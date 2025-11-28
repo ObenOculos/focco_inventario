@@ -5,7 +5,42 @@ import { supabase } from '@/integrations/supabase/client';
 import { EstoqueItem } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Package, TrendingUp, TrendingDown, ClipboardList, Search } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { 
+  Package, 
+  TrendingUp, 
+  TrendingDown, 
+  ClipboardList, 
+  Search, 
+  AlertTriangle,
+  DollarSign,
+  Users,
+  Trophy
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
+
+interface MovimentacaoResumo {
+  totalRemessas: number;
+  unidadesRemessa: number;
+  valorRemessa: number;
+  totalVendas: number;
+  unidadesVenda: number;
+  valorVenda: number;
+}
+
+interface TopVendedor {
+  codigo_vendedor: string;
+  nome_vendedor: string;
+  unidades_vendidas: number;
+}
+
+interface Divergencia {
+  codigo_vendedor: string;
+  nome_vendedor: string;
+  inventario_id: string;
+  data: string;
+}
 
 export default function Dashboard() {
   const { profile } = useAuth();
@@ -17,18 +52,36 @@ export default function Dashboard() {
     totalModelos: 0,
     inventariosPendentes: 0,
   });
+  const [movimentacao, setMovimentacao] = useState<MovimentacaoResumo>({
+    totalRemessas: 0,
+    unidadesRemessa: 0,
+    valorRemessa: 0,
+    totalVendas: 0,
+    unidadesVenda: 0,
+    valorVenda: 0,
+  });
+  const [topVendedores, setTopVendedores] = useState<TopVendedor[]>([]);
+  const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
+  const [produtosNegativos, setProdutosNegativos] = useState<EstoqueItem[]>([]);
+
+  const isGerente = profile?.role === 'gerente';
 
   useEffect(() => {
-    fetchEstoque();
-    fetchStats();
+    if (profile) {
+      fetchEstoque();
+      fetchMovimentacao();
+      if (isGerente) {
+        fetchTopVendedores();
+        fetchDivergencias();
+      }
+    }
   }, [profile]);
 
   const fetchEstoque = async () => {
     if (!profile) return;
 
-    const codigoVendedor = profile.role === 'gerente' ? null : profile.codigo_vendedor;
+    const codigoVendedor = isGerente ? null : profile.codigo_vendedor;
     
-    // Buscar todos os itens de pedido com seus pedidos
     let query = supabase
       .from('itens_pedido')
       .select(`
@@ -53,7 +106,6 @@ export default function Dashboard() {
       return;
     }
 
-    // Agrupar por codigo_auxiliar e calcular estoque
     const estoqueMap = new Map<string, EstoqueItem>();
 
     data?.forEach((item: any) => {
@@ -81,39 +133,174 @@ export default function Dashboard() {
       estoqueMap.set(key, existing);
     });
 
-    setEstoque(Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0));
+    const estoqueArray = Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
+    setEstoque(estoqueArray);
+    setProdutosNegativos(estoqueArray.filter(e => e.estoque_teorico < 0));
     setLoading(false);
   };
 
-  const fetchStats = async () => {
+  const fetchMovimentacao = async () => {
     if (!profile) return;
 
-    const codigoVendedor = profile.role === 'gerente' ? null : profile.codigo_vendedor;
+    const codigoVendedor = isGerente ? null : profile.codigo_vendedor;
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Contar inventários pendentes
-    let inventarioQuery = supabase
-      .from('inventarios')
-      .select('id', { count: 'exact' })
-      .eq('status', 'pendente');
+    let pedidosQuery = supabase
+      .from('pedidos')
+      .select('id, codigo_tipo, valor_total')
+      .gte('data_emissao', thirtyDaysAgo.toISOString());
 
     if (codigoVendedor) {
-      inventarioQuery = inventarioQuery.eq('codigo_vendedor', codigoVendedor);
+      pedidosQuery = pedidosQuery.eq('codigo_vendedor', codigoVendedor);
     }
 
-    const { count: inventariosPendentes } = await inventarioQuery;
+    const { data: pedidos, error: pedidosError } = await pedidosQuery;
 
-    setStats({
-      totalItens: estoque.reduce((acc, item) => acc + item.estoque_teorico, 0),
-      totalModelos: new Set(estoque.map(e => e.modelo)).size,
-      inventariosPendentes: inventariosPendentes || 0,
+    if (pedidosError) {
+      console.error('Erro ao buscar movimentações:', pedidosError);
+      return;
+    }
+
+    const pedidoIds = pedidos?.map(p => p.id) || [];
+    
+    let itensQuery = supabase
+      .from('itens_pedido')
+      .select('pedido_id, quantidade')
+      .in('pedido_id', pedidoIds);
+
+    const { data: itens } = await itensQuery;
+
+    const itensPorPedido = new Map<string, number>();
+    itens?.forEach(item => {
+      const current = itensPorPedido.get(item.pedido_id) || 0;
+      itensPorPedido.set(item.pedido_id, current + Number(item.quantidade));
+    });
+
+    let totalRemessas = 0, unidadesRemessa = 0, valorRemessa = 0;
+    let totalVendas = 0, unidadesVenda = 0, valorVenda = 0;
+
+    pedidos?.forEach(p => {
+      const unidades = itensPorPedido.get(p.id) || 0;
+      if (p.codigo_tipo === 7) {
+        totalRemessas++;
+        unidadesRemessa += unidades;
+        valorRemessa += Number(p.valor_total);
+      } else if (p.codigo_tipo === 2) {
+        totalVendas++;
+        unidadesVenda += unidades;
+        valorVenda += Number(p.valor_total);
+      }
+    });
+
+    setMovimentacao({
+      totalRemessas,
+      unidadesRemessa,
+      valorRemessa,
+      totalVendas,
+      unidadesVenda,
+      valorVenda,
     });
   };
 
-  useEffect(() => {
-    if (estoque.length > 0) {
-      fetchStats();
+  const fetchTopVendedores = async () => {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const { data: pedidos, error } = await supabase
+      .from('pedidos')
+      .select('id, codigo_vendedor, nome_vendedor')
+      .eq('codigo_tipo', 2)
+      .gte('data_emissao', thirtyDaysAgo.toISOString());
+
+    if (error) {
+      console.error('Erro ao buscar top vendedores:', error);
+      return;
     }
-  }, [estoque]);
+
+    const pedidoIds = pedidos?.map(p => p.id) || [];
+    
+    const { data: itens } = await supabase
+      .from('itens_pedido')
+      .select('pedido_id, quantidade')
+      .in('pedido_id', pedidoIds);
+
+    const vendedorMap = new Map<string, { nome: string; unidades: number }>();
+    
+    pedidos?.forEach(pedido => {
+      const current = vendedorMap.get(pedido.codigo_vendedor) || { 
+        nome: pedido.nome_vendedor || pedido.codigo_vendedor, 
+        unidades: 0 
+      };
+      
+      const pedidoItens = itens?.filter(i => i.pedido_id === pedido.id) || [];
+      const unidades = pedidoItens.reduce((acc, i) => acc + Number(i.quantidade), 0);
+      
+      current.unidades += unidades;
+      vendedorMap.set(pedido.codigo_vendedor, current);
+    });
+
+    const top = Array.from(vendedorMap.entries())
+      .map(([codigo, data]) => ({
+        codigo_vendedor: codigo,
+        nome_vendedor: data.nome,
+        unidades_vendidas: data.unidades,
+      }))
+      .sort((a, b) => b.unidades_vendidas - a.unidades_vendidas)
+      .slice(0, 5);
+
+    setTopVendedores(top);
+  };
+
+  const fetchDivergencias = async () => {
+    const { data, error } = await supabase
+      .from('inventarios')
+      .select('id, codigo_vendedor, data_inventario')
+      .eq('status', 'revisao')
+      .order('data_inventario', { ascending: false })
+      .limit(5);
+
+    if (error) {
+      console.error('Erro ao buscar divergências:', error);
+      return;
+    }
+
+    // Get vendedor names
+    const vendedorCodigos = [...new Set(data?.map(d => d.codigo_vendedor) || [])];
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('codigo_vendedor, nome')
+      .in('codigo_vendedor', vendedorCodigos);
+
+    const nomeMap = new Map(profiles?.map(p => [p.codigo_vendedor, p.nome]) || []);
+
+    setDivergencias(
+      data?.map(d => ({
+        codigo_vendedor: d.codigo_vendedor,
+        nome_vendedor: nomeMap.get(d.codigo_vendedor) || d.codigo_vendedor,
+        inventario_id: d.id,
+        data: d.data_inventario,
+      })) || []
+    );
+  };
+
+  useEffect(() => {
+    if (!loading && profile) {
+      const codigoVendedor = isGerente ? null : profile.codigo_vendedor;
+      
+      supabase
+        .from('inventarios')
+        .select('id', { count: 'exact' })
+        .eq('status', 'pendente')
+        .then(({ count }) => {
+          setStats({
+            totalItens: estoque.reduce((acc, item) => acc + item.estoque_teorico, 0),
+            totalModelos: new Set(estoque.map(e => e.modelo)).size,
+            inventariosPendentes: count || 0,
+          });
+        });
+    }
+  }, [estoque, loading]);
 
   const filteredEstoque = estoque.filter(item =>
     item.codigo_auxiliar.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -126,10 +313,96 @@ export default function Dashboard() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
           <p className="text-muted-foreground">
-            {profile?.role === 'gerente' 
-              ? 'Visão geral do estoque de todos os vendedores' 
-              : 'Seu estoque teórico atual'}
+            {isGerente 
+              ? 'Visão geral do sistema - Últimos 30 dias' 
+              : 'Seu resumo de atividades - Últimos 30 dias'}
           </p>
+        </div>
+
+        {/* Alertas */}
+        {(produtosNegativos.length > 0 || divergencias.length > 0) && (
+          <div className="space-y-2">
+            {produtosNegativos.length > 0 && (
+              <div className="flex items-center gap-3 p-4 bg-destructive/10 border-2 border-destructive rounded-lg">
+                <AlertTriangle className="text-destructive shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold text-destructive">
+                    {produtosNegativos.length} produto(s) com estoque negativo
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Verifique divergências de inventário
+                  </p>
+                </div>
+                <Link to="/pedidos">
+                  <Button variant="outline" size="sm">Ver detalhes</Button>
+                </Link>
+              </div>
+            )}
+            {isGerente && divergencias.length > 0 && (
+              <div className="flex items-center gap-3 p-4 bg-orange-100 dark:bg-orange-900/20 border-2 border-orange-500 rounded-lg">
+                <AlertTriangle className="text-orange-600 shrink-0" />
+                <div className="flex-1">
+                  <p className="font-semibold text-orange-700 dark:text-orange-400">
+                    {divergencias.length} inventário(s) aguardando revisão
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {divergencias.slice(0, 2).map(d => d.nome_vendedor).join(', ')}
+                    {divergencias.length > 2 && ` e mais ${divergencias.length - 2}`}
+                  </p>
+                </div>
+                <Link to="/conferencia">
+                  <Button variant="outline" size="sm">Conferir</Button>
+                </Link>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Resumo de Movimentações */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <Card className="border-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                <Package size={16} />
+                {isGerente ? 'Remessas Enviadas' : 'Remessas Recebidas'}
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">
+                  {movimentacao.totalRemessas} pedidos
+                </p>
+                <p className="text-sm text-blue-600 dark:text-blue-400">
+                  {movimentacao.unidadesRemessa.toLocaleString('pt-BR')} unidades
+                </p>
+                <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
+                  {movimentacao.valorRemessa.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
+                <DollarSign size={16} />
+                Vendas Realizadas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-1">
+                <p className="text-2xl font-bold text-green-800 dark:text-green-200">
+                  {movimentacao.totalVendas} pedidos
+                </p>
+                <p className="text-sm text-green-600 dark:text-green-400">
+                  {movimentacao.unidadesVenda.toLocaleString('pt-BR')} unidades
+                </p>
+                <p className="text-sm font-medium text-green-700 dark:text-green-300">
+                  {movimentacao.valorVenda.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Stats */}
@@ -162,7 +435,7 @@ export default function Dashboard() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <ClipboardList size={16} />
-                Inventários Pendentes
+                {isGerente ? 'Inventários Pendentes' : 'Meus Inventários Pendentes'}
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -170,6 +443,76 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Top Vendedores (apenas gerente) */}
+        {isGerente && topVendedores.length > 0 && (
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="text-yellow-500" size={20} />
+                Top 5 Vendedores (por volume)
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {topVendedores.map((vendedor, index) => (
+                  <div 
+                    key={vendedor.codigo_vendedor}
+                    className="flex items-center gap-4 p-3 border rounded-lg"
+                  >
+                    <div className={`w-8 h-8 flex items-center justify-center font-bold rounded ${
+                      index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                      index === 1 ? 'bg-gray-100 text-gray-700' :
+                      index === 2 ? 'bg-orange-100 text-orange-700' :
+                      'bg-muted text-muted-foreground'
+                    }`}>
+                      {index + 1}
+                    </div>
+                    <div className="flex-1">
+                      <p className="font-medium">{vendedor.nome_vendedor}</p>
+                      <p className="text-sm text-muted-foreground">{vendedor.codigo_vendedor}</p>
+                    </div>
+                    <Badge variant="secondary" className="font-bold">
+                      {vendedor.unidades_vendidas.toLocaleString('pt-BR')} un
+                    </Badge>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Painel do Vendedor - Últimos pedidos */}
+        {!isGerente && (
+          <Card className="border-2">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <CardTitle>Atividade Recente</CardTitle>
+              <Link to="/pedidos">
+                <Button variant="outline" size="sm">Ver todos</Button>
+              </Link>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-600 mb-2">
+                    <Package size={16} />
+                    <span className="font-medium">Última Remessa</span>
+                  </div>
+                  <p className="text-2xl font-bold">{movimentacao.unidadesRemessa}</p>
+                  <p className="text-sm text-muted-foreground">unidades recebidas</p>
+                </div>
+                <div className="p-4 border rounded-lg">
+                  <div className="flex items-center gap-2 text-green-600 mb-2">
+                    <DollarSign size={16} />
+                    <span className="font-medium">Minhas Vendas</span>
+                  </div>
+                  <p className="text-2xl font-bold">{movimentacao.unidadesVenda}</p>
+                  <p className="text-sm text-muted-foreground">unidades vendidas</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Estoque Table */}
         <Card className="border-2">
@@ -225,9 +568,9 @@ export default function Dashboard() {
                         <td className="py-3 px-2 text-center">
                           <span className={`inline-block px-3 py-1 font-bold ${
                             item.estoque_teorico > 0 
-                              ? 'bg-green-100 text-green-800' 
+                              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' 
                               : item.estoque_teorico < 0 
-                                ? 'bg-red-100 text-red-800'
+                                ? 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
                                 : 'bg-secondary'
                           }`}>
                             {item.estoque_teorico}
