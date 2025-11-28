@@ -12,7 +12,7 @@ export default function Importar() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ExcelRow[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ success: number; errors: number } | null>(null);
+  const [result, setResult] = useState<{ success: number; errors: number; skipped: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parseValue = (value: string | number): number => {
@@ -43,6 +43,19 @@ export default function Importar() {
     }
   };
 
+  // Função para processar produtos em lotes de até 1000
+  const batchUpsertProdutos = async (items: any[]) => {
+    const BATCH_SIZE = 1000;
+    for (let i = 0; i < items.length; i += BATCH_SIZE) {
+      const batch = items.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('produtos').upsert(batch, { onConflict: 'codigo_auxiliar' });
+      if (error) {
+        console.error(`Erro no lote ${i / BATCH_SIZE + 1}:`, error);
+        throw error;
+      }
+    }
+  };
+
   const handleImport = async () => {
     if (!file) return;
 
@@ -58,15 +71,21 @@ export default function Importar() {
 
       let success = 0;
       let errors = 0;
+      let skipped = 0;
 
+      // Coletar todos os produtos únicos
+      const produtosMap = new Map<string, any>();
+      
       // Agrupar por pedido
       const pedidosMap = new Map<string, { pedido: any; itens: any[] }>();
 
       for (const row of rows) {
         const numeroPedido = String(row.pedido);
+        const codigoTipo = Number(row.codigo_tipo);
+        const key = `${numeroPedido}-${codigoTipo}`;
         
-        if (!pedidosMap.has(numeroPedido)) {
-          pedidosMap.set(numeroPedido, {
+        if (!pedidosMap.has(key)) {
+          pedidosMap.set(key, {
             pedido: {
               numero_pedido: numeroPedido,
               data_emissao: row.data_emissao,
@@ -74,7 +93,7 @@ export default function Importar() {
               codigo_vendedor: String(row.codigo_vendedor),
               nome_vendedor: row.nome_vendedor,
               valor_total: parseValue(row.valor_total),
-              codigo_tipo: Number(row.codigo_tipo),
+              codigo_tipo: codigoTipo,
               situacao: row.situacao || 'N',
               numero_nota_fiscal: String(row.numero_nota_fiscal || ''),
               serie_nota_fiscal: String(row.serie_nota_fiscal || ''),
@@ -83,39 +102,67 @@ export default function Importar() {
           });
         }
 
-        pedidosMap.get(numeroPedido)!.itens.push({
+        pedidosMap.get(key)!.itens.push({
           codigo_auxiliar: row.codigo_auxiliar,
           nome_produto: row.nome_produto,
           quantidade: parseValue(row.quantidade),
           valor_produto: parseValue(row.valor_produto),
         });
 
-        // Criar/atualizar produto se não existir
+        // Coletar produto único
         const codigoAuxiliar = row.codigo_auxiliar;
-        const [modelo, cor] = codigoAuxiliar.split(' ');
-
-        await supabase.from('produtos').upsert({
-          codigo_produto: row.codigo_produto,
-          codigo_auxiliar: codigoAuxiliar,
-          nome_produto: row.nome_produto,
-          modelo: modelo || row.codigo_produto,
-          cor: cor || '',
-          valor_produto: parseValue(row.valor_produto),
-        }, { onConflict: 'codigo_auxiliar' });
+        if (!produtosMap.has(codigoAuxiliar)) {
+          const [modelo, cor] = codigoAuxiliar.split(' ');
+          produtosMap.set(codigoAuxiliar, {
+            codigo_produto: row.codigo_produto,
+            codigo_auxiliar: codigoAuxiliar,
+            nome_produto: row.nome_produto,
+            modelo: modelo || row.codigo_produto,
+            cor: cor || '',
+            valor_produto: parseValue(row.valor_produto),
+          });
+        }
       }
 
-      // Inserir pedidos e itens
-      for (const [, { pedido, itens }] of pedidosMap) {
-        // Verificar se pedido já existe
+      // Verificar pedidos já existentes no banco ANTES de inserir
+      const pedidoKeys = Array.from(pedidosMap.keys());
+      const existingPedidos = new Set<string>();
+
+      // Buscar pedidos existentes em lotes
+      for (let i = 0; i < pedidoKeys.length; i += 100) {
+        const batchKeys = pedidoKeys.slice(i, i + 100);
+        const numerosToCheck = batchKeys.map(k => k.split('-')[0]);
+        
         const { data: existing } = await supabase
           .from('pedidos')
-          .select('id')
-          .eq('numero_pedido', pedido.numero_pedido)
-          .eq('codigo_tipo', pedido.codigo_tipo)
-          .maybeSingle();
+          .select('numero_pedido, codigo_tipo')
+          .in('numero_pedido', numerosToCheck);
 
         if (existing) {
-          continue; // Pular pedidos duplicados
+          existing.forEach(p => {
+            existingPedidos.add(`${p.numero_pedido}-${p.codigo_tipo}`);
+          });
+        }
+      }
+
+      // Informar sobre duplicatas
+      const duplicatesCount = Array.from(pedidosMap.keys()).filter(k => existingPedidos.has(k)).length;
+      if (duplicatesCount > 0) {
+        toast.info(`${duplicatesCount} pedidos já existem e serão ignorados`);
+      }
+
+      // Inserir produtos em lotes de 1000
+      const produtosArray = Array.from(produtosMap.values());
+      if (produtosArray.length > 0) {
+        await batchUpsertProdutos(produtosArray);
+      }
+
+      // Inserir pedidos e itens (apenas os que não existem)
+      for (const [key, { pedido, itens }] of pedidosMap) {
+        // Pular se já existe
+        if (existingPedidos.has(key)) {
+          skipped++;
+          continue;
         }
 
         const { data: pedidoData, error: pedidoError } = await supabase
@@ -135,20 +182,29 @@ export default function Importar() {
           pedido_id: pedidoData.id,
         }));
 
-        const { error: itensError } = await supabase
-          .from('itens_pedido')
-          .insert(itensWithPedidoId);
+        // Inserir itens em lotes se necessário
+        const BATCH_SIZE = 1000;
+        for (let i = 0; i < itensWithPedidoId.length; i += BATCH_SIZE) {
+          const batch = itensWithPedidoId.slice(i, i + BATCH_SIZE);
+          const { error: itensError } = await supabase
+            .from('itens_pedido')
+            .insert(batch);
 
-        if (itensError) {
-          errors++;
-          console.error('Erro ao inserir itens:', itensError);
-        } else {
-          success++;
+          if (itensError) {
+            errors++;
+            console.error('Erro ao inserir itens:', itensError);
+          }
         }
+        
+        success++;
       }
 
-      setResult({ success, errors });
-      toast.success(`Importação concluída! ${success} pedidos importados.`);
+      setResult({ success, errors, skipped });
+      if (success > 0) {
+        toast.success(`Importação concluída! ${success} pedidos importados.`);
+      } else if (skipped > 0) {
+        toast.info('Nenhum pedido novo para importar.');
+      }
     } catch (err) {
       toast.error('Erro durante a importação');
       console.error(err);
@@ -252,6 +308,11 @@ export default function Importar() {
                     <p className="font-medium">
                       {result.success} pedidos importados com sucesso
                     </p>
+                    {result.skipped > 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        {result.skipped} pedidos ignorados (já existiam)
+                      </p>
+                    )}
                     {result.errors > 0 && (
                       <p className="text-sm text-yellow-700">
                         {result.errors} pedidos com erro (verifique os logs)
