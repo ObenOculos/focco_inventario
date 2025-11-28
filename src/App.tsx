@@ -13,6 +13,7 @@ import Vendedores from "./pages/Vendedores";
 import Produtos from "./pages/Produtos";
 import Importar from "./pages/Importar";
 import Conferencia from "./pages/Conferencia";
+import Pedidos from "./pages/Pedidos";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -66,6 +67,11 @@ const App = () => (
             <Route path="/conferencia" element={
               <ProtectedRoute allowedRoles={['gerente']}>
                 <Conferencia />
+              </ProtectedRoute>
+            } />
+            <Route path="/pedidos" element={
+              <ProtectedRoute>
+                <Pedidos />
               </ProtectedRoute>
             } />
             
