@@ -41,6 +41,40 @@ export default function Importar() {
     return parseFloat(String(value).replace('R$', '').replace('.', '').replace(',', '.').trim()) || 0;
   };
 
+  const parseExcelDate = (value: string | number): string => {
+    if (!value) return new Date().toISOString();
+    
+    // Se for número (serial date do Excel), converter
+    if (typeof value === 'number') {
+      // Excel usa 1/1/1900 como base (com bug do ano bissexto de 1900)
+      const excelEpoch = new Date(1899, 11, 30);
+      const days = Math.floor(value);
+      const fraction = value - days;
+      const date = new Date(excelEpoch.getTime() + days * 24 * 60 * 60 * 1000);
+      // Adicionar horas/minutos da fração do dia
+      date.setTime(date.getTime() + fraction * 24 * 60 * 60 * 1000);
+      return date.toISOString();
+    }
+    
+    // Se for string, tentar converter diretamente
+    const parsed = new Date(value);
+    if (!isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+    
+    // Tentar formato DD/MM/YYYY
+    const parts = String(value).split('/');
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      const date = new Date(Number(year), Number(month) - 1, Number(day));
+      if (!isNaN(date.getTime())) {
+        return date.toISOString();
+      }
+    }
+    
+    return new Date().toISOString();
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (!selectedFile) return;
@@ -137,7 +171,7 @@ export default function Importar() {
           pedidosMap.set(key, {
             pedido: {
               numero_pedido: numeroPedido,
-              data_emissao: row.data_emissao,
+              data_emissao: parseExcelDate(row.data_emissao),
               codigo_cliente: String(row.codigo_cliente || ''),
               codigo_vendedor: String(row.codigo_vendedor),
               nome_vendedor: row.nome_vendedor || '',
