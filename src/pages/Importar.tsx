@@ -8,11 +8,18 @@ import { toast } from 'sonner';
 import { FileSpreadsheet, Upload, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
+interface ImportError {
+  tipo: 'produto' | 'pedido' | 'item';
+  identificador: string;
+  mensagem: string;
+  detalhes?: string;
+}
+
 export default function Importar() {
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<ExcelRow[]>([]);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ success: number; errors: number; skipped: number } | null>(null);
+  const [result, setResult] = useState<{ success: number; errors: number; skipped: number; errorDetails: ImportError[] } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parseValue = (value: string | number): number => {
@@ -44,16 +51,25 @@ export default function Importar() {
   };
 
   // Função para processar produtos em lotes de até 1000
-  const batchUpsertProdutos = async (items: any[]) => {
+  const batchUpsertProdutos = async (items: any[]): Promise<ImportError[]> => {
+    const errors: ImportError[] = [];
     const BATCH_SIZE = 1000;
+    
     for (let i = 0; i < items.length; i += BATCH_SIZE) {
       const batch = items.slice(i, i + BATCH_SIZE);
       const { error } = await supabase.from('produtos').upsert(batch, { onConflict: 'codigo_auxiliar' });
+      
       if (error) {
-        console.error(`Erro no lote ${i / BATCH_SIZE + 1}:`, error);
-        throw error;
+        console.error(`Erro no lote de produtos ${i / BATCH_SIZE + 1}:`, error);
+        errors.push({
+          tipo: 'produto',
+          identificador: `Lote ${i / BATCH_SIZE + 1} (${batch.length} produtos)`,
+          mensagem: error.message,
+          detalhes: error.details || error.hint || undefined,
+        });
       }
     }
+    return errors;
   };
 
   const handleImport = async () => {
@@ -61,6 +77,8 @@ export default function Importar() {
 
     setImporting(true);
     setResult(null);
+
+    const errorDetails: ImportError[] = [];
 
     try {
       const data = await file.arrayBuffer();
@@ -79,7 +97,32 @@ export default function Importar() {
       // Agrupar por pedido
       const pedidosMap = new Map<string, { pedido: any; itens: any[] }>();
 
+      // Validação e agrupamento
+      let rowNumber = 1;
       for (const row of rows) {
+        rowNumber++;
+        
+        // Validar campos obrigatórios
+        if (!row.codigo_auxiliar) {
+          errorDetails.push({
+            tipo: 'item',
+            identificador: `Linha ${rowNumber}`,
+            mensagem: 'Campo codigo_auxiliar está vazio',
+            detalhes: `Pedido: ${row.pedido || 'N/A'}`,
+          });
+          continue;
+        }
+
+        if (!row.codigo_produto) {
+          errorDetails.push({
+            tipo: 'produto',
+            identificador: `Linha ${rowNumber}`,
+            mensagem: 'Campo codigo_produto está vazio',
+            detalhes: `codigo_auxiliar: ${row.codigo_auxiliar}`,
+          });
+          continue;
+        }
+
         const numeroPedido = String(row.pedido);
         const codigoTipo = Number(row.codigo_tipo);
         const key = `${numeroPedido}-${codigoTipo}`;
@@ -104,7 +147,7 @@ export default function Importar() {
 
         pedidosMap.get(key)!.itens.push({
           codigo_auxiliar: row.codigo_auxiliar,
-          nome_produto: row.nome_produto,
+          nome_produto: row.nome_produto || '',
           quantidade: parseValue(row.quantidade),
           valor_produto: parseValue(row.valor_produto),
         });
@@ -116,7 +159,7 @@ export default function Importar() {
           produtosMap.set(codigoAuxiliar, {
             codigo_produto: row.codigo_produto,
             codigo_auxiliar: codigoAuxiliar,
-            nome_produto: row.nome_produto,
+            nome_produto: row.nome_produto || '',
             modelo: modelo || row.codigo_produto,
             cor: cor || '',
             valor_produto: parseValue(row.valor_produto),
@@ -154,7 +197,11 @@ export default function Importar() {
       // Inserir produtos em lotes de 1000
       const produtosArray = Array.from(produtosMap.values());
       if (produtosArray.length > 0) {
-        await batchUpsertProdutos(produtosArray);
+        const produtoErrors = await batchUpsertProdutos(produtosArray);
+        errorDetails.push(...produtoErrors);
+        if (produtoErrors.length > 0) {
+          errors += produtoErrors.length;
+        }
       }
 
       // Inserir pedidos e itens (apenas os que não existem)
@@ -173,7 +220,12 @@ export default function Importar() {
 
         if (pedidoError) {
           errors++;
-          console.error('Erro ao inserir pedido:', pedidoError);
+          errorDetails.push({
+            tipo: 'pedido',
+            identificador: `Pedido #${pedido.numero_pedido}`,
+            mensagem: pedidoError.message,
+            detalhes: pedidoError.details || pedidoError.hint || `Vendedor: ${pedido.codigo_vendedor}`,
+          });
           continue;
         }
 
@@ -192,21 +244,36 @@ export default function Importar() {
 
           if (itensError) {
             errors++;
-            console.error('Erro ao inserir itens:', itensError);
+            errorDetails.push({
+              tipo: 'item',
+              identificador: `Itens do Pedido #${pedido.numero_pedido}`,
+              mensagem: itensError.message,
+              detalhes: itensError.details || itensError.hint || undefined,
+            });
           }
         }
         
         success++;
       }
 
-      setResult({ success, errors, skipped });
+      setResult({ success, errors, skipped, errorDetails });
       if (success > 0) {
         toast.success(`Importação concluída! ${success} pedidos importados.`);
-      } else if (skipped > 0) {
+      } else if (skipped > 0 && errors === 0) {
         toast.info('Nenhum pedido novo para importar.');
+      } else if (errors > 0) {
+        toast.error(`Importação com erros: ${errors} falhas`);
       }
-    } catch (err) {
-      toast.error('Erro durante a importação');
+    } catch (err: any) {
+      const errorMessage = err?.message || 'Erro desconhecido';
+      errorDetails.push({
+        tipo: 'pedido',
+        identificador: 'Erro Geral',
+        mensagem: errorMessage,
+        detalhes: err?.details || err?.hint || undefined,
+      });
+      setResult({ success: 0, errors: 1, skipped: 0, errorDetails });
+      toast.error(`Erro durante a importação: ${errorMessage}`);
       console.error(err);
     } finally {
       setImporting(false);
@@ -297,14 +364,14 @@ export default function Importar() {
             )}
 
             {result && (
-              <div className={`p-4 border-2 ${result.errors > 0 ? 'border-yellow-500 bg-yellow-50' : 'border-green-500 bg-green-50'}`}>
-                <div className="flex items-center gap-2">
+              <div className={`p-4 border-2 ${result.errors > 0 ? 'border-destructive bg-destructive/10' : 'border-green-500 bg-green-50'}`}>
+                <div className="flex items-start gap-2">
                   {result.errors > 0 ? (
-                    <AlertCircle className="text-yellow-600" size={20} />
+                    <AlertCircle className="text-destructive mt-0.5" size={20} />
                   ) : (
-                    <CheckCircle className="text-green-600" size={20} />
+                    <CheckCircle className="text-green-600 mt-0.5" size={20} />
                   )}
-                  <div>
+                  <div className="flex-1">
                     <p className="font-medium">
                       {result.success} pedidos importados com sucesso
                     </p>
@@ -314,9 +381,35 @@ export default function Importar() {
                       </p>
                     )}
                     {result.errors > 0 && (
-                      <p className="text-sm text-yellow-700">
-                        {result.errors} pedidos com erro (verifique os logs)
+                      <p className="text-sm text-destructive font-medium">
+                        {result.errors} erros encontrados
                       </p>
+                    )}
+                    
+                    {result.errorDetails.length > 0 && (
+                      <div className="mt-3 space-y-2">
+                        <p className="text-sm font-medium text-foreground">Detalhes dos erros:</p>
+                        <div className="max-h-48 overflow-y-auto space-y-2">
+                          {result.errorDetails.map((error, index) => (
+                            <div key={index} className="text-xs bg-background border border-border p-2 rounded">
+                              <div className="flex items-center gap-2">
+                                <span className={`px-1.5 py-0.5 font-medium uppercase ${
+                                  error.tipo === 'produto' ? 'bg-blue-100 text-blue-800' :
+                                  error.tipo === 'pedido' ? 'bg-yellow-100 text-yellow-800' :
+                                  'bg-purple-100 text-purple-800'
+                                }`}>
+                                  {error.tipo}
+                                </span>
+                                <span className="font-mono font-medium">{error.identificador}</span>
+                              </div>
+                              <p className="text-destructive mt-1">{error.mensagem}</p>
+                              {error.detalhes && (
+                                <p className="text-muted-foreground mt-0.5">{error.detalhes}</p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                   </div>
                 </div>
