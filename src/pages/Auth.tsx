@@ -4,8 +4,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { QrCode, Eye, EyeOff } from 'lucide-react';
+import { QrCode, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -78,106 +79,109 @@ export default function Auth() {
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-foreground flex items-center justify-center mb-4">
-            <QrCode className="text-background" size={48} />
+          <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center mb-4 shadow-md">
+            <QrCode className="text-primary-foreground" size={32} />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">OPTISTOCK</h1>
-          <p className="text-muted-foreground mt-2">Controle de Estoque para Óculos</p>
+          <h1 className="text-2xl font-bold tracking-tight">OptiStock</h1>
+          <p className="text-muted-foreground text-sm mt-1">Controle de Estoque para Óculos</p>
         </div>
 
         {/* Form */}
-        <div className="border-2 border-foreground bg-card p-6 shadow-md">
-          <div className="flex mb-6">
-            <button
-              type="button"
-              onClick={() => setIsLogin(true)}
-              className={`flex-1 py-3 font-medium border-2 border-r-0 transition-all ${
-                isLogin 
-                  ? 'bg-foreground text-background border-foreground' 
-                  : 'border-foreground hover:bg-secondary'
-              }`}
-            >
-              ENTRAR
-            </button>
-            <button
-              type="button"
-              onClick={() => setIsLogin(false)}
-              className={`flex-1 py-3 font-medium border-2 transition-all ${
-                !isLogin 
-                  ? 'bg-foreground text-background border-foreground' 
-                  : 'border-foreground hover:bg-secondary'
-              }`}
-            >
-              CADASTRAR
-            </button>
-          </div>
-
-          <form onSubmit={handleSubmit} className="space-y-4">
-            {!isLogin && (
-              <div>
-                <Label htmlFor="nome" className="font-medium">Nome</Label>
-                <Input
-                  id="nome"
-                  type="text"
-                  value={nome}
-                  onChange={(e) => setNome(e.target.value)}
-                  className="mt-1 border-2"
-                  placeholder="Seu nome completo"
-                  required={!isLogin}
-                />
-              </div>
-            )}
-
-            <div>
-              <Label htmlFor="email" className="font-medium">Email</Label>
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 border-2"
-                placeholder="seu@email.com"
-                required
-              />
+        <Card className="shadow-lg">
+          <CardHeader className="pb-4">
+            <div className="flex rounded-lg overflow-hidden border border-border">
+              <button
+                type="button"
+                onClick={() => setIsLogin(true)}
+                className={`flex-1 py-3 text-sm font-medium transition-all ${
+                  isLogin 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-card text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                Entrar
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsLogin(false)}
+                className={`flex-1 py-3 text-sm font-medium transition-all ${
+                  !isLogin 
+                    ? 'bg-primary text-primary-foreground' 
+                    : 'bg-card text-muted-foreground hover:bg-accent'
+                }`}
+              >
+                Cadastrar
+              </button>
             </div>
+          </CardHeader>
 
-            <div>
-              <Label htmlFor="password" className="font-medium">Senha</Label>
-              <div className="relative">
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {!isLogin && (
+                <div className="space-y-2">
+                  <Label htmlFor="nome">Nome</Label>
+                  <Input
+                    id="nome"
+                    type="text"
+                    value={nome}
+                    onChange={(e) => setNome(e.target.value)}
+                    placeholder="Seu nome completo"
+                    required={!isLogin}
+                  />
+                </div>
+              )}
+
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
                 <Input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 border-2 pr-10"
-                  placeholder="••••••"
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                >
-                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
-                </button>
               </div>
-            </div>
 
-            <Button 
-              type="submit" 
-              className="w-full mt-6" 
-              disabled={loading}
-            >
-              {loading ? 'Aguarde...' : isLogin ? 'ENTRAR' : 'CRIAR CONTA'}
-            </Button>
-          </form>
+              <div className="space-y-2">
+                <Label htmlFor="password">Senha</Label>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••"
+                    className="pr-10"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+              </div>
 
-          {!isLogin && (
-            <p className="text-xs text-muted-foreground mt-4 text-center">
-              O primeiro cadastro será automaticamente um gerente.
-            </p>
-          )}
-        </div>
+              <Button 
+                type="submit" 
+                className="w-full mt-2 shadow-sm" 
+                disabled={loading}
+              >
+                {loading ? <Loader2 className="animate-spin mr-2" size={16} /> : null}
+                {isLogin ? 'Entrar' : 'Criar Conta'}
+              </Button>
+            </form>
+
+            {!isLogin && (
+              <p className="text-xs text-muted-foreground mt-4 text-center">
+                O primeiro cadastro será automaticamente um gerente.
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
