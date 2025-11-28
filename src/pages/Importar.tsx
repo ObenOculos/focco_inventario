@@ -384,12 +384,12 @@ export default function Importar() {
                 {file ? file.name : 'Clique para selecionar um arquivo Excel'}
               </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Formato: .xlsx ou .xls
+                Formato: .xlsx, .xls ou .csv
               </p>
               <input
                 ref={fileInputRef}
                 type="file"
-                accept=".xlsx,.xls"
+                accept=".xlsx,.xls,.csv"
                 onChange={handleFileSelect}
                 className="hidden"
               />
