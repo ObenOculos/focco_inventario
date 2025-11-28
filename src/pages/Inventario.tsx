@@ -1,0 +1,298 @@
+import { useState, useEffect, useRef } from 'react';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
+import { Camera, Plus, Trash2, Send, QrCode } from 'lucide-react';
+import { Html5Qrcode } from 'html5-qrcode';
+
+interface InventarioItem {
+  codigo_auxiliar: string;
+  nome_produto: string;
+  quantidade_fisica: number;
+}
+
+export default function Inventario() {
+  const { profile, user } = useAuth();
+  const [items, setItems] = useState<InventarioItem[]>([]);
+  const [scanning, setScanning] = useState(false);
+  const [manualCode, setManualCode] = useState('');
+  const [observacoes, setObservacoes] = useState('');
+  const [loading, setLoading] = useState(false);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+
+  const startScanner = async () => {
+    try {
+      const html5QrCode = new Html5Qrcode("qr-reader");
+      scannerRef.current = html5QrCode;
+      
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+        },
+        (decodedText) => {
+          handleQrCodeScanned(decodedText);
+        },
+        () => {}
+      );
+      setScanning(true);
+    } catch (err) {
+      console.error('Erro ao iniciar scanner:', err);
+      toast.error('Não foi possível acessar a câmera');
+    }
+  };
+
+  const stopScanner = async () => {
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.stop();
+        scannerRef.current = null;
+      } catch (err) {
+        console.error('Erro ao parar scanner:', err);
+      }
+    }
+    setScanning(false);
+  };
+
+  const handleQrCodeScanned = async (code: string) => {
+    // Verificar se já existe
+    if (items.some(item => item.codigo_auxiliar === code)) {
+      toast.info('Este produto já foi escaneado');
+      return;
+    }
+
+    // Buscar informações do produto
+    const { data: produto } = await supabase
+      .from('produtos')
+      .select('nome_produto')
+      .eq('codigo_auxiliar', code)
+      .maybeSingle();
+
+    const newItem: InventarioItem = {
+      codigo_auxiliar: code,
+      nome_produto: produto?.nome_produto || code,
+      quantidade_fisica: 1,
+    };
+
+    setItems([...items, newItem]);
+    toast.success(`Produto ${code} adicionado`);
+  };
+
+  const handleManualAdd = () => {
+    if (!manualCode.trim()) {
+      toast.error('Digite o código do produto');
+      return;
+    }
+    handleQrCodeScanned(manualCode.trim().toUpperCase());
+    setManualCode('');
+  };
+
+  const updateQuantidade = (index: number, quantidade: number) => {
+    const newItems = [...items];
+    newItems[index].quantidade_fisica = Math.max(0, quantidade);
+    setItems(newItems);
+  };
+
+  const removeItem = (index: number) => {
+    setItems(items.filter((_, i) => i !== index));
+  };
+
+  const handleSubmit = async () => {
+    if (!profile?.codigo_vendedor || !user) {
+      toast.error('Você precisa ter um código de vendedor configurado');
+      return;
+    }
+
+    if (items.length === 0) {
+      toast.error('Adicione pelo menos um item ao inventário');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Criar inventário
+      const { data: inventario, error: invError } = await supabase
+        .from('inventarios')
+        .insert({
+          codigo_vendedor: profile.codigo_vendedor,
+          user_id: user.id,
+          observacoes,
+        })
+        .select()
+        .single();
+
+      if (invError) throw invError;
+
+      // Criar itens do inventário
+      const itensData = items.map(item => ({
+        inventario_id: inventario.id,
+        codigo_auxiliar: item.codigo_auxiliar,
+        nome_produto: item.nome_produto,
+        quantidade_fisica: item.quantidade_fisica,
+      }));
+
+      const { error: itensError } = await supabase
+        .from('itens_inventario')
+        .insert(itensData);
+
+      if (itensError) throw itensError;
+
+      toast.success('Inventário enviado para conferência!');
+      setItems([]);
+      setObservacoes('');
+    } catch (error: any) {
+      console.error('Erro ao salvar inventário:', error);
+      toast.error('Erro ao salvar inventário');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    return () => {
+      stopScanner();
+    };
+  }, []);
+
+  if (!profile?.codigo_vendedor) {
+    return (
+      <AppLayout>
+        <div className="flex items-center justify-center min-h-[50vh]">
+          <Card className="border-2 max-w-md">
+            <CardContent className="pt-6 text-center">
+              <QrCode size={48} className="mx-auto mb-4 text-muted-foreground" />
+              <h2 className="text-xl font-bold mb-2">Código de Vendedor Necessário</h2>
+              <p className="text-muted-foreground">
+                Você precisa ter um código de vendedor configurado para realizar inventários.
+                Entre em contato com o gerente.
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      </AppLayout>
+    );
+  }
+
+  return (
+    <AppLayout>
+      <div className="space-y-6 max-w-2xl mx-auto">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Novo Inventário</h1>
+          <p className="text-muted-foreground">
+            Escaneie os QR Codes ou adicione manualmente os produtos
+          </p>
+        </div>
+
+        {/* Scanner */}
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Camera size={20} />
+              Scanner QR Code
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div 
+              id="qr-reader" 
+              className={`w-full aspect-square max-w-sm mx-auto bg-secondary ${!scanning ? 'hidden' : ''}`}
+            />
+            
+            <div className="flex justify-center">
+              {scanning ? (
+                <Button variant="destructive" onClick={stopScanner}>
+                  Parar Scanner
+                </Button>
+              ) : (
+                <Button onClick={startScanner}>
+                  <Camera className="mr-2" size={16} />
+                  Iniciar Scanner
+                </Button>
+              )}
+            </div>
+
+            <div className="border-t-2 border-border pt-4">
+              <Label className="font-medium">Adicionar Manualmente</Label>
+              <div className="flex gap-2 mt-2">
+                <Input
+                  placeholder="Ex: OB1215 Q01"
+                  value={manualCode}
+                  onChange={(e) => setManualCode(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                  className="border-2 font-mono"
+                />
+                <Button onClick={handleManualAdd}>
+                  <Plus size={16} />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Items */}
+        {items.length > 0 && (
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle>Itens Escaneados ({items.length})</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {items.map((item, index) => (
+                  <div key={item.codigo_auxiliar} className="flex items-center gap-3 p-3 border-2 border-border">
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono font-medium">{item.codigo_auxiliar}</p>
+                      <p className="text-sm text-muted-foreground truncate">{item.nome_produto}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="number"
+                        min="0"
+                        value={item.quantidade_fisica}
+                        onChange={(e) => updateQuantidade(index, parseInt(e.target.value) || 0)}
+                        className="w-20 border-2 text-center"
+                      />
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => removeItem(index)}
+                        className="border-2 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-4">
+                <Label className="font-medium">Observações</Label>
+                <Textarea
+                  placeholder="Observações sobre o inventário..."
+                  value={observacoes}
+                  onChange={(e) => setObservacoes(e.target.value)}
+                  className="mt-2 border-2"
+                />
+              </div>
+
+              <Button 
+                className="w-full mt-4" 
+                onClick={handleSubmit}
+                disabled={loading}
+              >
+                <Send className="mr-2" size={16} />
+                {loading ? 'Enviando...' : 'Enviar para Conferência'}
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </AppLayout>
+  );
+}
