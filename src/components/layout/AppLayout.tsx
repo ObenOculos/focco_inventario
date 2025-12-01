@@ -16,7 +16,8 @@ import {
   Upload,
   ClipboardCheck,
   History,
-  FileText
+  FileText,
+  RefreshCw
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -36,6 +37,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
     { to: '/pedidos', icon: FileText, label: 'Meus Pedidos' },
+    { to: '/movimentacoes', icon: RefreshCw, label: 'Movimentações' },
     { to: '/inventario', icon: ClipboardList, label: 'Inventário' },
     { to: '/historico', icon: History, label: 'Histórico' },
   ];
@@ -44,6 +46,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
     { to: '/pedidos', icon: FileText, label: 'Gestão de Pedidos' },
+    { to: '/movimentacoes', icon: RefreshCw, label: 'Movimentações' },
     { to: '/vendedores', icon: Users, label: 'Vendedores' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos' },
     { to: '/importar', icon: Upload, label: 'Importar' },

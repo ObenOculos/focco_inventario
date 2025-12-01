@@ -18,6 +18,7 @@ import Produtos from "./pages/Produtos";
 import Importar from "./pages/Importar";
 import Conferencia from "./pages/Conferencia";
 import Pedidos from "./pages/Pedidos";
+import Movimentacoes from "./pages/Movimentacoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -84,6 +85,11 @@ const App = () => (
             <Route path="/pedidos" element={
               <ProtectedRoute>
                 <Pedidos />
+              </ProtectedRoute>
+            } />
+            <Route path="/movimentacoes" element={
+              <ProtectedRoute>
+                <Movimentacoes />
               </ProtectedRoute>
             } />
             

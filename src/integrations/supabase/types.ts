@@ -131,6 +131,48 @@ export type Database = {
           },
         ]
       }
+      movimentacoes_estoque: {
+        Row: {
+          codigo_auxiliar: string
+          codigo_vendedor: string
+          created_at: string
+          data_movimentacao: string
+          id: string
+          motivo: string | null
+          nome_produto: string | null
+          observacoes: string | null
+          quantidade: number
+          tipo_movimentacao: number
+          user_id: string
+        }
+        Insert: {
+          codigo_auxiliar: string
+          codigo_vendedor: string
+          created_at?: string
+          data_movimentacao?: string
+          id?: string
+          motivo?: string | null
+          nome_produto?: string | null
+          observacoes?: string | null
+          quantidade: number
+          tipo_movimentacao: number
+          user_id: string
+        }
+        Update: {
+          codigo_auxiliar?: string
+          codigo_vendedor?: string
+          created_at?: string
+          data_movimentacao?: string
+          id?: string
+          motivo?: string | null
+          nome_produto?: string | null
+          observacoes?: string | null
+          quantidade?: number
+          tipo_movimentacao?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       pedidos: {
         Row: {
           codigo_cliente: string | null
