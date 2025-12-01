@@ -1,17 +1,18 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Produto } from '@/types/database';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
-import { Package, Plus, QrCode, Search, Download } from 'lucide-react';
+import { Package, Plus, QrCode, Download } from 'lucide-react';
 import QRCode from 'qrcode';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/Pagination';
+import { SearchFilter } from '@/components/SearchFilter';
 
 export default function Produtos() {
   const [produtos, setProdutos] = useState<Produto[]>([]);
@@ -21,8 +22,6 @@ export default function Produtos() {
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(24);
   const [formData, setFormData] = useState({
     codigo_produto: '',
     codigo_auxiliar: '',
@@ -30,13 +29,26 @@ export default function Produtos() {
     valor_produto: '',
   });
 
+  const {
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    startIndex,
+    endIndex,
+    paginatedData: paginatedProdutos,
+    totalItems,
+    handlePageChange,
+    handleItemsPerPageChange,
+  } = usePagination({
+    data: produtos,
+    itemsPerPage: 24,
+    searchTerm,
+    searchFields: ['codigo_auxiliar', 'nome_produto'],
+  });
+
   useEffect(() => {
     fetchProdutos();
   }, []);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, itemsPerPage]);
 
   const fetchProdutos = async () => {
     const { data, error } = await supabase
@@ -106,15 +118,6 @@ export default function Produtos() {
     link.click();
   };
 
-  const filteredProdutos = produtos.filter(p =>
-    p.codigo_auxiliar.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    p.nome_produto.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  const totalPages = Math.ceil(filteredProdutos.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedProdutos = filteredProdutos.slice(startIndex, endIndex);
 
   return (
     <AppLayout>
@@ -191,15 +194,11 @@ export default function Produtos() {
         </div>
 
         {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-          <Input
-            placeholder="Buscar produto..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-9 border-2"
-          />
-        </div>
+        <SearchFilter
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Buscar produto..."
+        />
 
         {/* QR Code Dialog */}
         <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
@@ -223,7 +222,7 @@ export default function Produtos() {
 
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-        ) : filteredProdutos.length === 0 ? (
+        ) : totalItems === 0 ? (
           <Card className="border-2">
             <CardContent className="py-12 text-center">
               <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
@@ -262,65 +261,17 @@ export default function Produtos() {
               </Card>
               ))}
             </div>
-            {filteredProdutos.length > 0 && (
-              <div className="mt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Itens por página:</span>
-                  <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="12">12</SelectItem>
-                      <SelectItem value="24">24</SelectItem>
-                      <SelectItem value="48">48</SelectItem>
-                      <SelectItem value="96">96</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {filteredProdutos.length > itemsPerPage && (
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        return (
-                          <PaginationItem key={pageNum}>
-                            <PaginationLink
-                              onClick={() => setCurrentPage(pageNum)}
-                              isActive={currentPage === pageNum}
-                              className="cursor-pointer"
-                            >
-                              {pageNum}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      })}
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                )}
-              </div>
-            )}
+            
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              itemsPerPage={itemsPerPage}
+              totalItems={totalItems}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              onPageChange={handlePageChange}
+              onItemsPerPageChange={handleItemsPerPageChange}
+            />
           </>
         )}
       </div>

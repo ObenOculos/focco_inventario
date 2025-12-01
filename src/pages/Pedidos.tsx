@@ -3,16 +3,17 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
-import { Search, Package, DollarSign, AlertTriangle, ChevronDown, ChevronUp, FileText } from 'lucide-react';
+import { Package, DollarSign, AlertTriangle, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination as PaginationComponent } from '@/components/Pagination';
+import { SearchFilter } from '@/components/SearchFilter';
 
 interface Pedido {
   id: string;
@@ -50,10 +51,35 @@ export default function Pedidos() {
   const [vendedores, setVendedores] = useState<{ codigo: string; nome: string }[]>([]);
   const [selectedPedido, setSelectedPedido] = useState<PedidoComItens | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
 
   const isGerente = profile?.role === 'gerente';
+
+  // Filtrar pedidos antes da paginação
+  const filteredPedidos = pedidos.filter(pedido => {
+    const matchesSearch = pedido.numero_pedido.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pedido.nome_vendedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      pedido.numero_nota_fiscal?.includes(searchTerm);
+
+    const matchesTipo = tipoFilter === 'todos' || pedido.codigo_tipo.toString() === tipoFilter;
+    const matchesVendedor = vendedorFilter === 'todos' || pedido.codigo_vendedor === vendedorFilter;
+
+    return matchesSearch && matchesTipo && matchesVendedor;
+  });
+
+  const {
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    startIndex,
+    endIndex,
+    paginatedData: paginatedPedidos,
+    totalItems,
+    handlePageChange,
+    handleItemsPerPageChange,
+  } = usePagination({
+    data: filteredPedidos,
+    itemsPerPage: 20,
+  });
 
   useEffect(() => {
     fetchPedidos();
@@ -61,10 +87,6 @@ export default function Pedidos() {
       fetchVendedores();
     }
   }, [profile]);
-
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm, tipoFilter, vendedorFilter, itemsPerPage]);
 
   const fetchPedidos = async () => {
     if (!profile) return;
@@ -153,21 +175,6 @@ export default function Pedidos() {
     }
   };
 
-  const filteredPedidos = pedidos.filter(pedido => {
-    const matchesSearch = pedido.numero_pedido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pedido.nome_vendedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pedido.numero_nota_fiscal?.includes(searchTerm);
-
-    const matchesTipo = tipoFilter === 'todos' || pedido.codigo_tipo.toString() === tipoFilter;
-    const matchesVendedor = vendedorFilter === 'todos' || pedido.codigo_vendedor === vendedorFilter;
-
-    return matchesSearch && matchesTipo && matchesVendedor;
-  });
-
-  const totalPages = Math.ceil(filteredPedidos.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedPedidos = filteredPedidos.slice(startIndex, endIndex);
 
   const totalUnidades = (itens: ItemPedido[]) => {
     return itens.reduce((acc, item) => acc + Number(item.quantidade), 0);
@@ -200,15 +207,11 @@ export default function Pedidos() {
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                <Input
-                  placeholder="Buscar por número do pedido, vendedor ou NF..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+              <SearchFilter
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder="Buscar por número do pedido, vendedor ou NF..."
+              />
               <Select value={tipoFilter} onValueChange={setTipoFilter}>
                 <SelectTrigger className="w-full md:w-40">
                   <SelectValue placeholder="Tipo" />
@@ -243,7 +246,7 @@ export default function Pedidos() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <FileText className="h-5 w-5" />
-              Pedidos ({filteredPedidos.length})
+              Pedidos ({totalItems})
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -306,64 +309,17 @@ export default function Pedidos() {
                 </Table>
               </div>
             )}
-            {!loading && filteredPedidos.length > 0 && (
-              <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-muted-foreground">Itens por página:</span>
-                  <Select value={itemsPerPage.toString()} onValueChange={(value) => setItemsPerPage(Number(value))}>
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="10">10</SelectItem>
-                      <SelectItem value="20">20</SelectItem>
-                      <SelectItem value="50">50</SelectItem>
-                      <SelectItem value="100">100</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                {filteredPedidos.length > itemsPerPage && (
-                  <Pagination>
-                    <PaginationContent>
-                      <PaginationItem>
-                        <PaginationPrevious
-                          onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                          className={currentPage === 1 ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-                      {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                        let pageNum;
-                        if (totalPages <= 5) {
-                          pageNum = i + 1;
-                        } else if (currentPage <= 3) {
-                          pageNum = i + 1;
-                        } else if (currentPage >= totalPages - 2) {
-                          pageNum = totalPages - 4 + i;
-                        } else {
-                          pageNum = currentPage - 2 + i;
-                        }
-                        return (
-                          <PaginationItem key={pageNum}>
-                            <PaginationLink
-                              onClick={() => setCurrentPage(pageNum)}
-                              isActive={currentPage === pageNum}
-                              className="cursor-pointer"
-                            >
-                              {pageNum}
-                            </PaginationLink>
-                          </PaginationItem>
-                        );
-                      })}
-                      <PaginationItem>
-                        <PaginationNext
-                          onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                          className={currentPage === totalPages ? 'pointer-events-none opacity-50' : 'cursor-pointer'}
-                        />
-                      </PaginationItem>
-                    </PaginationContent>
-                  </Pagination>
-                )}
-              </div>
+            {!loading && totalItems > 0 && (
+              <PaginationComponent
+                currentPage={currentPage}
+                totalPages={totalPages}
+                itemsPerPage={itemsPerPage}
+                totalItems={totalItems}
+                startIndex={startIndex}
+                endIndex={endIndex}
+                onPageChange={handlePageChange}
+                onItemsPerPageChange={handleItemsPerPageChange}
+              />
             )}
           </CardContent>
         </Card>
