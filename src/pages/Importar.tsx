@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { FileSpreadsheet, Upload, CheckCircle, AlertCircle, Loader2, Search, ShieldCheck } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { useImport } from '@/contexts/ImportContext';
 
 interface ImportError {
   tipo: 'validacao' | 'duplicata' | 'produto' | 'pedido' | 'item';
@@ -32,9 +33,8 @@ export default function Importar() {
   const [preview, setPreview] = useState<ExcelRow[]>([]);
   const [status, setStatus] = useState<ImportStatus>('idle');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [importResult, setImportResult] = useState<{ success: number; errors: number; errorDetails: ImportError[] } | null>(null);
-  const [progress, setProgress] = useState<{ current: number; total: number; phase: string }>({ current: 0, total: 0, phase: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const { status: importStatus, progress, importResult, startImport } = useImport();
 
   const parseValue = (value: string | number): number => {
     if (typeof value === 'number') return value;
@@ -83,7 +83,6 @@ export default function Importar() {
     setFile(selectedFile);
     setStatus('idle');
     setValidation(null);
-    setImportResult(null);
 
     try {
       const data = await selectedFile.arrayBuffer();
@@ -109,7 +108,6 @@ export default function Importar() {
 
     setStatus('validating');
     setValidation(null);
-    setImportResult(null);
 
     const errors: ImportError[] = [];
     const duplicates: string[] = [];
@@ -288,128 +286,9 @@ export default function Importar() {
     }
   };
 
-  const handleImport = async () => {
+  const handleImport = () => {
     if (!validation || !validation.isValid) return;
-
-    setStatus('importing');
-    const errorDetails: ImportError[] = [];
-    let success = 0;
-    let errors = 0;
-    
-    const totalPedidos = validation.pedidosMap.size;
-    const totalProdutos = validation.produtosMap.size;
-    const totalSteps = totalProdutos > 0 ? totalPedidos + 1 : totalPedidos; // +1 para produtos
-
-    try {
-      // Inserir produtos em lotes de 1000
-      const produtosArray = Array.from(validation.produtosMap.values());
-      const BATCH_SIZE = 1000;
-
-      if (produtosArray.length > 0) {
-        setProgress({ current: 0, total: totalSteps, phase: 'Inserindo produtos...' });
-      }
-
-      for (let i = 0; i < produtosArray.length; i += BATCH_SIZE) {
-        const batch = produtosArray.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from('produtos').upsert(batch, { onConflict: 'codigo_auxiliar' });
-        
-        if (error) {
-          console.error(`Erro no lote de produtos:`, error);
-          errorDetails.push({
-            tipo: 'produto',
-            identificador: `Lote ${Math.floor(i / BATCH_SIZE) + 1}`,
-            mensagem: error.message,
-            detalhes: error.details || error.hint || undefined,
-          });
-          errors++;
-          setImportResult({ success: 0, errors: 1, errorDetails });
-          setStatus('error');
-          toast.error('Erro ao inserir produtos. Importação interrompida.');
-          return;
-        }
-      }
-      
-      // Produtos concluídos
-      if (produtosArray.length > 0) {
-        setProgress({ current: 1, total: totalSteps, phase: 'Inserindo pedidos...' });
-      }
-
-      // Inserir pedidos e itens
-      let pedidoIndex = 0;
-      const baseStep = produtosArray.length > 0 ? 1 : 0;
-      
-      for (const [, { pedido, itens }] of validation.pedidosMap) {
-        setProgress({ 
-          current: baseStep + pedidoIndex, 
-          total: totalSteps, 
-          phase: `Pedido ${pedidoIndex + 1} de ${totalPedidos}` 
-        });
-        
-        const { data: pedidoData, error: pedidoError } = await supabase
-          .from('pedidos')
-          .insert(pedido)
-          .select()
-          .single();
-
-        if (pedidoError) {
-          errors++;
-          errorDetails.push({
-            tipo: 'pedido',
-            identificador: `Pedido #${pedido.numero_pedido}`,
-            mensagem: pedidoError.message,
-            detalhes: pedidoError.details || pedidoError.hint || `Vendedor: ${pedido.codigo_vendedor}`,
-          });
-          setImportResult({ success, errors, errorDetails });
-          setStatus('error');
-          toast.error(`Erro ao inserir pedido #${pedido.numero_pedido}. Importação interrompida.`);
-          return;
-        }
-
-        const itensWithPedidoId = itens.map(item => ({
-          ...item,
-          pedido_id: pedidoData.id,
-        }));
-
-        for (let i = 0; i < itensWithPedidoId.length; i += BATCH_SIZE) {
-          const batch = itensWithPedidoId.slice(i, i + BATCH_SIZE);
-          const { error: itensError } = await supabase
-            .from('itens_pedido')
-            .insert(batch);
-
-          if (itensError) {
-            errors++;
-            errorDetails.push({
-              tipo: 'item',
-              identificador: `Itens do Pedido #${pedido.numero_pedido}`,
-              mensagem: itensError.message,
-              detalhes: itensError.details || itensError.hint || undefined,
-            });
-            setImportResult({ success, errors, errorDetails });
-            setStatus('error');
-            toast.error(`Erro ao inserir itens do pedido #${pedido.numero_pedido}. Importação interrompida.`);
-            return;
-          }
-        }
-        
-        success++;
-        pedidoIndex++;
-      }
-
-      setImportResult({ success, errors, errorDetails });
-      setStatus('completed');
-      toast.success(`Importação concluída! ${success} pedidos importados.`);
-
-    } catch (err: any) {
-      console.error(err);
-      errorDetails.push({
-        tipo: 'pedido',
-        identificador: 'Erro Geral',
-        mensagem: err?.message || 'Erro desconhecido',
-      });
-      setImportResult({ success, errors: errors + 1, errorDetails });
-      setStatus('error');
-      toast.error('Erro durante a importação');
-    }
+    startImport(validation);
   };
 
   const resetImport = () => {
@@ -417,8 +296,6 @@ export default function Importar() {
     setPreview([]);
     setStatus('idle');
     setValidation(null);
-    setImportResult(null);
-    setProgress({ current: 0, total: 0, phase: '' });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -633,7 +510,7 @@ export default function Importar() {
                 </Button>
               )}
 
-              {status === 'validated' && validation?.isValid && (
+              {status === 'validated' && validation?.isValid && importStatus !== 'importing' && (
                 <Button
                   onClick={handleImport}
                   className="flex-1 bg-green-600 hover:bg-green-700"
@@ -643,27 +520,7 @@ export default function Importar() {
                 </Button>
               )}
 
-              {status === 'importing' && (
-                <div className="flex-1 space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="flex items-center gap-2">
-                      <Loader2 className="animate-spin" size={16} />
-                      {progress.phase || 'Importando...'}
-                    </span>
-                    <span className="font-mono font-bold">
-                      {progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0}%
-                    </span>
-                  </div>
-                  <div className="h-3 bg-secondary border-2 border-border overflow-hidden">
-                    <div 
-                      className="h-full bg-primary transition-all duration-300"
-                      style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {(status === 'error' || status === 'completed') && (
+              {(importStatus === 'error' || importStatus === 'completed') && (
                 <Button
                   onClick={resetImport}
                   variant="outline"
@@ -673,7 +530,7 @@ export default function Importar() {
                 </Button>
               )}
 
-              {file && status !== 'validating' && status !== 'importing' && status !== 'completed' && (
+              {file && status !== 'validating' && importStatus !== 'importing' && importStatus !== 'completed' && (
                 <Button variant="outline" onClick={resetImport} className="border-2">
                   Limpar
                 </Button>
