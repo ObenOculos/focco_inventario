@@ -325,10 +325,10 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
+      <div className="space-y-8">
+        <div className="space-y-2">
+          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-muted-foreground text-base">
             {isGerente 
               ? 'Visão geral do sistema - Últimos 30 dias' 
               : 'Seu resumo de atividades - Últimos 30 dias'}
@@ -337,15 +337,15 @@ export default function Dashboard() {
 
         {/* Alertas */}
         {(produtosNegativos.length > 0 || divergencias.length > 0) && (
-          <div className="space-y-2">
+          <div className="space-y-3">
             {produtosNegativos.length > 0 && (
-              <div className="flex items-center gap-3 p-4 bg-destructive/10 border-2 border-destructive rounded-lg">
-                <AlertTriangle className="text-destructive shrink-0" />
+              <div className="flex items-center gap-4 p-5 bg-destructive/10 border-2 border-destructive rounded-lg">
+                <AlertTriangle className="text-destructive shrink-0 h-6 w-6" />
                 <div className="flex-1">
-                  <p className="font-semibold text-destructive">
+                  <p className="font-semibold text-destructive text-base">
                     {produtosNegativos.length} produto(s) com estoque negativo
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mt-1">
                     Verifique divergências de inventário
                   </p>
                 </div>
@@ -355,13 +355,13 @@ export default function Dashboard() {
               </div>
             )}
             {isGerente && divergencias.length > 0 && (
-              <div className="flex items-center gap-3 p-4 bg-orange-100 dark:bg-orange-900/20 border-2 border-orange-500 rounded-lg">
-                <AlertTriangle className="text-orange-600 shrink-0" />
+              <div className="flex items-center gap-4 p-5 bg-orange-100 dark:bg-orange-900/20 border-2 border-orange-500 rounded-lg">
+                <AlertTriangle className="text-orange-600 shrink-0 h-6 w-6" />
                 <div className="flex-1">
-                  <p className="font-semibold text-orange-700 dark:text-orange-400">
+                  <p className="font-semibold text-orange-700 dark:text-orange-400 text-base">
                     {divergencias.length} inventário(s) aguardando revisão
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-sm text-muted-foreground mt-1">
                     {divergencias.slice(0, 2).map(d => d.nome_vendedor).join(', ')}
                     {divergencias.length > 2 && ` e mais ${divergencias.length - 2}`}
                   </p>
@@ -375,17 +375,17 @@ export default function Dashboard() {
         )}
 
         {/* Resumo de Movimentações */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
           <Card className="border-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                <Package size={16} />
+                <Package size={18} />
                 {isGerente ? 'Remessas Enviadas' : 'Remessas Recebidas'}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">
+              <div className="space-y-2">
+                <p className="text-3xl font-bold text-blue-800 dark:text-blue-200">
                   {movimentacao.totalRemessas}
                 </p>
                 <p className="text-xs text-blue-600 dark:text-blue-400">
@@ -399,15 +399,15 @@ export default function Dashboard() {
           </Card>
 
           <Card className="border-2 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-            <CardHeader className="pb-2">
+            <CardHeader className="pb-3">
               <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
-                <DollarSign size={16} />
+                <DollarSign size={18} />
                 Vendas Realizadas
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-1">
-                <p className="text-2xl font-bold text-green-800 dark:text-green-200">
+              <div className="space-y-2">
+                <p className="text-3xl font-bold text-green-800 dark:text-green-200">
                   {movimentacao.totalVendas}
                 </p>
                 <p className="text-xs text-green-600 dark:text-green-400">
@@ -423,15 +423,15 @@ export default function Dashboard() {
           {isGerente && (
             <>
               <Card className="border-2 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2 text-purple-700 dark:text-purple-300">
-                    <Percent size={16} />
+                    <Percent size={18} />
                     Taxa de Venda
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-purple-800 dark:text-purple-200">
+                  <div className="space-y-2">
+                    <p className="text-3xl font-bold text-purple-800 dark:text-purple-200">
                       {movimentacao.unidadesRemessa > 0 
                         ? Math.round((movimentacao.unidadesVenda / movimentacao.unidadesRemessa) * 100) 
                         : 0}%
@@ -444,15 +444,15 @@ export default function Dashboard() {
               </Card>
 
               <Card className="border-2 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
-                <CardHeader className="pb-2">
+                <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                    <BarChart3 size={16} />
+                    <BarChart3 size={18} />
                     Ticket Médio
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="space-y-1">
-                    <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">
+                  <div className="space-y-2">
+                    <p className="text-3xl font-bold text-orange-800 dark:text-orange-200">
                       {movimentacao.totalVendas > 0 
                         ? (movimentacao.valorVenda / movimentacao.totalVendas).toLocaleString('pt-BR', { 
                             style: 'currency', 
@@ -474,107 +474,110 @@ export default function Dashboard() {
 
         {/* Stats - Linha atualizada para gerente */}
         {isGerente ? (
-          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-5">
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Package size={16} />
+                  <Package size={18} />
                   Estoque Total
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.totalItens}</p>
-                <p className="text-xs text-muted-foreground">unidades</p>
+                <p className="text-xs text-muted-foreground mt-1">unidades</p>
               </CardContent>
             </Card>
 
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <TrendingUp size={16} />
+                  <TrendingUp size={18} />
                   Modelos
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.totalModelos}</p>
-                <p className="text-xs text-muted-foreground">diferentes</p>
+                <p className="text-xs text-muted-foreground mt-1">diferentes</p>
               </CardContent>
             </Card>
 
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Users size={16} />
+                  <Users size={18} />
                   Vendedores
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.totalVendedores}</p>
-                <p className="text-xs text-muted-foreground">ativos</p>
+                <p className="text-xs text-muted-foreground mt-1">ativos</p>
               </CardContent>
             </Card>
 
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <AlertTriangle size={16} />
+                  <AlertTriangle size={18} />
                   Estoque Crítico
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.produtosCriticos}</p>
-                <p className="text-xs text-muted-foreground">≤ 5 unidades</p>
+                <p className="text-xs text-muted-foreground mt-1">≤ 5 unidades</p>
               </CardContent>
             </Card>
 
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Clock size={16} />
+                  <Clock size={18} />
                   Inventários
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.inventariosPendentes}</p>
-                <p className="text-xs text-muted-foreground">pendentes</p>
+                <p className="text-xs text-muted-foreground mt-1">pendentes</p>
               </CardContent>
             </Card>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <Package size={16} />
+                  <Package size={18} />
                   Total em Estoque
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.totalItens}</p>
+                <p className="text-xs text-muted-foreground mt-1">unidades</p>
               </CardContent>
             </Card>
 
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <TrendingUp size={16} />
+                  <TrendingUp size={18} />
                   Modelos Diferentes
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.totalModelos}</p>
+                <p className="text-xs text-muted-foreground mt-1">modelos</p>
               </CardContent>
             </Card>
 
             <Card className="border-2">
-              <CardHeader className="pb-2">
+              <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                  <ClipboardList size={16} />
-                  Meus Inventários Pendentes
+                  <ClipboardList size={18} />
+                  Inventários Pendentes
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <p className="text-3xl font-bold">{stats.inventariosPendentes}</p>
+                <p className="text-xs text-muted-foreground mt-1">aguardando</p>
               </CardContent>
             </Card>
           </div>
@@ -582,12 +585,12 @@ export default function Dashboard() {
 
         {/* Top Vendedores (apenas gerente) */}
         {isGerente && topVendedores.length > 0 && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="flex items-center justify-between">
+              <CardHeader className="pb-4">
+                <CardTitle className="flex items-center justify-between text-lg">
                   <span className="flex items-center gap-2">
-                    <Trophy className="text-yellow-500" size={20} />
+                    <Trophy className="text-yellow-500" size={22} />
                     Top 5 Vendedores
                   </span>
                   <Link to="/vendedores">
@@ -598,13 +601,13 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {topVendedores.map((vendedor, index) => (
                     <div 
                       key={vendedor.codigo_vendedor}
-                      className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                      className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors"
                     >
-                      <div className={`w-10 h-10 flex items-center justify-center font-bold text-lg rounded ${
+                      <div className={`w-11 h-11 flex items-center justify-center font-bold text-lg rounded ${
                         index === 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200' :
                         index === 1 ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' :
                         index === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200' :
@@ -613,15 +616,15 @@ export default function Dashboard() {
                         {index + 1}°
                       </div>
                       <div className="flex-1 min-w-0">
-                        <p className="font-medium truncate">{vendedor.nome_vendedor}</p>
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <p className="font-medium truncate text-base">{vendedor.nome_vendedor}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-1">
                           <span>{vendedor.codigo_vendedor}</span>
                           <span>•</span>
                           <span>{vendedor.numero_vendas} vendas</span>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="font-bold text-green-600 dark:text-green-400">
+                        <p className="font-bold text-green-600 dark:text-green-400 text-base">
                           {vendedor.valor_vendido.toLocaleString('pt-BR', { 
                             style: 'currency', 
                             currency: 'BRL',
@@ -629,7 +632,7 @@ export default function Dashboard() {
                             maximumFractionDigits: 0,
                           })}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="text-xs text-muted-foreground mt-1">
                           {vendedor.unidades_vendidas.toLocaleString('pt-BR')} un
                         </p>
                       </div>
@@ -641,20 +644,20 @@ export default function Dashboard() {
 
             {/* Ações Rápidas */}
             <Card className="border-2">
-              <CardHeader>
-                <CardTitle>Ações Rápidas</CardTitle>
+              <CardHeader className="pb-4">
+                <CardTitle className="text-lg">Ações Rápidas</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
                   <Link to="/importar">
                     <Button variant="outline" className="w-full justify-between h-auto py-4">
                       <div className="flex items-center gap-3 text-left">
-                        <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded">
+                        <div className="p-2.5 bg-blue-100 dark:bg-blue-900 rounded-lg">
                           <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
                         </div>
                         <div>
-                          <p className="font-medium">Importar Pedidos</p>
-                          <p className="text-xs text-muted-foreground">Carregar arquivo Excel</p>
+                          <p className="font-medium text-base">Importar Pedidos</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Carregar arquivo Excel</p>
                         </div>
                       </div>
                       <ArrowRight size={16} />
@@ -664,12 +667,12 @@ export default function Dashboard() {
                   <Link to="/conferencia">
                     <Button variant="outline" className="w-full justify-between h-auto py-4">
                       <div className="flex items-center gap-3 text-left">
-                        <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded">
+                        <div className="p-2.5 bg-orange-100 dark:bg-orange-900 rounded-lg">
                           <ClipboardList className="text-orange-600 dark:text-orange-400" size={20} />
                         </div>
                         <div>
-                          <p className="font-medium">Revisar Inventários</p>
-                          <p className="text-xs text-muted-foreground">
+                          <p className="font-medium text-base">Revisar Inventários</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
                             {stats.inventariosPendentes} pendente{stats.inventariosPendentes !== 1 ? 's' : ''}
                           </p>
                         </div>
@@ -681,12 +684,12 @@ export default function Dashboard() {
                   <Link to="/produtos">
                     <Button variant="outline" className="w-full justify-between h-auto py-4">
                       <div className="flex items-center gap-3 text-left">
-                        <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded">
+                        <div className="p-2.5 bg-purple-100 dark:bg-purple-900 rounded-lg">
                           <Package className="text-purple-600 dark:text-purple-400" size={20} />
                         </div>
                         <div>
-                          <p className="font-medium">Gerenciar Produtos</p>
-                          <p className="text-xs text-muted-foreground">Cadastrar e gerar QR codes</p>
+                          <p className="font-medium text-base">Gerenciar Produtos</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Cadastrar e gerar QR codes</p>
                         </div>
                       </div>
                       <ArrowRight size={16} />
@@ -696,12 +699,12 @@ export default function Dashboard() {
                   <Link to="/estoque-teorico">
                     <Button variant="outline" className="w-full justify-between h-auto py-4">
                       <div className="flex items-center gap-3 text-left">
-                        <div className="p-2 bg-green-100 dark:bg-green-900 rounded">
+                        <div className="p-2.5 bg-green-100 dark:bg-green-900 rounded-lg">
                           <BarChart3 className="text-green-600 dark:text-green-400" size={20} />
                         </div>
                         <div>
-                          <p className="font-medium">Ver Estoque Completo</p>
-                          <p className="text-xs text-muted-foreground">{stats.totalItens} unidades</p>
+                          <p className="font-medium text-base">Ver Estoque Completo</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{stats.totalItens} unidades</p>
                         </div>
                       </div>
                       <ArrowRight size={16} />
@@ -716,29 +719,29 @@ export default function Dashboard() {
         {/* Painel do Vendedor - Últimos pedidos */}
         {!isGerente && (
           <Card className="border-2">
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle>Atividade Recente</CardTitle>
+            <CardHeader className="flex flex-row items-center justify-between pb-4">
+              <CardTitle className="text-lg">Atividade Recente</CardTitle>
               <Link to="/pedidos">
                 <Button variant="outline" size="sm">Ver todos</Button>
               </Link>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 text-blue-600 mb-2">
-                    <Package size={16} />
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                <div className="p-5 border-2 rounded-lg">
+                  <div className="flex items-center gap-2 text-blue-600 mb-3">
+                    <Package size={18} />
                     <span className="font-medium">Última Remessa</span>
                   </div>
-                  <p className="text-2xl font-bold">{movimentacao.unidadesRemessa}</p>
-                  <p className="text-sm text-muted-foreground">unidades recebidas</p>
+                  <p className="text-3xl font-bold">{movimentacao.unidadesRemessa}</p>
+                  <p className="text-sm text-muted-foreground mt-1">unidades recebidas</p>
                 </div>
-                <div className="p-4 border rounded-lg">
-                  <div className="flex items-center gap-2 text-green-600 mb-2">
-                    <DollarSign size={16} />
+                <div className="p-5 border-2 rounded-lg">
+                  <div className="flex items-center gap-2 text-green-600 mb-3">
+                    <DollarSign size={18} />
                     <span className="font-medium">Minhas Vendas</span>
                   </div>
-                  <p className="text-2xl font-bold">{movimentacao.unidadesVenda}</p>
-                  <p className="text-sm text-muted-foreground">unidades vendidas</p>
+                  <p className="text-3xl font-bold">{movimentacao.unidadesVenda}</p>
+                  <p className="text-sm text-muted-foreground mt-1">unidades vendidas</p>
                 </div>
               </div>
             </CardContent>
@@ -748,26 +751,28 @@ export default function Dashboard() {
         {/* Acesso rápido ao estoque - apenas vendedor */}
         {!isGerente && (
           <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Package size={20} />
+            <CardHeader className="pb-4">
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Package size={22} />
                 Estoque Teórico
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 border rounded-lg text-center">
-                    <p className="text-sm text-muted-foreground mb-1">Total em Estoque</p>
+              <div className="space-y-5">
+                <div className="grid grid-cols-2 gap-5">
+                  <div className="p-5 border-2 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground mb-2">Total em Estoque</p>
                     <p className="text-3xl font-bold">{stats.totalItens}</p>
+                    <p className="text-xs text-muted-foreground mt-1">unidades</p>
                   </div>
-                  <div className="p-4 border rounded-lg text-center">
-                    <p className="text-sm text-muted-foreground mb-1">Modelos</p>
+                  <div className="p-5 border-2 rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground mb-2">Modelos</p>
                     <p className="text-3xl font-bold">{stats.totalModelos}</p>
+                    <p className="text-xs text-muted-foreground mt-1">diferentes</p>
                   </div>
                 </div>
                 <Link to="/estoque-teorico">
-                  <Button className="w-full">
+                  <Button className="w-full h-11">
                     Ver Estoque Completo
                   </Button>
                 </Link>
