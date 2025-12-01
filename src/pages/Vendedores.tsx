@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Users, Plus, Pencil, UserCheck, UserX } from 'lucide-react';
 
@@ -15,6 +16,7 @@ export default function Vendedores() {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVendedor, setEditingVendedor] = useState<Profile | null>(null);
+  const [codigosDisponiveis, setCodigosDisponiveis] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     email: '',
     nome: '',
@@ -24,6 +26,7 @@ export default function Vendedores() {
 
   useEffect(() => {
     fetchVendedores();
+    fetchCodigosDisponiveis();
   }, []);
 
   const fetchVendedores = async () => {
@@ -39,6 +42,42 @@ export default function Vendedores() {
       setVendedores(data as Profile[]);
     }
     setLoading(false);
+  };
+
+  const fetchCodigosDisponiveis = async () => {
+    // Buscar todos os códigos de vendedor únicos dos pedidos
+    const { data: pedidosData, error: pedidosError } = await supabase
+      .from('pedidos')
+      .select('codigo_vendedor')
+      .not('codigo_vendedor', 'is', null);
+
+    if (pedidosError) {
+      console.error('Erro ao buscar códigos:', pedidosError);
+      return;
+    }
+
+    // Buscar códigos já associados a vendedores
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('codigo_vendedor')
+      .eq('role', 'vendedor')
+      .not('codigo_vendedor', 'is', null);
+
+    if (profilesError) {
+      console.error('Erro ao buscar perfis:', profilesError);
+      return;
+    }
+
+    // Extrair códigos únicos dos pedidos
+    const codigosPedidos = [...new Set(pedidosData.map(p => p.codigo_vendedor).filter(Boolean))];
+    
+    // Extrair códigos já associados
+    const codigosAssociados = new Set(profilesData.map(p => p.codigo_vendedor).filter(Boolean));
+    
+    // Filtrar apenas os códigos não associados
+    const disponiveis = codigosPedidos.filter(codigo => !codigosAssociados.has(codigo));
+    
+    setCodigosDisponiveis(disponiveis.sort());
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -61,6 +100,7 @@ export default function Vendedores() {
       } else {
         toast.success('Vendedor atualizado!');
         fetchVendedores();
+        fetchCodigosDisponiveis();
         setDialogOpen(false);
         resetForm();
       }
@@ -93,6 +133,7 @@ export default function Vendedores() {
       } else {
         toast.success('Vendedor criado! Um email foi enviado para definir a senha.');
         fetchVendedores();
+        fetchCodigosDisponiveis();
         setDialogOpen(false);
         resetForm();
       }
@@ -175,12 +216,36 @@ export default function Vendedores() {
                 </div>
                 <div>
                   <Label>Código do Vendedor</Label>
-                  <Input
-                    value={formData.codigo_vendedor}
-                    onChange={(e) => setFormData({ ...formData, codigo_vendedor: e.target.value })}
-                    className="border-2"
-                    placeholder="Ex: 11"
-                  />
+                  {editingVendedor ? (
+                    <Input
+                      value={formData.codigo_vendedor}
+                      onChange={(e) => setFormData({ ...formData, codigo_vendedor: e.target.value })}
+                      className="border-2"
+                      placeholder="Ex: 11"
+                    />
+                  ) : (
+                    <Select
+                      value={formData.codigo_vendedor}
+                      onValueChange={(value) => setFormData({ ...formData, codigo_vendedor: value })}
+                    >
+                      <SelectTrigger className="border-2">
+                        <SelectValue placeholder="Selecione um código" />
+                      </SelectTrigger>
+                      <SelectContent className="bg-background border-2 z-50">
+                        {codigosDisponiveis.length === 0 ? (
+                          <SelectItem value="_empty" disabled>
+                            Nenhum código disponível
+                          </SelectItem>
+                        ) : (
+                          codigosDisponiveis.map((codigo) => (
+                            <SelectItem key={codigo} value={codigo}>
+                              {codigo}
+                            </SelectItem>
+                          ))
+                        )}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
                 <div>
                   <Label>Telefone</Label>
