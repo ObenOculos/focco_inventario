@@ -79,38 +79,22 @@ export default function ControleVendedores() {
         .order('data_emissao', { ascending: false })
         .limit(50);
 
-      // Buscar todos os pedidos para calcular totais de remessa/venda
-      const { data: todosPedidos } = await supabase
-        .from('pedidos')
-        .select('id, codigo_tipo')
-        .eq('codigo_vendedor', vendedor.codigo_vendedor);
-
-      // Buscar itens dos pedidos
-      const pedidoIds = todosPedidos?.map(p => p.id) || [];
-      const { data: itensPedidos } = await supabase
+      // Buscar itens de todos os pedidos agrupados por tipo
+      const { data: itensRemessa } = await supabase
         .from('itens_pedido')
-        .select('pedido_id, quantidade')
-        .in('pedido_id', pedidoIds);
+        .select('quantidade, pedidos!inner(codigo_tipo, codigo_vendedor)')
+        .eq('pedidos.codigo_vendedor', vendedor.codigo_vendedor)
+        .eq('pedidos.codigo_tipo', 7);
 
-      // Mapear quantidade por pedido
-      const quantidadePorPedido = new Map<string, number>();
-      itensPedidos?.forEach(item => {
-        const current = quantidadePorPedido.get(item.pedido_id) || 0;
-        quantidadePorPedido.set(item.pedido_id, current + Number(item.quantidade));
-      });
+      const { data: itensVenda } = await supabase
+        .from('itens_pedido')
+        .select('quantidade, pedidos!inner(codigo_tipo, codigo_vendedor)')
+        .eq('pedidos.codigo_vendedor', vendedor.codigo_vendedor)
+        .eq('pedidos.codigo_tipo', 2);
 
       // Calcular totais
-      let totalRemessas = 0;
-      let totalVendas = 0;
-      
-      todosPedidos?.forEach(pedido => {
-        const quantidade = quantidadePorPedido.get(pedido.id) || 0;
-        if (pedido.codigo_tipo === 7) {
-          totalRemessas += quantidade;
-        } else if (pedido.codigo_tipo === 2) {
-          totalVendas += quantidade;
-        }
-      });
+      const totalRemessas = itensRemessa?.reduce((sum, item) => sum + Number(item.quantidade), 0) || 0;
+      const totalVendas = itensVenda?.reduce((sum, item) => sum + Number(item.quantidade), 0) || 0;
 
       vendedoresData.push({
         codigo_vendedor: vendedor.codigo_vendedor!,
