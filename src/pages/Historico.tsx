@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { useInventariosQuery } from '@/hooks/useInventariosQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
@@ -15,36 +15,9 @@ interface InventarioComItens extends Inventario {
 
 export default function Historico() {
   const { profile } = useAuth();
-  const [inventarios, setInventarios] = useState<InventarioComItens[]>([]);
-  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchHistorico();
-  }, [profile]);
-
-  const fetchHistorico = async () => {
-    if (!profile?.codigo_vendedor) {
-      setLoading(false);
-      return;
-    }
-
-    const { data, error } = await supabase
-      .from('inventarios')
-      .select(`
-        *,
-        itens_inventario (*)
-      `)
-      .eq('codigo_vendedor', profile.codigo_vendedor)
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar histórico:', error);
-    } else {
-      setInventarios(data as InventarioComItens[]);
-    }
-    setLoading(false);
-  };
+  const { data: inventarios = [], isLoading: loading } = useInventariosQuery(profile?.codigo_vendedor);
 
   const getStatusBadge = (status: InventoryStatus) => {
     const styles = {
