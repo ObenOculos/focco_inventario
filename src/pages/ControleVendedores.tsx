@@ -79,18 +79,21 @@ export default function ControleVendedores() {
         .order('data_emissao', { ascending: false })
         .limit(50);
 
-      // Contar número de pedidos por tipo
-      const { count: totalRemessas } = await supabase
+      // Buscar e contar pedidos por tipo
+      const { data: pedidosRemessa } = await supabase
         .from('pedidos')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('codigo_vendedor', vendedor.codigo_vendedor)
         .eq('codigo_tipo', 7);
 
-      const { count: totalVendas } = await supabase
+      const { data: pedidosVenda } = await supabase
         .from('pedidos')
-        .select('*', { count: 'exact', head: true })
+        .select('id')
         .eq('codigo_vendedor', vendedor.codigo_vendedor)
         .eq('codigo_tipo', 2);
+
+      const totalRemessas = pedidosRemessa?.length || 0;
+      const totalVendas = pedidosVenda?.length || 0;
 
       vendedoresData.push({
         codigo_vendedor: vendedor.codigo_vendedor!,
