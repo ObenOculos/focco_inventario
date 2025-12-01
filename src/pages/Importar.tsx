@@ -173,7 +173,8 @@ export default function Importar() {
 
         const numeroPedido = String(row.pedido);
         const codigoTipo = Number(row.codigo_tipo);
-        const key = `${numeroPedido}-${codigoTipo}`;
+        const codigoEmpresa = row.codigo_empresa ? Number(row.codigo_empresa) : null;
+        const key = `${codigoEmpresa}-${numeroPedido}-${codigoTipo}`;
         
         if (!pedidosMap.has(key)) {
           pedidosMap.set(key, {
@@ -188,6 +189,8 @@ export default function Importar() {
               situacao: row.situacao || 'N',
               numero_nota_fiscal: String(row.numero_nota_fiscal || ''),
               serie_nota_fiscal: String(row.serie_nota_fiscal || ''),
+              codigo_empresa: codigoEmpresa,
+              empresa: row.empresa || '',
             },
             itens: [],
           });
@@ -220,16 +223,16 @@ export default function Importar() {
 
       for (let i = 0; i < pedidoKeys.length; i += 100) {
         const batchKeys = pedidoKeys.slice(i, i + 100);
-        const numerosToCheck = batchKeys.map(k => k.split('-')[0]);
+        const numerosToCheck = batchKeys.map(k => k.split('-')[1]); // numero_pedido é o segundo elemento
         
         const { data: existing } = await supabase
           .from('pedidos')
-          .select('numero_pedido, codigo_tipo')
+          .select('numero_pedido, codigo_tipo, codigo_empresa')
           .in('numero_pedido', numerosToCheck);
 
         if (existing) {
           existing.forEach(p => {
-            const key = `${p.numero_pedido}-${p.codigo_tipo}`;
+            const key = `${p.codigo_empresa}-${p.numero_pedido}-${p.codigo_tipo}`;
             existingPedidos.add(key);
             if (pedidosMap.has(key)) {
               duplicates.push(key);
@@ -237,7 +240,7 @@ export default function Importar() {
                 tipo: 'duplicata',
                 identificador: `Pedido #${p.numero_pedido}`,
                 mensagem: 'Pedido já existe no banco de dados',
-                detalhes: `Tipo: ${p.codigo_tipo === 7 ? 'Remessa' : 'Venda'}`,
+                detalhes: `Empresa: ${p.codigo_empresa || 'N/A'} | Tipo: ${p.codigo_tipo === 7 ? 'Remessa' : 'Venda'}`,
               });
             }
           });

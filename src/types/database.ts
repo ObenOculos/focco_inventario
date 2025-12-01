@@ -37,6 +37,8 @@ export interface Pedido {
   situacao: string;
   numero_nota_fiscal: string | null;
   serie_nota_fiscal: string | null;
+  codigo_empresa: number | null;
+  empresa: string | null;
   created_at: string;
 }
 
@@ -97,4 +99,6 @@ export interface ExcelRow {
   codigo_produto: string;
   quantidade: string | number;
   valor_produto: string | number;
+  codigo_empresa?: number;
+  empresa?: string;
 }
