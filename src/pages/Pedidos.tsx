@@ -55,6 +55,9 @@ export default function Pedidos() {
   const { data: vendedores = [] } = useVendedoresQuery();
   const { data: itensPedido = [] } = usePedidoDetalhesQuery(selectedPedidoId);
 
+  console.log('🎯 Pedidos recebidos:', pedidos.length);
+  console.log('🔍 Filtros ativos - Tipo:', tipoFilter, 'Vendedor:', vendedorFilter);
+
   // Filtrar pedidos antes da paginação
   const filteredPedidos = pedidos.filter(pedido => {
     const matchesSearch = pedido.numero_pedido.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -66,6 +69,11 @@ export default function Pedidos() {
 
     return matchesSearch && matchesTipo && matchesVendedor;
   });
+
+  console.log('✅ Pedidos após filtro:', filteredPedidos.length);
+  if (tipoFilter === '7' && vendedorFilter === '11') {
+    console.log('🔍 DEBUG - Pedidos filtrados (tipo 7, vendedor 11):', filteredPedidos.map(p => p.numero_pedido));
+  }
 
   const {
     currentPage,
