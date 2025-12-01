@@ -65,9 +65,37 @@ export default function Vendedores() {
         resetForm();
       }
     } else {
-      // Criar novo vendedor via convite
-      toast.info('Para adicionar um novo vendedor, ele precisa se cadastrar no sistema e você pode depois atribuir o código de vendedor.');
-      setDialogOpen(false);
+      // Criar novo vendedor via Edge Function
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        toast.error('Sessão expirada');
+        return;
+      }
+
+      const response = await fetch(
+        `https://evsneoercdzzwxmhuxid.supabase.co/functions/v1/criar-vendedor`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(formData),
+        }
+      );
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        toast.error(result.error || 'Erro ao criar vendedor');
+        console.error(result.error);
+      } else {
+        toast.success('Vendedor criado! Um email foi enviado para definir a senha.');
+        fetchVendedores();
+        setDialogOpen(false);
+        resetForm();
+      }
     }
   };
 
