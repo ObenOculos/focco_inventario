@@ -19,6 +19,7 @@ import Importar from "./pages/Importar";
 import Conferencia from "./pages/Conferencia";
 import Pedidos from "./pages/Pedidos";
 import Movimentacoes from "./pages/Movimentacoes";
+import ControleVendedores from "./pages/ControleVendedores";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -65,6 +66,11 @@ const App = () => (
             <Route path="/vendedores" element={
               <ProtectedRoute allowedRoles={['gerente']}>
                 <Vendedores />
+              </ProtectedRoute>
+            } />
+            <Route path="/controle-vendedores" element={
+              <ProtectedRoute allowedRoles={['gerente']}>
+                <ControleVendedores />
               </ProtectedRoute>
             } />
             <Route path="/produtos" element={
