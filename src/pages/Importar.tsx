@@ -86,7 +86,11 @@ export default function Importar() {
 
     try {
       const data = await selectedFile.arrayBuffer();
-      const workbook = XLSX.read(data);
+      const isCsv = selectedFile.name.toLowerCase().endsWith('.csv');
+      const workbook = XLSX.read(data, { 
+        type: 'array',
+        FS: isCsv ? ';' : undefined // CSV brasileiro usa ; como delimitador
+      });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<ExcelRow>(worksheet);
@@ -94,7 +98,7 @@ export default function Importar() {
       setPreview(jsonData.slice(0, 5));
       toast.success(`${jsonData.length} registros encontrados. Clique em "Validar" para verificar.`);
     } catch (err) {
-      toast.error('Erro ao ler arquivo Excel');
+      toast.error('Erro ao ler arquivo');
       console.error(err);
     }
   };
@@ -111,7 +115,11 @@ export default function Importar() {
 
     try {
       const data = await file.arrayBuffer();
-      const workbook = XLSX.read(data);
+      const isCsv = file.name.toLowerCase().endsWith('.csv');
+      const workbook = XLSX.read(data, {
+        type: 'array',
+        FS: isCsv ? ';' : undefined
+      });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<ExcelRow>(worksheet);
