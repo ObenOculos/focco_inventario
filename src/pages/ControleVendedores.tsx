@@ -4,13 +4,19 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
 import { EstoqueItem } from '@/types/database';
-import { Users, AlertTriangle, Package, TrendingUp, TrendingDown, FileText } from 'lucide-react';
+import { Users, AlertTriangle, Package, TrendingUp, TrendingDown, FileText, CalendarIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar } from '@/components/ui/calendar';
+import { format } from 'date-fns';
+import { cn } from '@/lib/utils';
+import { DateRange } from 'react-day-picker';
 
 interface VendedorEstoque {
   codigo_vendedor: string;
@@ -27,6 +33,10 @@ export default function ControleVendedores() {
   const [loading, setLoading] = useState(true);
   const [vendedores, setVendedores] = useState<VendedorEstoque[]>([]);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('');
+  const [dateRange, setDateRange] = useState<DateRange | undefined>({
+    from: new Date(new Date().setDate(new Date().getDate() - 30)),
+    to: new Date(),
+  });
 
   useEffect(() => {
     if (profile?.role === 'gerente') {
@@ -110,6 +120,15 @@ export default function ControleVendedores() {
   const vendedorSelecionado = vendedores.find(v => v.codigo_vendedor === selectedVendedor);
   const vendedoresComEstoqueNegativo = vendedores.filter(v => v.estoqueAtual < 0);
 
+  // Filtrar pedidos pelo período selecionado
+  const pedidosFiltrados = vendedorSelecionado?.pedidosRecentes.filter((pedido) => {
+    if (!dateRange?.from) return true;
+    const dataPedido = new Date(pedido.data_emissao);
+    const dataInicio = dateRange.from;
+    const dataFim = dateRange.to || new Date();
+    return dataPedido >= dataInicio && dataPedido <= dataFim;
+  }) || [];
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -154,32 +173,80 @@ export default function ControleVendedores() {
           </Card>
         </div>
 
-        {/* Seletor de Vendedor */}
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="text-base">Selecione um Vendedor</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-              <SelectTrigger className="w-full border-2">
-                <SelectValue placeholder="Escolha um vendedor" />
-              </SelectTrigger>
-              <SelectContent>
-                {vendedores.map((v) => (
-                  <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium">{v.nome_vendedor}</span>
-                      <span className="text-xs text-muted-foreground">({v.codigo_vendedor})</span>
-                      {v.estoqueAtual < 0 && (
-                        <Badge variant="destructive" className="ml-2">Negativo</Badge>
-                      )}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </CardContent>
-        </Card>
+        {/* Filtros */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Seletor de Vendedor */}
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle className="text-base">Selecione um Vendedor</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
+                <SelectTrigger className="w-full border-2">
+                  <SelectValue placeholder="Escolha um vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {vendedores.map((v) => (
+                    <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium">{v.nome_vendedor}</span>
+                        <span className="text-xs text-muted-foreground">({v.codigo_vendedor})</span>
+                        {v.estoqueAtual < 0 && (
+                          <Badge variant="destructive" className="ml-2">Negativo</Badge>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </CardContent>
+          </Card>
+
+          {/* Filtro de Período */}
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle className="text-base">Período dos Pedidos</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      'w-full justify-start text-left font-normal border-2',
+                      !dateRange && 'text-muted-foreground'
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateRange?.from ? (
+                      dateRange.to ? (
+                        <>
+                          {format(dateRange.from, 'dd/MM/yyyy')} -{' '}
+                          {format(dateRange.to, 'dd/MM/yyyy')}
+                        </>
+                      ) : (
+                        format(dateRange.from, 'dd/MM/yyyy')
+                      )
+                    ) : (
+                      <span>Selecione o período</span>
+                    )}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    initialFocus
+                    mode="range"
+                    defaultMonth={dateRange?.from}
+                    selected={dateRange}
+                    onSelect={setDateRange}
+                    numberOfMonths={2}
+                    className={cn('p-3 pointer-events-auto')}
+                  />
+                </PopoverContent>
+              </Popover>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Conteúdo do Vendedor Selecionado */}
         {loading ? (
@@ -303,17 +370,19 @@ export default function ControleVendedores() {
                 </CardContent>
               </Card>
 
-              {/* Pedidos Recentes */}
+              {/* Pedidos no Período */}
               <Card className="border-2">
                 <CardHeader>
                   <CardTitle className="text-base flex items-center gap-2">
                     <FileText size={18} />
-                    Pedidos Recentes ({vendedorSelecionado.pedidosRecentes.length})
+                    Pedidos no Período ({pedidosFiltrados.length})
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {vendedorSelecionado.pedidosRecentes.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhum pedido registrado</p>
+                  {pedidosFiltrados.length === 0 ? (
+                    <p className="text-center text-muted-foreground py-8">
+                      Nenhum pedido no período selecionado
+                    </p>
                   ) : (
                     <ScrollArea className="h-[400px]">
                       <Table>
@@ -326,7 +395,7 @@ export default function ControleVendedores() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {vendedorSelecionado.pedidosRecentes.map((pedido) => (
+                          {pedidosFiltrados.map((pedido) => (
                             <TableRow key={pedido.numero_pedido}>
                               <TableCell className="text-xs font-medium">
                                 {pedido.numero_pedido}
