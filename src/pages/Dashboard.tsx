@@ -13,7 +13,11 @@ import {
   AlertTriangle,
   DollarSign,
   Users,
-  Trophy
+  Trophy,
+  Percent,
+  BarChart3,
+  ArrowRight,
+  Clock
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -31,6 +35,8 @@ interface TopVendedor {
   codigo_vendedor: string;
   nome_vendedor: string;
   unidades_vendidas: number;
+  valor_vendido: number;
+  numero_vendas: number;
 }
 
 interface Divergencia {
@@ -47,6 +53,8 @@ export default function Dashboard() {
     totalItens: 0,
     totalModelos: 0,
     inventariosPendentes: 0,
+    totalVendedores: 0,
+    produtosCriticos: 0,
   });
   const [movimentacao, setMovimentacao] = useState<MovimentacaoResumo>({
     totalRemessas: 0,
@@ -133,10 +141,13 @@ export default function Dashboard() {
     setProdutosNegativos(estoqueArray.filter(e => e.estoque_teorico < 0));
     
     // Update stats
+    const produtosCriticos = estoqueArray.filter(e => e.estoque_teorico > 0 && e.estoque_teorico <= 5).length;
+    
     setStats(prev => ({
       ...prev,
       totalItens: estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0),
       totalModelos: new Set(estoqueArray.map(e => e.modelo)).size,
+      produtosCriticos,
     }));
     
     setLoading(false);
@@ -212,7 +223,7 @@ export default function Dashboard() {
 
     const { data: pedidos, error } = await supabase
       .from('pedidos')
-      .select('id, codigo_vendedor, nome_vendedor')
+      .select('id, codigo_vendedor, nome_vendedor, valor_total')
       .eq('codigo_tipo', 2)
       .gte('data_emissao', thirtyDaysAgo.toISOString());
 
@@ -228,18 +239,22 @@ export default function Dashboard() {
       .select('pedido_id, quantidade')
       .in('pedido_id', pedidoIds);
 
-    const vendedorMap = new Map<string, { nome: string; unidades: number }>();
+    const vendedorMap = new Map<string, { nome: string; unidades: number; valor: number; vendas: number }>();
     
     pedidos?.forEach(pedido => {
       const current = vendedorMap.get(pedido.codigo_vendedor) || { 
         nome: pedido.nome_vendedor || pedido.codigo_vendedor, 
-        unidades: 0 
+        unidades: 0,
+        valor: 0,
+        vendas: 0,
       };
       
       const pedidoItens = itens?.filter(i => i.pedido_id === pedido.id) || [];
       const unidades = pedidoItens.reduce((acc, i) => acc + Number(i.quantidade), 0);
       
       current.unidades += unidades;
+      current.valor += Number(pedido.valor_total);
+      current.vendas += 1;
       vendedorMap.set(pedido.codigo_vendedor, current);
     });
 
@@ -248,11 +263,17 @@ export default function Dashboard() {
         codigo_vendedor: codigo,
         nome_vendedor: data.nome,
         unidades_vendidas: data.unidades,
+        valor_vendido: data.valor,
+        numero_vendas: data.vendas,
       }))
-      .sort((a, b) => b.unidades_vendidas - a.unidades_vendidas)
+      .sort((a, b) => b.valor_vendido - a.valor_vendido)
       .slice(0, 5);
 
     setTopVendedores(top);
+    
+    // Count unique active sellers
+    const vendedoresAtivos = new Set(pedidos?.map(p => p.codigo_vendedor) || []).size;
+    setStats(prev => ({ ...prev, totalVendedores: vendedoresAtivos }));
   };
 
   const fetchDivergencias = async () => {
@@ -354,7 +375,7 @@ export default function Dashboard() {
         )}
 
         {/* Resumo de Movimentações */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
@@ -365,9 +386,9 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-1">
                 <p className="text-2xl font-bold text-blue-800 dark:text-blue-200">
-                  {movimentacao.totalRemessas} pedidos
+                  {movimentacao.totalRemessas}
                 </p>
-                <p className="text-sm text-blue-600 dark:text-blue-400">
+                <p className="text-xs text-blue-600 dark:text-blue-400">
                   {movimentacao.unidadesRemessa.toLocaleString('pt-BR')} unidades
                 </p>
                 <p className="text-sm font-medium text-blue-700 dark:text-blue-300">
@@ -387,9 +408,9 @@ export default function Dashboard() {
             <CardContent>
               <div className="space-y-1">
                 <p className="text-2xl font-bold text-green-800 dark:text-green-200">
-                  {movimentacao.totalVendas} pedidos
+                  {movimentacao.totalVendas}
                 </p>
-                <p className="text-sm text-green-600 dark:text-green-400">
+                <p className="text-xs text-green-600 dark:text-green-400">
                   {movimentacao.unidadesVenda.toLocaleString('pt-BR')} unidades
                 </p>
                 <p className="text-sm font-medium text-green-700 dark:text-green-300">
@@ -398,83 +419,298 @@ export default function Dashboard() {
               </div>
             </CardContent>
           </Card>
+
+          {isGerente && (
+            <>
+              <Card className="border-2 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                    <Percent size={16} />
+                    Taxa de Venda
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-purple-800 dark:text-purple-200">
+                      {movimentacao.unidadesRemessa > 0 
+                        ? Math.round((movimentacao.unidadesVenda / movimentacao.unidadesRemessa) * 100) 
+                        : 0}%
+                    </p>
+                    <p className="text-xs text-purple-600 dark:text-purple-400">
+                      vendas / remessas
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-2 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                    <BarChart3 size={16} />
+                    Ticket Médio
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-1">
+                    <p className="text-2xl font-bold text-orange-800 dark:text-orange-200">
+                      {movimentacao.totalVendas > 0 
+                        ? (movimentacao.valorVenda / movimentacao.totalVendas).toLocaleString('pt-BR', { 
+                            style: 'currency', 
+                            currency: 'BRL',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })
+                        : 'R$ 0'}
+                    </p>
+                    <p className="text-xs text-orange-600 dark:text-orange-400">
+                      por venda
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
         </div>
 
-        {/* Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <Card className="border-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Package size={16} />
-                Total em Estoque
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold">{stats.totalItens}</p>
-            </CardContent>
-          </Card>
+        {/* Stats - Linha atualizada para gerente */}
+        {isGerente ? (
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-4">
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Package size={16} />
+                  Estoque Total
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.totalItens}</p>
+                <p className="text-xs text-muted-foreground">unidades</p>
+              </CardContent>
+            </Card>
 
-          <Card className="border-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <TrendingUp size={16} />
-                Modelos Diferentes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold">{stats.totalModelos}</p>
-            </CardContent>
-          </Card>
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <TrendingUp size={16} />
+                  Modelos
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.totalModelos}</p>
+                <p className="text-xs text-muted-foreground">diferentes</p>
+              </CardContent>
+            </Card>
 
-          <Card className="border-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ClipboardList size={16} />
-                {isGerente ? 'Inventários Pendentes' : 'Meus Inventários Pendentes'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold">{stats.inventariosPendentes}</p>
-            </CardContent>
-          </Card>
-        </div>
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Users size={16} />
+                  Vendedores
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.totalVendedores}</p>
+                <p className="text-xs text-muted-foreground">ativos</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <AlertTriangle size={16} />
+                  Estoque Crítico
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.produtosCriticos}</p>
+                <p className="text-xs text-muted-foreground">≤ 5 unidades</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Clock size={16} />
+                  Inventários
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.inventariosPendentes}</p>
+                <p className="text-xs text-muted-foreground">pendentes</p>
+              </CardContent>
+            </Card>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <Package size={16} />
+                  Total em Estoque
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.totalItens}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <TrendingUp size={16} />
+                  Modelos Diferentes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.totalModelos}</p>
+              </CardContent>
+            </Card>
+
+            <Card className="border-2">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                  <ClipboardList size={16} />
+                  Meus Inventários Pendentes
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-3xl font-bold">{stats.inventariosPendentes}</p>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Top Vendedores (apenas gerente) */}
         {isGerente && topVendedores.length > 0 && (
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Trophy className="text-yellow-500" size={20} />
-                Top 5 Vendedores (por volume)
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {topVendedores.map((vendedor, index) => (
-                  <div 
-                    key={vendedor.codigo_vendedor}
-                    className="flex items-center gap-4 p-3 border rounded-lg"
-                  >
-                    <div className={`w-8 h-8 flex items-center justify-center font-bold rounded ${
-                      index === 0 ? 'bg-yellow-100 text-yellow-700' :
-                      index === 1 ? 'bg-gray-100 text-gray-700' :
-                      index === 2 ? 'bg-orange-100 text-orange-700' :
-                      'bg-muted text-muted-foreground'
-                    }`}>
-                      {index + 1}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <Trophy className="text-yellow-500" size={20} />
+                    Top 5 Vendedores
+                  </span>
+                  <Link to="/vendedores">
+                    <Button variant="ghost" size="sm">
+                      Ver todos <ArrowRight size={14} className="ml-1" />
+                    </Button>
+                  </Link>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {topVendedores.map((vendedor, index) => (
+                    <div 
+                      key={vendedor.codigo_vendedor}
+                      className="flex items-center gap-3 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                    >
+                      <div className={`w-10 h-10 flex items-center justify-center font-bold text-lg rounded ${
+                        index === 0 ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-200' :
+                        index === 1 ? 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200' :
+                        index === 2 ? 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-200' :
+                        'bg-muted text-muted-foreground'
+                      }`}>
+                        {index + 1}°
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium truncate">{vendedor.nome_vendedor}</p>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <span>{vendedor.codigo_vendedor}</span>
+                          <span>•</span>
+                          <span>{vendedor.numero_vendas} vendas</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-bold text-green-600 dark:text-green-400">
+                          {vendedor.valor_vendido.toLocaleString('pt-BR', { 
+                            style: 'currency', 
+                            currency: 'BRL',
+                            minimumFractionDigits: 0,
+                            maximumFractionDigits: 0,
+                          })}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {vendedor.unidades_vendidas.toLocaleString('pt-BR')} un
+                        </p>
+                      </div>
                     </div>
-                    <div className="flex-1">
-                      <p className="font-medium">{vendedor.nome_vendedor}</p>
-                      <p className="text-sm text-muted-foreground">{vendedor.codigo_vendedor}</p>
-                    </div>
-                    <Badge variant="secondary" className="font-bold">
-                      {vendedor.unidades_vendidas.toLocaleString('pt-BR')} un
-                    </Badge>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Ações Rápidas */}
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle>Ações Rápidas</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  <Link to="/importar">
+                    <Button variant="outline" className="w-full justify-between h-auto py-4">
+                      <div className="flex items-center gap-3 text-left">
+                        <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded">
+                          <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Importar Pedidos</p>
+                          <p className="text-xs text-muted-foreground">Carregar arquivo Excel</p>
+                        </div>
+                      </div>
+                      <ArrowRight size={16} />
+                    </Button>
+                  </Link>
+
+                  <Link to="/conferencia">
+                    <Button variant="outline" className="w-full justify-between h-auto py-4">
+                      <div className="flex items-center gap-3 text-left">
+                        <div className="p-2 bg-orange-100 dark:bg-orange-900 rounded">
+                          <ClipboardList className="text-orange-600 dark:text-orange-400" size={20} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Revisar Inventários</p>
+                          <p className="text-xs text-muted-foreground">
+                            {stats.inventariosPendentes} pendente{stats.inventariosPendentes !== 1 ? 's' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <ArrowRight size={16} />
+                    </Button>
+                  </Link>
+
+                  <Link to="/produtos">
+                    <Button variant="outline" className="w-full justify-between h-auto py-4">
+                      <div className="flex items-center gap-3 text-left">
+                        <div className="p-2 bg-purple-100 dark:bg-purple-900 rounded">
+                          <Package className="text-purple-600 dark:text-purple-400" size={20} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Gerenciar Produtos</p>
+                          <p className="text-xs text-muted-foreground">Cadastrar e gerar QR codes</p>
+                        </div>
+                      </div>
+                      <ArrowRight size={16} />
+                    </Button>
+                  </Link>
+
+                  <Link to="/estoque-teorico">
+                    <Button variant="outline" className="w-full justify-between h-auto py-4">
+                      <div className="flex items-center gap-3 text-left">
+                        <div className="p-2 bg-green-100 dark:bg-green-900 rounded">
+                          <BarChart3 className="text-green-600 dark:text-green-400" size={20} />
+                        </div>
+                        <div>
+                          <p className="font-medium">Ver Estoque Completo</p>
+                          <p className="text-xs text-muted-foreground">{stats.totalItens} unidades</p>
+                        </div>
+                      </div>
+                      <ArrowRight size={16} />
+                    </Button>
+                  </Link>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         )}
 
         {/* Painel do Vendedor - Últimos pedidos */}
@@ -509,34 +745,36 @@ export default function Dashboard() {
           </Card>
         )}
 
-        {/* Acesso rápido ao estoque */}
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package size={20} />
-              Estoque Teórico
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="p-4 border rounded-lg text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Total em Estoque</p>
-                  <p className="text-3xl font-bold">{stats.totalItens}</p>
+        {/* Acesso rápido ao estoque - apenas vendedor */}
+        {!isGerente && (
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Package size={20} />
+                Estoque Teórico
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="p-4 border rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground mb-1">Total em Estoque</p>
+                    <p className="text-3xl font-bold">{stats.totalItens}</p>
+                  </div>
+                  <div className="p-4 border rounded-lg text-center">
+                    <p className="text-sm text-muted-foreground mb-1">Modelos</p>
+                    <p className="text-3xl font-bold">{stats.totalModelos}</p>
+                  </div>
                 </div>
-                <div className="p-4 border rounded-lg text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Modelos</p>
-                  <p className="text-3xl font-bold">{stats.totalModelos}</p>
-                </div>
+                <Link to="/estoque-teorico">
+                  <Button className="w-full">
+                    Ver Estoque Completo
+                  </Button>
+                </Link>
               </div>
-              <Link to="/estoque-teorico">
-                <Button className="w-full">
-                  Ver Estoque Completo
-                </Button>
-              </Link>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </AppLayout>
   );
