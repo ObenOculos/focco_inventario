@@ -17,7 +17,8 @@ import {
   ClipboardCheck,
   History,
   FileText,
-  RefreshCw
+  RefreshCw,
+  UserCog
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -45,9 +46,10 @@ export function AppLayout({ children }: AppLayoutProps) {
   const gerenteLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
+    { to: '/controle-vendedores', icon: ClipboardList, label: 'Controle de Vendedores' },
     { to: '/pedidos', icon: FileText, label: 'Gestão de Pedidos' },
     { to: '/movimentacoes', icon: RefreshCw, label: 'Movimentações' },
-    { to: '/vendedores', icon: Users, label: 'Vendedores' },
+    { to: '/vendedores', icon: UserCog, label: 'Cadastro de Vendedores' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos' },
     { to: '/importar', icon: Upload, label: 'Importar' },
     { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
