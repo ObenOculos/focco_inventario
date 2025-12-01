@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { VendedorEstoqueCard } from '@/components/VendedorEstoqueCard';
+import { calcularEstoqueTeorico } from '@/lib/estoque';
 
 interface MovimentacaoResumo {
   totalRemessas: number;
@@ -46,6 +48,16 @@ interface Divergencia {
   data: string;
 }
 
+interface VendedorEstoque {
+  codigo_vendedor: string;
+  nome_vendedor: string;
+  totalRemessas: number;
+  totalVendas: number;
+  estoqueAtual: number;
+  itens: EstoqueItem[];
+  pedidosRecentes: any[];
+}
+
 export default function Dashboard() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -70,6 +82,7 @@ export default function Dashboard() {
   const [statusInventarios, setStatusInventarios] = useState<StatusInventario[]>([]);
   const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
   const [produtosNegativos, setProdutosNegativos] = useState<EstoqueItem[]>([]);
+  const [vendedoresEstoque, setVendedoresEstoque] = useState<VendedorEstoque[]>([]);
 
   const isGerente = profile?.role === 'gerente';
 
@@ -80,6 +93,7 @@ export default function Dashboard() {
       if (isGerente) {
         fetchStatusInventarios();
         fetchDivergencias();
+        fetchVendedoresEstoque();
       }
     }
   }, [profile]);
@@ -317,6 +331,59 @@ export default function Dashboard() {
         data: d.data_inventario,
       })) || []
     );
+  };
+
+  const fetchVendedoresEstoque = async () => {
+    // Buscar todos os vendedores
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('codigo_vendedor, nome')
+      .eq('role', 'vendedor')
+      .not('codigo_vendedor', 'is', null);
+
+    if (profilesError || !profiles) {
+      console.error('Erro ao buscar vendedores:', profilesError);
+      return;
+    }
+
+    const vendedoresData: VendedorEstoque[] = [];
+
+    for (const vendedor of profiles) {
+      // Calcular estoque usando a função centralizada
+      const estoqueMap = await calcularEstoqueTeorico(vendedor.codigo_vendedor!);
+      const itensArray = Array.from(estoqueMap.values());
+
+      // Buscar pedidos recentes (últimos 10)
+      const { data: pedidos } = await supabase
+        .from('pedidos')
+        .select('numero_pedido, data_emissao, codigo_tipo, situacao, valor_total')
+        .eq('codigo_vendedor', vendedor.codigo_vendedor)
+        .order('data_emissao', { ascending: false })
+        .limit(10);
+
+      const totalRemessas = itensArray.reduce((sum, item) => sum + item.quantidade_remessa, 0);
+      const totalVendas = itensArray.reduce((sum, item) => sum + item.quantidade_venda, 0);
+      const estoqueAtual = itensArray.reduce((sum, item) => sum + item.estoque_teorico, 0);
+
+      vendedoresData.push({
+        codigo_vendedor: vendedor.codigo_vendedor!,
+        nome_vendedor: vendedor.nome,
+        totalRemessas,
+        totalVendas,
+        estoqueAtual,
+        itens: itensArray.sort((a, b) => b.estoque_teorico - a.estoque_teorico),
+        pedidosRecentes: pedidos || [],
+      });
+    }
+
+    // Ordenar por estoque negativo primeiro, depois por estoque total
+    vendedoresData.sort((a, b) => {
+      if (a.estoqueAtual < 0 && b.estoqueAtual >= 0) return -1;
+      if (a.estoqueAtual >= 0 && b.estoqueAtual < 0) return 1;
+      return Math.abs(b.estoqueAtual) - Math.abs(a.estoqueAtual);
+    });
+
+    setVendedoresEstoque(vendedoresData);
   };
 
   useEffect(() => {
@@ -562,6 +629,39 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground mt-1">aguardando</p>
               </CardContent>
             </Card>
+          </div>
+        )}
+
+        {/* Controle de Estoque dos Vendedores (apenas gerente) */}
+        {isGerente && vendedoresEstoque.length > 0 && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold">Controle de Estoque por Vendedor</h2>
+                <p className="text-muted-foreground text-sm mt-1">
+                  Visão detalhada de remessas, vendas e itens de cada vendedor
+                </p>
+              </div>
+              <Link to="/estoque-teorico">
+                <Button variant="outline" size="sm">
+                  Ver Estoque Completo <ArrowRight size={14} className="ml-1" />
+                </Button>
+              </Link>
+            </div>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+              {vendedoresEstoque.map((vendedor) => (
+                <VendedorEstoqueCard
+                  key={vendedor.codigo_vendedor}
+                  codigo_vendedor={vendedor.codigo_vendedor}
+                  nome_vendedor={vendedor.nome_vendedor}
+                  totalRemessas={vendedor.totalRemessas}
+                  totalVendas={vendedor.totalVendas}
+                  estoqueAtual={vendedor.estoqueAtual}
+                  itens={vendedor.itens}
+                  pedidosRecentes={vendedor.pedidosRecentes}
+                />
+              ))}
+            </div>
           </div>
         )}
 
