@@ -33,10 +33,7 @@ export default function ControleVendedores() {
   const [loading, setLoading] = useState(true);
   const [vendedores, setVendedores] = useState<VendedorEstoque[]>([]);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('');
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: new Date(new Date().setDate(new Date().getDate() - 30)),
-    to: new Date(),
-  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
   useEffect(() => {
     if (profile?.role === 'gerente') {
