@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
-import { Inventario, ItemInventario, EstoqueItem, InventoryStatus } from '@/types/database';
+import { Inventario, ItemInventario, InventoryStatus } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -16,6 +16,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { calcularEstoqueTeorico } from '@/lib/estoque';
 
 interface InventarioComItens extends Inventario {
   itens_inventario: ItemInventario[];
@@ -93,50 +94,6 @@ export default function Conferencia() {
       setInventarios(data as unknown as InventarioComItens[]);
     }
     setLoading(false);
-  };
-
-  const calcularEstoqueTeorico = async (codigoVendedor: string): Promise<Map<string, EstoqueItem>> => {
-    const { data } = await supabase
-      .from('itens_pedido')
-      .select(`
-        codigo_auxiliar,
-        nome_produto,
-        quantidade,
-        pedidos!inner (
-          codigo_vendedor,
-          codigo_tipo
-        )
-      `)
-      .eq('pedidos.codigo_vendedor', codigoVendedor);
-
-    const estoqueMap = new Map<string, EstoqueItem>();
-
-    data?.forEach((item: any) => {
-      const key = item.codigo_auxiliar;
-      const existing = estoqueMap.get(key) || {
-        codigo_auxiliar: item.codigo_auxiliar,
-        nome_produto: item.nome_produto,
-        modelo: '',
-        cor: '',
-        quantidade_remessa: 0,
-        quantidade_venda: 0,
-        estoque_teorico: 0,
-      };
-
-      const quantidade = Number(item.quantidade) || 0;
-      const codigoTipo = item.pedidos?.codigo_tipo;
-
-      if (codigoTipo === 7) {
-        existing.quantidade_remessa += quantidade;
-      } else if (codigoTipo === 2) {
-        existing.quantidade_venda += quantidade;
-      }
-
-      existing.estoque_teorico = existing.quantidade_remessa - existing.quantidade_venda;
-      estoqueMap.set(key, existing);
-    });
-
-    return estoqueMap;
   };
 
   const openConferencia = async (inventario: InventarioComItens) => {
