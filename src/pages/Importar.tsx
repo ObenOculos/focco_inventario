@@ -33,6 +33,7 @@ export default function Importar() {
   const [status, setStatus] = useState<ImportStatus>('idle');
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [importResult, setImportResult] = useState<{ success: number; errors: number; errorDetails: ImportError[] } | null>(null);
+  const [progress, setProgress] = useState<{ current: number; total: number; phase: string }>({ current: 0, total: 0, phase: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const parseValue = (value: string | number): number => {
@@ -294,11 +295,19 @@ export default function Importar() {
     const errorDetails: ImportError[] = [];
     let success = 0;
     let errors = 0;
+    
+    const totalPedidos = validation.pedidosMap.size;
+    const totalProdutos = validation.produtosMap.size;
+    const totalSteps = totalProdutos > 0 ? totalPedidos + 1 : totalPedidos; // +1 para produtos
 
     try {
       // Inserir produtos em lotes de 1000
       const produtosArray = Array.from(validation.produtosMap.values());
       const BATCH_SIZE = 1000;
+
+      if (produtosArray.length > 0) {
+        setProgress({ current: 0, total: totalSteps, phase: 'Inserindo produtos...' });
+      }
 
       for (let i = 0; i < produtosArray.length; i += BATCH_SIZE) {
         const batch = produtosArray.slice(i, i + BATCH_SIZE);
@@ -313,16 +322,29 @@ export default function Importar() {
             detalhes: error.details || error.hint || undefined,
           });
           errors++;
-          // Interrompe se houver erro nos produtos
           setImportResult({ success: 0, errors: 1, errorDetails });
           setStatus('error');
           toast.error('Erro ao inserir produtos. Importação interrompida.');
           return;
         }
       }
+      
+      // Produtos concluídos
+      if (produtosArray.length > 0) {
+        setProgress({ current: 1, total: totalSteps, phase: 'Inserindo pedidos...' });
+      }
 
       // Inserir pedidos e itens
+      let pedidoIndex = 0;
+      const baseStep = produtosArray.length > 0 ? 1 : 0;
+      
       for (const [, { pedido, itens }] of validation.pedidosMap) {
+        setProgress({ 
+          current: baseStep + pedidoIndex, 
+          total: totalSteps, 
+          phase: `Pedido ${pedidoIndex + 1} de ${totalPedidos}` 
+        });
+        
         const { data: pedidoData, error: pedidoError } = await supabase
           .from('pedidos')
           .insert(pedido)
@@ -337,7 +359,6 @@ export default function Importar() {
             mensagem: pedidoError.message,
             detalhes: pedidoError.details || pedidoError.hint || `Vendedor: ${pedido.codigo_vendedor}`,
           });
-          // Interrompe se houver erro
           setImportResult({ success, errors, errorDetails });
           setStatus('error');
           toast.error(`Erro ao inserir pedido #${pedido.numero_pedido}. Importação interrompida.`);
@@ -363,7 +384,6 @@ export default function Importar() {
               mensagem: itensError.message,
               detalhes: itensError.details || itensError.hint || undefined,
             });
-            // Interrompe se houver erro
             setImportResult({ success, errors, errorDetails });
             setStatus('error');
             toast.error(`Erro ao inserir itens do pedido #${pedido.numero_pedido}. Importação interrompida.`);
@@ -372,6 +392,7 @@ export default function Importar() {
         }
         
         success++;
+        pedidoIndex++;
       }
 
       setImportResult({ success, errors, errorDetails });
@@ -397,6 +418,7 @@ export default function Importar() {
     setStatus('idle');
     setValidation(null);
     setImportResult(null);
+    setProgress({ current: 0, total: 0, phase: '' });
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -622,10 +644,23 @@ export default function Importar() {
               )}
 
               {status === 'importing' && (
-                <Button disabled className="flex-1">
-                  <Loader2 className="mr-2 animate-spin" size={16} />
-                  Importando...
-                </Button>
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="flex items-center gap-2">
+                      <Loader2 className="animate-spin" size={16} />
+                      {progress.phase || 'Importando...'}
+                    </span>
+                    <span className="font-mono font-bold">
+                      {progress.total > 0 ? Math.round((progress.current / progress.total) * 100) : 0}%
+                    </span>
+                  </div>
+                  <div className="h-3 bg-secondary border-2 border-border overflow-hidden">
+                    <div 
+                      className="h-full bg-primary transition-all duration-300"
+                      style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
+                    />
+                  </div>
+                </div>
               )}
 
               {(status === 'error' || status === 'completed') && (
