@@ -69,19 +69,51 @@ export default function ControleVendedores() {
     const vendedoresData: VendedorEstoque[] = [];
 
     for (const vendedor of profiles) {
+      // Calcular estoque teórico total (sem filtro de período)
       const estoqueMap = await calcularEstoqueTeorico(vendedor.codigo_vendedor!);
       const itensArray = Array.from(estoqueMap.values());
+      const estoqueAtual = itensArray.reduce((sum, item) => sum + item.estoque_teorico, 0);
 
-      const { data: pedidos } = await supabase
+      // Buscar pedidos recentes para a tabela
+      const { data: pedidosRecentes } = await supabase
         .from('pedidos')
         .select('numero_pedido, data_emissao, codigo_tipo, situacao, valor_total')
         .eq('codigo_vendedor', vendedor.codigo_vendedor)
         .order('data_emissao', { ascending: false })
-        .limit(10);
+        .limit(50);
 
-      const totalRemessas = itensArray.reduce((sum, item) => sum + item.quantidade_remessa, 0);
-      const totalVendas = itensArray.reduce((sum, item) => sum + item.quantidade_venda, 0);
-      const estoqueAtual = itensArray.reduce((sum, item) => sum + item.estoque_teorico, 0);
+      // Buscar todos os pedidos para calcular totais de remessa/venda
+      const { data: todosPedidos } = await supabase
+        .from('pedidos')
+        .select('id, codigo_tipo')
+        .eq('codigo_vendedor', vendedor.codigo_vendedor);
+
+      // Buscar itens dos pedidos
+      const pedidoIds = todosPedidos?.map(p => p.id) || [];
+      const { data: itensPedidos } = await supabase
+        .from('itens_pedido')
+        .select('pedido_id, quantidade')
+        .in('pedido_id', pedidoIds);
+
+      // Mapear quantidade por pedido
+      const quantidadePorPedido = new Map<string, number>();
+      itensPedidos?.forEach(item => {
+        const current = quantidadePorPedido.get(item.pedido_id) || 0;
+        quantidadePorPedido.set(item.pedido_id, current + Number(item.quantidade));
+      });
+
+      // Calcular totais
+      let totalRemessas = 0;
+      let totalVendas = 0;
+      
+      todosPedidos?.forEach(pedido => {
+        const quantidade = quantidadePorPedido.get(pedido.id) || 0;
+        if (pedido.codigo_tipo === 7) {
+          totalRemessas += quantidade;
+        } else if (pedido.codigo_tipo === 2) {
+          totalVendas += quantidade;
+        }
+      });
 
       vendedoresData.push({
         codigo_vendedor: vendedor.codigo_vendedor!,
@@ -90,7 +122,7 @@ export default function ControleVendedores() {
         totalVendas,
         estoqueAtual,
         itens: itensArray.sort((a, b) => b.estoque_teorico - a.estoque_teorico),
-        pedidosRecentes: pedidos || [],
+        pedidosRecentes: pedidosRecentes || [],
       });
     }
 
@@ -118,7 +150,6 @@ export default function ControleVendedores() {
   }
 
   const vendedorSelecionado = vendedores.find(v => v.codigo_vendedor === selectedVendedor);
-  const vendedoresComEstoqueNegativo = vendedores.filter(v => v.estoqueAtual < 0);
 
   // Filtrar pedidos pelo período selecionado
   const pedidosFiltrados = vendedorSelecionado?.pedidosRecentes.filter((pedido) => {
@@ -128,6 +159,18 @@ export default function ControleVendedores() {
     const dataFim = dateRange.to || new Date();
     return dataPedido >= dataInicio && dataPedido <= dataFim;
   }) || [];
+
+  // Calcular totais do período
+  let remessasPeriodo = 0;
+  let vendasPeriodo = 0;
+  
+  pedidosFiltrados.forEach(pedido => {
+    if (pedido.codigo_tipo === 7) {
+      remessasPeriodo += Number(pedido.valor_total || 0);
+    } else if (pedido.codigo_tipo === 2) {
+      vendasPeriodo += Number(pedido.valor_total || 0);
+    }
+  });
 
   return (
     <AppLayout>
@@ -255,8 +298,11 @@ export default function ControleVendedores() {
                       <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{vendedorSelecionado.totalRemessas}</p>
-                      <p className="text-xs text-muted-foreground">Remessas</p>
+                      <p className="text-2xl font-bold">{vendedorSelecionado.totalRemessas.toLocaleString('pt-BR')}</p>
+                      <p className="text-xs text-muted-foreground">Remessas (Total)</p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                        {pedidosFiltrados.filter(p => p.codigo_tipo === 7).length} no período
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -264,8 +310,11 @@ export default function ControleVendedores() {
                       <TrendingDown className="text-green-600 dark:text-green-400" size={20} />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{vendedorSelecionado.totalVendas}</p>
-                      <p className="text-xs text-muted-foreground">Vendas</p>
+                      <p className="text-2xl font-bold">{vendedorSelecionado.totalVendas.toLocaleString('pt-BR')}</p>
+                      <p className="text-xs text-muted-foreground">Vendas (Total)</p>
+                      <p className="text-xs text-green-600 dark:text-green-400 font-medium">
+                        {pedidosFiltrados.filter(p => p.codigo_tipo === 2).length} no período
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -286,7 +335,7 @@ export default function ControleVendedores() {
                       }`}>
                         {vendedorSelecionado.estoqueAtual}
                       </p>
-                      <p className="text-xs text-muted-foreground">Estoque</p>
+                      <p className="text-xs text-muted-foreground">Estoque Atual</p>
                     </div>
                   </div>
                 </div>
