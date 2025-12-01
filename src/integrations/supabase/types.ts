@@ -134,10 +134,12 @@ export type Database = {
       pedidos: {
         Row: {
           codigo_cliente: string | null
+          codigo_empresa: number | null
           codigo_tipo: number
           codigo_vendedor: string
           created_at: string
           data_emissao: string
+          empresa: string | null
           id: string
           nome_vendedor: string | null
           numero_nota_fiscal: string | null
@@ -148,10 +150,12 @@ export type Database = {
         }
         Insert: {
           codigo_cliente?: string | null
+          codigo_empresa?: number | null
           codigo_tipo: number
           codigo_vendedor: string
           created_at?: string
           data_emissao: string
+          empresa?: string | null
           id?: string
           nome_vendedor?: string | null
           numero_nota_fiscal?: string | null
@@ -162,10 +166,12 @@ export type Database = {
         }
         Update: {
           codigo_cliente?: string | null
+          codigo_empresa?: number | null
           codigo_tipo?: number
           codigo_vendedor?: string
           created_at?: string
           data_emissao?: string
+          empresa?: string | null
           id?: string
           nome_vendedor?: string | null
           numero_nota_fiscal?: string | null
