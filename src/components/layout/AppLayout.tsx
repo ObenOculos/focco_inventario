@@ -12,7 +12,11 @@ import {
   Menu,
   X,
   QrCode,
-  ShoppingCart
+  ShoppingCart,
+  Upload,
+  ClipboardCheck,
+  History,
+  FileText
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -30,18 +34,20 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const vendedorLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/pedidos', icon: ShoppingCart, label: 'Pedidos' },
+    { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
+    { to: '/pedidos', icon: FileText, label: 'Meus Pedidos' },
     { to: '/inventario', icon: ClipboardList, label: 'Inventário' },
-    { to: '/historico', icon: FileSpreadsheet, label: 'Histórico' },
+    { to: '/historico', icon: History, label: 'Histórico' },
   ];
 
   const gerenteLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/pedidos', icon: ShoppingCart, label: 'Pedidos' },
+    { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
+    { to: '/pedidos', icon: FileText, label: 'Gestão de Pedidos' },
     { to: '/vendedores', icon: Users, label: 'Vendedores' },
-    { to: '/produtos', icon: Package, label: 'Produtos' },
-    { to: '/importar', icon: FileSpreadsheet, label: 'Importar' },
-    { to: '/conferencia', icon: ClipboardList, label: 'Conferência' },
+    { to: '/produtos', icon: ShoppingCart, label: 'Produtos' },
+    { to: '/importar', icon: Upload, label: 'Importar' },
+    { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
   ];
 
   const links = isGerente ? gerenteLinks : vendedorLinks;

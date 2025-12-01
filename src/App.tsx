@@ -10,6 +10,7 @@ import { ImportBlocker } from "@/components/ImportBlocker";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Auth from "./pages/Auth";
 import Dashboard from "./pages/Dashboard";
+import EstoqueTeorico from "./pages/EstoqueTeorico";
 import Inventario from "./pages/Inventario";
 import Historico from "./pages/Historico";
 import Vendedores from "./pages/Vendedores";
@@ -39,6 +40,11 @@ const App = () => (
             <Route path="/dashboard" element={
               <ProtectedRoute>
                 <Dashboard />
+              </ProtectedRoute>
+            } />
+            <Route path="/estoque-teorico" element={
+              <ProtectedRoute>
+                <EstoqueTeorico />
               </ProtectedRoute>
             } />
             
