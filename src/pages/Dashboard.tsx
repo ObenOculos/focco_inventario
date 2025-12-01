@@ -1,7 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
+import { useEstoqueQuery, useMovimentacaoResumoQuery } from '@/hooks/useDashboardQuery';
+import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
 import { EstoqueItem } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -48,180 +50,28 @@ interface Divergencia {
 
 export default function Dashboard() {
   const { profile } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    totalItens: 0,
-    totalModelos: 0,
-    inventariosPendentes: 0,
-    inventariosAprovados: 0,
-    inventariosRevisao: 0,
-    totalVendedores: 0,
-    produtosNegativos: 0,
-    produtosCriticos: 0,
-  });
-  const [movimentacao, setMovimentacao] = useState<MovimentacaoResumo>({
-    totalRemessas: 0,
-    unidadesRemessa: 0,
-    valorRemessa: 0,
-    totalVendas: 0,
-    unidadesVenda: 0,
-    valorVenda: 0,
-  });
-  const [statusInventarios, setStatusInventarios] = useState<StatusInventario[]>([]);
-  const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
-  const [produtosNegativos, setProdutosNegativos] = useState<EstoqueItem[]>([]);
-
   const isGerente = profile?.role === 'gerente';
 
+  const [statusInventarios, setStatusInventarios] = useState<StatusInventario[]>([]);
+  const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
+
+  const { data: estoqueArray = [], isLoading: loadingEstoque } = useEstoqueQuery(profile?.codigo_vendedor, isGerente);
+  const { data: movimentacao = { totalRemessas: 0, unidadesRemessa: 0, valorRemessa: 0, totalVendas: 0, unidadesVenda: 0, valorVenda: 0 } } = useMovimentacaoResumoQuery(profile?.codigo_vendedor, isGerente);
+  const { data: inventariosPendentes = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'pendente');
+  const { data: inventariosAprovados = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'aprovado');
+  const { data: inventariosRevisao = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'revisao');
+
+  const produtosNegativos = estoqueArray.filter(e => e.estoque_teorico < 0);
+  const produtosCriticos = estoqueArray.filter(e => e.estoque_teorico > 0 && e.estoque_teorico <= 5).length;
+  const totalItens = estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0);
+  const totalModelos = new Set(estoqueArray.map(e => e.modelo)).size;
+
   useEffect(() => {
-    if (profile) {
-      fetchEstoque();
-      fetchMovimentacao();
-      if (isGerente) {
-        fetchStatusInventarios();
-        fetchDivergencias();
-      }
+    if (profile && isGerente) {
+      fetchStatusInventarios();
+      fetchDivergencias();
     }
-  }, [profile]);
-
-  const fetchEstoque = async () => {
-    if (!profile) return;
-
-    const codigoVendedor = isGerente ? null : profile.codigo_vendedor;
-    
-    let query = supabase
-      .from('itens_pedido')
-      .select(`
-        codigo_auxiliar,
-        nome_produto,
-        quantidade,
-        pedidos!inner (
-          codigo_vendedor,
-          codigo_tipo
-        )
-      `);
-
-    if (codigoVendedor) {
-      query = query.eq('pedidos.codigo_vendedor', codigoVendedor);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Erro ao buscar estoque:', error);
-      setLoading(false);
-      return;
-    }
-
-    const estoqueMap = new Map<string, EstoqueItem>();
-
-    data?.forEach((item: any) => {
-      const key = item.codigo_auxiliar;
-      const existing = estoqueMap.get(key) || {
-        codigo_auxiliar: item.codigo_auxiliar,
-        nome_produto: item.nome_produto,
-        modelo: item.codigo_auxiliar.split(' ')[0] || '',
-        cor: item.codigo_auxiliar.split(' ')[1] || '',
-        quantidade_remessa: 0,
-        quantidade_venda: 0,
-        estoque_teorico: 0,
-      };
-
-      const quantidade = Number(item.quantidade) || 0;
-      const codigoTipo = item.pedidos?.codigo_tipo;
-
-      if (codigoTipo === 7) {
-        existing.quantidade_remessa += quantidade;
-      } else if (codigoTipo === 2) {
-        existing.quantidade_venda += quantidade;
-      }
-
-      existing.estoque_teorico = existing.quantidade_remessa - existing.quantidade_venda;
-      estoqueMap.set(key, existing);
-    });
-
-    const estoqueArray = Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
-    const negativos = estoqueArray.filter(e => e.estoque_teorico < 0);
-    setProdutosNegativos(negativos);
-    
-    // Update stats
-    const produtosCriticos = estoqueArray.filter(e => e.estoque_teorico > 0 && e.estoque_teorico <= 5).length;
-    
-    setStats(prev => ({
-      ...prev,
-      totalItens: estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0),
-      totalModelos: new Set(estoqueArray.map(e => e.modelo)).size,
-      produtosNegativos: negativos.length,
-      produtosCriticos,
-    }));
-    
-    setLoading(false);
-  };
-
-  const fetchMovimentacao = async () => {
-    if (!profile) return;
-
-    const codigoVendedor = isGerente ? null : profile.codigo_vendedor;
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    let pedidosQuery = supabase
-      .from('pedidos')
-      .select('id, codigo_tipo, valor_total')
-      .gte('data_emissao', thirtyDaysAgo.toISOString());
-
-    if (codigoVendedor) {
-      pedidosQuery = pedidosQuery.eq('codigo_vendedor', codigoVendedor);
-    }
-
-    const { data: pedidos, error: pedidosError } = await pedidosQuery;
-
-    if (pedidosError) {
-      console.error('Erro ao buscar movimentações:', pedidosError);
-      return;
-    }
-
-    const pedidoIds = pedidos?.map(p => p.id) || [];
-    
-    let itensQuery = supabase
-      .from('itens_pedido')
-      .select('pedido_id, quantidade')
-      .in('pedido_id', pedidoIds);
-
-    const { data: itens } = await itensQuery;
-
-    const itensPorPedido = new Map<string, number>();
-    itens?.forEach(item => {
-      const current = itensPorPedido.get(item.pedido_id) || 0;
-      itensPorPedido.set(item.pedido_id, current + Number(item.quantidade));
-    });
-
-    let totalRemessas = 0, unidadesRemessa = 0, valorRemessa = 0;
-    let totalVendas = 0, unidadesVenda = 0, valorVenda = 0;
-
-    pedidos?.forEach(p => {
-      const unidades = itensPorPedido.get(p.id) || 0;
-      if (p.codigo_tipo === 7) {
-        totalRemessas++;
-        unidadesRemessa += unidades;
-        valorRemessa += Number(p.valor_total);
-      } else if (p.codigo_tipo === 2) {
-        totalVendas++;
-        unidadesVenda += unidades;
-        valorVenda += Number(p.valor_total);
-      }
-    });
-
-    setMovimentacao({
-      totalRemessas,
-      unidadesRemessa,
-      valorRemessa,
-      totalVendas,
-      unidadesVenda,
-      valorVenda,
-    });
-  };
-
+  }, [profile, isGerente]);
   const fetchStatusInventarios = async () => {
     // Buscar todos os inventários
     const { data: inventarios, error: invError } = await supabase
@@ -281,10 +131,6 @@ export default function Dashboard() {
       .slice(0, 5);
 
     setStatusInventarios(statusArray);
-    setStats(prev => ({ 
-      ...prev, 
-      totalVendedores: vendedorCodigos.length,
-    }));
   };
 
   const fetchDivergencias = async () => {
@@ -318,36 +164,6 @@ export default function Dashboard() {
       })) || []
     );
   };
-
-  useEffect(() => {
-    if (!loading && profile && isGerente) {
-      // Buscar contagens de inventários
-      Promise.all([
-        supabase.from('inventarios').select('id', { count: 'exact' }).eq('status', 'pendente'),
-        supabase.from('inventarios').select('id', { count: 'exact' }).eq('status', 'aprovado'),
-        supabase.from('inventarios').select('id', { count: 'exact' }).eq('status', 'revisao'),
-      ]).then(([pendentes, aprovados, revisao]) => {
-        setStats(prev => ({
-          ...prev,
-          inventariosPendentes: pendentes.count || 0,
-          inventariosAprovados: aprovados.count || 0,
-          inventariosRevisao: revisao.count || 0,
-        }));
-      });
-    } else if (!loading && profile && !isGerente) {
-      supabase
-        .from('inventarios')
-        .select('id', { count: 'exact' })
-        .eq('status', 'pendente')
-        .eq('codigo_vendedor', profile.codigo_vendedor)
-        .then(({ count }) => {
-          setStats(prev => ({
-            ...prev,
-            inventariosPendentes: count || 0,
-          }));
-        });
-    }
-  }, [loading, profile, isGerente]);
 
   return (
     <AppLayout>
@@ -452,7 +268,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{stats.totalItens}</p>
+                <p className="text-3xl font-bold">{totalItens}</p>
                 <p className="text-xs text-muted-foreground mt-1">unidades</p>
               </CardContent>
             </Card>
@@ -465,7 +281,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{stats.totalModelos}</p>
+                <p className="text-3xl font-bold">{totalModelos}</p>
                 <p className="text-xs text-muted-foreground mt-1">diferentes</p>
               </CardContent>
             </Card>
@@ -478,7 +294,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-destructive">{stats.produtosNegativos}</p>
+                <p className="text-3xl font-bold text-destructive">{produtosNegativos.length}</p>
                 <p className="text-xs text-muted-foreground mt-1">produtos</p>
               </CardContent>
             </Card>
@@ -491,7 +307,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{stats.produtosCriticos}</p>
+                <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{produtosCriticos}</p>
                 <p className="text-xs text-muted-foreground mt-1">≤ 5 unid.</p>
               </CardContent>
             </Card>
@@ -504,7 +320,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{stats.inventariosPendentes}</p>
+                <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{inventariosPendentes}</p>
                 <p className="text-xs text-muted-foreground mt-1">inventários</p>
               </CardContent>
             </Card>
@@ -517,7 +333,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold text-green-700 dark:text-green-300">{stats.inventariosAprovados}</p>
+                <p className="text-3xl font-bold text-green-700 dark:text-green-300">{inventariosAprovados}</p>
                 <p className="text-xs text-muted-foreground mt-1">inventários</p>
               </CardContent>
             </Card>
@@ -532,7 +348,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{stats.totalItens}</p>
+                <p className="text-3xl font-bold">{totalItens}</p>
                 <p className="text-xs text-muted-foreground mt-1">unidades</p>
               </CardContent>
             </Card>
@@ -545,7 +361,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{stats.totalModelos}</p>
+                <p className="text-3xl font-bold">{totalModelos}</p>
                 <p className="text-xs text-muted-foreground mt-1">modelos</p>
               </CardContent>
             </Card>
@@ -558,7 +374,7 @@ export default function Dashboard() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <p className="text-3xl font-bold">{stats.inventariosPendentes}</p>
+                <p className="text-3xl font-bold">{inventariosPendentes}</p>
                 <p className="text-xs text-muted-foreground mt-1">aguardando</p>
               </CardContent>
             </Card>
@@ -661,7 +477,7 @@ export default function Dashboard() {
                         <div>
                           <p className="font-medium text-base">Conferir Inventários</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
-                            {stats.inventariosPendentes + stats.inventariosRevisao} aguardando
+                            {inventariosPendentes + inventariosRevisao} aguardando
                           </p>
                         </div>
                       </div>
@@ -692,7 +508,7 @@ export default function Dashboard() {
                         </div>
                         <div>
                           <p className="font-medium text-base">Ver Estoque Completo</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">{stats.totalItens} unidades</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">{totalItens} unidades</p>
                         </div>
                       </div>
                       <ArrowRight size={16} />
@@ -747,12 +563,12 @@ export default function Dashboard() {
                 <div className="grid grid-cols-2 gap-5">
                   <div className="p-5 border-2 rounded-lg text-center">
                     <p className="text-sm text-muted-foreground mb-2">Total em Estoque</p>
-                    <p className="text-3xl font-bold">{stats.totalItens}</p>
+                    <p className="text-3xl font-bold">{totalItens}</p>
                     <p className="text-xs text-muted-foreground mt-1">unidades</p>
                   </div>
                   <div className="p-5 border-2 rounded-lg text-center">
                     <p className="text-sm text-muted-foreground mb-2">Modelos</p>
-                    <p className="text-3xl font-bold">{stats.totalModelos}</p>
+                    <p className="text-3xl font-bold">{totalModelos}</p>
                     <p className="text-xs text-muted-foreground mt-1">diferentes</p>
                   </div>
                 </div>

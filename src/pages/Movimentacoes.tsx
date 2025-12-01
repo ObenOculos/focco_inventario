@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useMovimentacoesQuery, useCreateMovimentacao } from '@/hooks/useMovimentacoesQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,8 +40,8 @@ const TIPOS_MOVIMENTACAO = {
 
 export default function Movimentacoes() {
   const { profile } = useAuth();
-  const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
-  const [loading, setLoading] = useState(true);
+  const isGerente = profile?.role === 'gerente';
+
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
@@ -53,7 +53,8 @@ export default function Movimentacoes() {
     observacoes: '',
   });
 
-  const isGerente = profile?.role === 'gerente';
+  const { data: movimentacoes = [], isLoading: loading } = useMovimentacoesQuery(profile?.codigo_vendedor, isGerente);
+  const createMovimentacao = useCreateMovimentacao();
 
   const {
     currentPage,
@@ -72,36 +73,10 @@ export default function Movimentacoes() {
     searchFields: ['codigo_auxiliar', 'nome_produto', 'motivo'],
   });
 
-  useEffect(() => {
-    fetchMovimentacoes();
-  }, [profile]);
-
-  const fetchMovimentacoes = async () => {
-    if (!profile) return;
-
-    let query = supabase
-      .from('movimentacoes_estoque')
-      .select('*')
-      .order('data_movimentacao', { ascending: false });
-
-    if (!isGerente && profile.codigo_vendedor) {
-      query = query.eq('codigo_vendedor', profile.codigo_vendedor);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Erro ao buscar movimentações:', error);
-    } else {
-      setMovimentacoes(data || []);
-    }
-    setLoading(false);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!profile?.codigo_vendedor) {
+    if (!profile?.codigo_vendedor || !profile.id) {
       toast.error('Código de vendedor não encontrado');
       return;
     }
@@ -112,28 +87,21 @@ export default function Movimentacoes() {
     // Para tipos de saída (4=Devolução Empresa, 5=Perda), quantidade deve ser negativa
     const quantidadeAjustada = (tipo === 4 || tipo === 5) && quantidade > 0 ? -quantidade : quantidade;
 
-    const { error } = await supabase
-      .from('movimentacoes_estoque')
-      .insert({
-        user_id: profile.id,
-        codigo_vendedor: profile.codigo_vendedor,
-        codigo_auxiliar: formData.codigo_auxiliar.toUpperCase(),
-        nome_produto: formData.nome_produto,
-        tipo_movimentacao: tipo,
-        quantidade: quantidadeAjustada,
-        motivo: formData.motivo,
-        observacoes: formData.observacoes || null,
-      });
-
-    if (error) {
-      toast.error('Erro ao registrar movimentação');
-      console.error(error);
-    } else {
-      toast.success('Movimentação registrada!');
-      setDialogOpen(false);
-      resetForm();
-      fetchMovimentacoes();
-    }
+    createMovimentacao.mutate({
+      user_id: profile.id,
+      codigo_vendedor: profile.codigo_vendedor,
+      codigo_auxiliar: formData.codigo_auxiliar.toUpperCase(),
+      nome_produto: formData.nome_produto,
+      tipo_movimentacao: tipo,
+      quantidade: quantidadeAjustada,
+      motivo: formData.motivo,
+      observacoes: formData.observacoes || null,
+    }, {
+      onSuccess: () => {
+        setDialogOpen(false);
+        resetForm();
+      },
+    });
   };
 
   const resetForm = () => {

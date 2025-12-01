@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
+import { usePedidosQuery, useVendedoresQuery, usePedidoDetalhesQuery } from '@/hooks/usePedidosQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,16 +43,17 @@ interface PedidoComItens extends Pedido {
 
 export default function Pedidos() {
   const { profile } = useAuth();
-  const [pedidos, setPedidos] = useState<Pedido[]>([]);
-  const [loading, setLoading] = useState(true);
+  const isGerente = profile?.role === 'gerente';
+
   const [searchTerm, setSearchTerm] = useState('');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
-  const [vendedores, setVendedores] = useState<{ codigo: string; nome: string }[]>([]);
-  const [selectedPedido, setSelectedPedido] = useState<PedidoComItens | null>(null);
+  const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const isGerente = profile?.role === 'gerente';
+  const { data: pedidos = [], isLoading: loading } = usePedidosQuery(profile?.codigo_vendedor, isGerente);
+  const { data: vendedores = [] } = useVendedoresQuery();
+  const { data: itensPedido = [] } = usePedidoDetalhesQuery(selectedPedidoId);
 
   // Filtrar pedidos antes da paginação
   const filteredPedidos = pedidos.filter(pedido => {
@@ -81,74 +82,14 @@ export default function Pedidos() {
     itemsPerPage: 20,
   });
 
-  useEffect(() => {
-    fetchPedidos();
-    if (isGerente) {
-      fetchVendedores();
-    }
-  }, [profile]);
-
-  const fetchPedidos = async () => {
-    if (!profile) return;
-    
-    setLoading(true);
-    try {
-      let query = supabase
-        .from('pedidos')
-        .select('*')
-        .order('data_emissao', { ascending: false });
-
-      if (!isGerente && profile.codigo_vendedor) {
-        query = query.eq('codigo_vendedor', profile.codigo_vendedor);
-      }
-
-      const { data, error } = await query;
-
-      if (error) throw error;
-      setPedidos(data || []);
-    } catch (error) {
-      console.error('Erro ao buscar pedidos:', error);
-    } finally {
-      setLoading(false);
-    }
+  const handleViewPedido = (pedido: Pedido) => {
+    setSelectedPedidoId(pedido.id);
+    setDialogOpen(true);
   };
 
-  const fetchVendedores = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('pedidos')
-        .select('codigo_vendedor, nome_vendedor')
-        .not('nome_vendedor', 'is', null);
-
-      if (error) throw error;
-
-      const uniqueVendedores = Array.from(
-        new Map(data?.map(p => [p.codigo_vendedor, { codigo: p.codigo_vendedor, nome: p.nome_vendedor || p.codigo_vendedor }])).values()
-      );
-      setVendedores(uniqueVendedores);
-    } catch (error) {
-      console.error('Erro ao buscar vendedores:', error);
-    }
-  };
-
-  const fetchPedidoDetalhes = async (pedido: Pedido) => {
-    try {
-      const { data: itens, error } = await supabase
-        .from('itens_pedido')
-        .select('*')
-        .eq('pedido_id', pedido.id);
-
-      if (error) throw error;
-
-      setSelectedPedido({
-        ...pedido,
-        itens_pedido: itens || []
-      });
-      setDialogOpen(true);
-    } catch (error) {
-      console.error('Erro ao buscar itens do pedido:', error);
-    }
-  };
+  const selectedPedido = selectedPedidoId 
+    ? { ...pedidos.find(p => p.id === selectedPedidoId)!, itens_pedido: itensPedido }
+    : null;
 
   const getTipoBadge = (codigoTipo: number) => {
     if (codigoTipo === 7) {
@@ -298,7 +239,7 @@ export default function Pedidos() {
                           <Button 
                             variant="outline" 
                             size="sm"
-                            onClick={() => fetchPedidoDetalhes(pedido)}
+                            onClick={() => handleViewPedido(pedido)}
                           >
                             Ver Detalhes
                           </Button>
