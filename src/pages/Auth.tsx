@@ -53,7 +53,7 @@ export default function Auth() {
         }
       } else {
         const validated = signupSchema.parse({ email, password, nome });
-        const { error } = await signUp(validated.email, validated.password, validated.nome, 'gerente');
+        const { error } = await signUp(validated.email, validated.password, validated.nome, 'vendedor');
         if (error) {
           if (error.message.includes('already registered')) {
             toast.error('Este email já está cadastrado');
@@ -174,7 +174,7 @@ export default function Auth() {
 
           {!isLogin && (
             <p className="text-xs text-muted-foreground mt-4 text-center">
-              O primeiro cadastro será automaticamente um gerente.
+              Novos cadastros serão criados como vendedores.
             </p>
           )}
         </div>
