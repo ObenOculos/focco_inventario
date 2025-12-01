@@ -653,12 +653,12 @@ export default function Importar() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
-              O arquivo Excel deve conter as seguintes colunas:
+              O arquivo Excel/CSV deve conter as seguintes colunas (delimitador: ponto e vírgula):
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
               {[
-                'pedido', 'data_emissao', 'codigo_cliente', 'codigo_vendedor',
-                'nome_vendedor', 'valor_total', 'codigo_tipo', 'situacao',
+                'codigo_empresa', 'empresa', 'pedido', 'data_emissao', 'codigo_cliente', 
+                'codigo_vendedor', 'nome_vendedor', 'valor_total', 'codigo_tipo', 'situacao',
                 'numero_nota_fiscal', 'serie_nota_fiscal', 'nome_produto',
                 'codigo_auxiliar', 'codigo_produto', 'quantidade', 'valor_produto'
               ].map(col => (
@@ -671,6 +671,12 @@ export default function Importar() {
                 <li><strong>2</strong> = Venda (saída de estoque)</li>
                 <li><strong>7</strong> = Remessa (entrada de estoque)</li>
               </ul>
+            </div>
+            <div className="mt-3 p-3 bg-secondary">
+              <p className="text-sm font-medium">Identificação de Duplicatas:</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Combinação única: <strong>codigo_empresa + pedido + codigo_tipo</strong>
+              </p>
             </div>
           </CardContent>
         </Card>
