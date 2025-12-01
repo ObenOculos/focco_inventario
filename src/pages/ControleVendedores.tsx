@@ -79,28 +79,24 @@ export default function ControleVendedores() {
         .order('data_emissao', { ascending: false })
         .limit(50);
 
-      // Buscar itens de todos os pedidos agrupados por tipo
-      const { data: itensRemessa } = await supabase
-        .from('itens_pedido')
-        .select('quantidade, pedidos!inner(codigo_tipo, codigo_vendedor)')
-        .eq('pedidos.codigo_vendedor', vendedor.codigo_vendedor)
-        .eq('pedidos.codigo_tipo', 7);
+      // Contar número de pedidos por tipo
+      const { count: totalRemessas } = await supabase
+        .from('pedidos')
+        .select('*', { count: 'exact', head: true })
+        .eq('codigo_vendedor', vendedor.codigo_vendedor)
+        .eq('codigo_tipo', 7);
 
-      const { data: itensVenda } = await supabase
-        .from('itens_pedido')
-        .select('quantidade, pedidos!inner(codigo_tipo, codigo_vendedor)')
-        .eq('pedidos.codigo_vendedor', vendedor.codigo_vendedor)
-        .eq('pedidos.codigo_tipo', 2);
-
-      // Calcular totais
-      const totalRemessas = itensRemessa?.reduce((sum, item) => sum + Number(item.quantidade), 0) || 0;
-      const totalVendas = itensVenda?.reduce((sum, item) => sum + Number(item.quantidade), 0) || 0;
+      const { count: totalVendas } = await supabase
+        .from('pedidos')
+        .select('*', { count: 'exact', head: true })
+        .eq('codigo_vendedor', vendedor.codigo_vendedor)
+        .eq('codigo_tipo', 2);
 
       vendedoresData.push({
         codigo_vendedor: vendedor.codigo_vendedor!,
         nome_vendedor: vendedor.nome,
-        totalRemessas,
-        totalVendas,
+        totalRemessas: totalRemessas || 0,
+        totalVendas: totalVendas || 0,
         estoqueAtual,
         itens: itensArray.sort((a, b) => b.estoque_teorico - a.estoque_teorico),
         pedidosRecentes: pedidosRecentes || [],
@@ -280,7 +276,7 @@ export default function ControleVendedores() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold">{vendedorSelecionado.totalRemessas.toLocaleString('pt-BR')}</p>
-                      <p className="text-xs text-muted-foreground">Remessas (Total)</p>
+                      <p className="text-xs text-muted-foreground">Remessas (Pedidos)</p>
                       <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
                         {pedidosFiltrados.filter(p => p.codigo_tipo === 7).length} no período
                       </p>
@@ -292,7 +288,7 @@ export default function ControleVendedores() {
                     </div>
                     <div>
                       <p className="text-2xl font-bold">{vendedorSelecionado.totalVendas.toLocaleString('pt-BR')}</p>
-                      <p className="text-xs text-muted-foreground">Vendas (Total)</p>
+                      <p className="text-xs text-muted-foreground">Vendas (Pedidos)</p>
                       <p className="text-xs text-green-600 dark:text-green-400 font-medium">
                         {pedidosFiltrados.filter(p => p.codigo_tipo === 2).length} no período
                       </p>
