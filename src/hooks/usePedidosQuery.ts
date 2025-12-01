@@ -38,6 +38,10 @@ export const usePedidosQuery = (codigoVendedor?: string | null, isGerente?: bool
 
       const { data, error } = await query;
       if (error) throw error;
+      console.log('📊 Total de pedidos carregados:', data?.length);
+      console.log('📋 Pedidos tipo 7 (Remessa):', data?.filter(p => p.codigo_tipo === 7).length);
+      console.log('📋 Pedidos vendedor 11:', data?.filter(p => p.codigo_vendedor === '11').length);
+      console.log('📋 Pedidos vendedor 11 + tipo 7:', data?.filter(p => p.codigo_vendedor === '11' && p.codigo_tipo === 7).length);
       return (data || []) as Pedido[];
     },
     enabled: !!codigoVendedor || isGerente === true,
