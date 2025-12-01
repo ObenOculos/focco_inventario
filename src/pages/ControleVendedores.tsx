@@ -142,37 +142,6 @@ export default function ControleVendedores() {
           </p>
         </div>
 
-        {/* Stats Gerais */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Card className="border-2">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-primary/10 rounded-lg">
-                  <Users className="text-primary" size={24} />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Total de Vendedores</p>
-                  <p className="text-2xl font-bold">{vendedores.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="border-2 bg-destructive/10 border-destructive">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="p-3 bg-destructive/20 rounded-lg">
-                  <AlertTriangle className="text-destructive" size={24} />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Com Estoque Negativo</p>
-                  <p className="text-2xl font-bold text-destructive">{vendedoresComEstoqueNegativo.length}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
         {/* Filtros */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* Seletor de Vendedor */}
@@ -259,66 +228,70 @@ export default function ControleVendedores() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Alertas do Vendedor */}
-            {vendedorSelecionado.estoqueAtual < 0 && (
-              <Alert variant="destructive" className="border-2">
-                <AlertTriangle className="h-5 w-5" />
-                <AlertDescription className="text-base">
-                  <strong>{vendedorSelecionado.nome_vendedor}</strong> está com estoque negativo de{' '}
-                  <strong>{Math.abs(vendedorSelecionado.estoqueAtual)} unidades</strong>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {/* Cards de Resumo */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card className="border-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3 mb-2">
-                    <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
-                    <span className="text-sm text-blue-700 dark:text-blue-300 font-medium">Remessas</span>
+            {/* Header do Vendedor com Stats Inline */}
+            <Card className={`border-2 ${
+              vendedorSelecionado.estoqueAtual < 0 ? 'border-destructive' : ''
+            }`}>
+              <CardHeader>
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle className="text-xl">{vendedorSelecionado.nome_vendedor}</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Código: {vendedorSelecionado.codigo_vendedor}
+                    </p>
                   </div>
-                  <p className="text-3xl font-bold text-blue-800 dark:text-blue-200">
-                    {vendedorSelecionado.totalRemessas}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">unidades recebidas</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-2 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3 mb-2">
-                    <TrendingDown className="text-green-600 dark:text-green-400" size={20} />
-                    <span className="text-sm text-green-700 dark:text-green-300 font-medium">Vendas</span>
+                  {vendedorSelecionado.estoqueAtual < 0 && (
+                    <Badge variant="destructive" className="text-base px-3 py-1">
+                      <AlertTriangle size={16} className="mr-1" />
+                      Estoque Negativo
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 gap-4">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded">
+                      <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{vendedorSelecionado.totalRemessas}</p>
+                      <p className="text-xs text-muted-foreground">Remessas</p>
+                    </div>
                   </div>
-                  <p className="text-3xl font-bold text-green-800 dark:text-green-200">
-                    {vendedorSelecionado.totalVendas}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">unidades vendidas</p>
-                </CardContent>
-              </Card>
-
-              <Card className={`border-2 ${
-                vendedorSelecionado.estoqueAtual < 0 
-                  ? 'bg-destructive/10 border-destructive' 
-                  : ''
-              }`}>
-                <CardContent className="pt-6">
-                  <div className="flex items-center gap-3 mb-2">
-                    <Package className={vendedorSelecionado.estoqueAtual < 0 ? 'text-destructive' : 'text-muted-foreground'} size={20} />
-                    <span className={`text-sm font-medium ${
-                      vendedorSelecionado.estoqueAtual < 0 ? 'text-destructive' : 'text-muted-foreground'
-                    }`}>Estoque Atual</span>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-green-100 dark:bg-green-900 rounded">
+                      <TrendingDown className="text-green-600 dark:text-green-400" size={20} />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{vendedorSelecionado.totalVendas}</p>
+                      <p className="text-xs text-muted-foreground">Vendas</p>
+                    </div>
                   </div>
-                  <p className={`text-3xl font-bold ${
-                    vendedorSelecionado.estoqueAtual < 0 ? 'text-destructive' : ''
-                  }`}>
-                    {vendedorSelecionado.estoqueAtual}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">unidades em estoque</p>
-                </CardContent>
-              </Card>
-            </div>
+                  <div className="flex items-center gap-3">
+                    <div className={`p-2 rounded ${
+                      vendedorSelecionado.estoqueAtual < 0 
+                        ? 'bg-destructive/10' 
+                        : 'bg-muted'
+                    }`}>
+                      <Package className={
+                        vendedorSelecionado.estoqueAtual < 0 
+                          ? 'text-destructive' 
+                          : 'text-muted-foreground'
+                      } size={20} />
+                    </div>
+                    <div>
+                      <p className={`text-2xl font-bold ${
+                        vendedorSelecionado.estoqueAtual < 0 ? 'text-destructive' : ''
+                      }`}>
+                        {vendedorSelecionado.estoqueAtual}
+                      </p>
+                      <p className="text-xs text-muted-foreground">Estoque</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Tabelas */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
