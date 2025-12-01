@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Profile } from '@/types/database';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -10,10 +10,14 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Users, Plus, Pencil, UserCheck, UserX } from 'lucide-react';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/Pagination';
+import { SearchFilter } from '@/components/SearchFilter';
 
 export default function Vendedores() {
   const [vendedores, setVendedores] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVendedor, setEditingVendedor] = useState<Profile | null>(null);
   const [codigosDisponiveis, setCodigosDisponiveis] = useState<string[]>([]);
@@ -22,6 +26,22 @@ export default function Vendedores() {
     nome: '',
     codigo_vendedor: '',
     telefone: '',
+  });
+
+  const {
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    startIndex,
+    endIndex,
+    paginatedData: paginatedVendedores,
+    totalItems,
+    handlePageChange,
+    handleItemsPerPageChange,
+  } = usePagination({
+    data: vendedores,
+    searchTerm,
+    searchFields: ['nome', 'email', 'codigo_vendedor'],
   });
 
   useEffect(() => {
@@ -264,66 +284,87 @@ export default function Vendedores() {
           </Dialog>
         </div>
 
+        <SearchFilter
+          value={searchTerm}
+          onChange={setSearchTerm}
+          placeholder="Buscar vendedor..."
+        />
+
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-        ) : vendedores.length === 0 ? (
+        ) : totalItems === 0 ? (
           <Card className="border-2">
             <CardContent className="py-12 text-center">
               <Users size={48} className="mx-auto mb-4 text-muted-foreground" />
-              <h2 className="text-xl font-bold mb-2">Nenhum vendedor cadastrado</h2>
+              <h2 className="text-xl font-bold mb-2">
+                {searchTerm ? 'Nenhum vendedor encontrado' : 'Nenhum vendedor cadastrado'}
+              </h2>
               <p className="text-muted-foreground">
-                Adicione vendedores para começar a gerenciar o estoque.
+                {searchTerm ? 'Tente outro termo de busca' : 'Adicione vendedores para começar a gerenciar o estoque.'}
               </p>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
-            {vendedores.map((vendedor) => (
-              <Card key={vendedor.id} className={`border-2 ${!vendedor.ativo ? 'opacity-60' : ''}`}>
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1 min-w-0">
+          <>
+            <div className="grid gap-4">
+              {paginatedVendedores.map((vendedor) => (
+                <Card key={vendedor.id} className={`border-2 ${!vendedor.ativo ? 'opacity-60' : ''}`}>
+                  <CardContent className="py-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h3 className="font-bold truncate">{vendedor.nome}</h3>
+                          {!vendedor.ativo && (
+                            <span className="text-xs px-2 py-0.5 bg-secondary font-medium">INATIVO</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-muted-foreground">{vendedor.email}</p>
+                        <div className="flex gap-4 mt-1 text-sm">
+                          {vendedor.codigo_vendedor && (
+                            <span className="font-mono bg-secondary px-2">
+                              Cód: {vendedor.codigo_vendedor}
+                            </span>
+                          )}
+                          {vendedor.telefone && (
+                            <span className="text-muted-foreground">{vendedor.telefone}</span>
+                          )}
+                        </div>
+                      </div>
                       <div className="flex items-center gap-2">
-                        <h3 className="font-bold truncate">{vendedor.nome}</h3>
-                        {!vendedor.ativo && (
-                          <span className="text-xs px-2 py-0.5 bg-secondary font-medium">INATIVO</span>
-                        )}
-                      </div>
-                      <p className="text-sm text-muted-foreground">{vendedor.email}</p>
-                      <div className="flex gap-4 mt-1 text-sm">
-                        {vendedor.codigo_vendedor && (
-                          <span className="font-mono bg-secondary px-2">
-                            Cód: {vendedor.codigo_vendedor}
-                          </span>
-                        )}
-                        {vendedor.telefone && (
-                          <span className="text-muted-foreground">{vendedor.telefone}</span>
-                        )}
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className="border-2"
+                          onClick={() => openEdit(vendedor)}
+                        >
+                          <Pencil size={16} />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          className={`border-2 ${vendedor.ativo ? 'text-destructive' : 'text-green-600'}`}
+                          onClick={() => toggleAtivo(vendedor)}
+                        >
+                          {vendedor.ativo ? <UserX size={16} /> : <UserCheck size={16} />}
+                        </Button>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="border-2"
-                        onClick={() => openEdit(vendedor)}
-                      >
-                        <Pencil size={16} />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className={`border-2 ${vendedor.ativo ? 'text-destructive' : 'text-green-600'}`}
-                        onClick={() => toggleAtivo(vendedor)}
-                      >
-                        {vendedor.ativo ? <UserX size={16} /> : <UserCheck size={16} />}
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+
+            <Pagination
+              currentPage={currentPage}
+              totalPages={totalPages}
+              itemsPerPage={itemsPerPage}
+              totalItems={totalItems}
+              startIndex={startIndex}
+              endIndex={endIndex}
+              onPageChange={handlePageChange}
+              onItemsPerPageChange={handleItemsPerPageChange}
+            />
+          </>
         )}
       </div>
     </AppLayout>

@@ -4,12 +4,13 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { EstoqueItem } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Package, Search, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Package, AlertTriangle } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/Pagination';
+import { SearchFilter } from '@/components/SearchFilter';
 
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
@@ -17,10 +18,24 @@ export default function EstoqueTeorico() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [produtosNegativos, setProdutosNegativos] = useState<EstoqueItem[]>([]);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   const isGerente = profile?.role === 'gerente';
+
+  const {
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    startIndex,
+    endIndex,
+    paginatedData: paginatedEstoque,
+    totalItems,
+    handlePageChange,
+    handleItemsPerPageChange,
+  } = usePagination({
+    data: estoque,
+    searchTerm,
+    searchFields: ['codigo_auxiliar', 'nome_produto'],
+  });
 
   useEffect(() => {
     if (profile) {
@@ -90,34 +105,8 @@ export default function EstoqueTeorico() {
     setLoading(false);
   };
 
-  const filteredEstoque = estoque.filter(item =>
-    item.codigo_auxiliar.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    item.nome_produto.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
-  // Reset para página 1 quando o filtro mudar
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchTerm]);
-
-  // Cálculos de paginação
-  const totalPages = Math.ceil(filteredEstoque.length / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const endIndex = startIndex + itemsPerPage;
-  const paginatedEstoque = filteredEstoque.slice(startIndex, endIndex);
-
   const totalItens = estoque.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalModelos = new Set(estoque.map(e => e.modelo)).size;
-
-  const handlePageChange = (newPage: number) => {
-    setCurrentPage(newPage);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleItemsPerPageChange = (value: string) => {
-    setItemsPerPage(Number(value));
-    setCurrentPage(1);
-  };
 
   return (
     <AppLayout>
@@ -185,41 +174,21 @@ export default function EstoqueTeorico() {
                 Produtos em Estoque
               </span>
               <Badge variant="secondary" className="text-lg px-3 py-1">
-                {filteredEstoque.length}
+                {totalItems}
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Search e Controles */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                <Input
-                  placeholder="Buscar por código ou produto..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 border-2"
-                />
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-muted-foreground whitespace-nowrap">Itens por página:</span>
-                <Select value={itemsPerPage.toString()} onValueChange={handleItemsPerPageChange}>
-                  <SelectTrigger className="w-[80px] border-2">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="10">10</SelectItem>
-                    <SelectItem value="20">20</SelectItem>
-                    <SelectItem value="50">50</SelectItem>
-                    <SelectItem value="100">100</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+            {/* Search */}
+            <SearchFilter
+              value={searchTerm}
+              onChange={setSearchTerm}
+              placeholder="Buscar por código ou produto..."
+            />
 
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-            ) : filteredEstoque.length === 0 ? (
+            ) : totalItems === 0 ? (
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
@@ -277,64 +246,16 @@ export default function EstoqueTeorico() {
                   ))}
                 </div>
 
-                {/* Paginação */}
-                {totalPages > 1 && (
-                  <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t-2">
-                    <div className="text-sm text-muted-foreground">
-                      Mostrando {startIndex + 1} a {Math.min(endIndex, filteredEstoque.length)} de {filteredEstoque.length} produtos
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(currentPage - 1)}
-                        disabled={currentPage === 1}
-                        className="border-2"
-                      >
-                        <ChevronLeft size={16} />
-                        Anterior
-                      </Button>
-                      
-                      <div className="flex items-center gap-1">
-                        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                          let pageNum;
-                          if (totalPages <= 5) {
-                            pageNum = i + 1;
-                          } else if (currentPage <= 3) {
-                            pageNum = i + 1;
-                          } else if (currentPage >= totalPages - 2) {
-                            pageNum = totalPages - 4 + i;
-                          } else {
-                            pageNum = currentPage - 2 + i;
-                          }
-                          
-                          return (
-                            <Button
-                              key={pageNum}
-                              variant={currentPage === pageNum ? "default" : "outline"}
-                              size="sm"
-                              onClick={() => handlePageChange(pageNum)}
-                              className="w-9 h-9 p-0 border-2"
-                            >
-                              {pageNum}
-                            </Button>
-                          );
-                        })}
-                      </div>
-
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePageChange(currentPage + 1)}
-                        disabled={currentPage === totalPages}
-                        className="border-2"
-                      >
-                        Próximo
-                        <ChevronRight size={16} />
-                      </Button>
-                    </div>
-                  </div>
-                )}
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  itemsPerPage={itemsPerPage}
+                  totalItems={totalItems}
+                  startIndex={startIndex}
+                  endIndex={endIndex}
+                  onPageChange={handlePageChange}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                />
               </>
             )}
           </CardContent>
