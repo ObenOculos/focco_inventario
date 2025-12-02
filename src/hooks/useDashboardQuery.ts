@@ -16,7 +16,8 @@ export const useEstoqueQuery = (codigoVendedor?: string | null, isGerente?: bool
             codigo_vendedor,
             codigo_tipo
           )
-        `);
+        `)
+        .range(0, 49999); // Aumenta limite para cálculo de estoque
 
       if (!isGerente && codigoVendedor) {
         query = query.eq('pedidos.codigo_vendedor', codigoVendedor);
@@ -68,7 +69,8 @@ export const useMovimentacaoResumoQuery = (codigoVendedor?: string | null, isGer
       let pedidosQuery = supabase
         .from('pedidos')
         .select('id, codigo_tipo, valor_total')
-        .gte('data_emissao', thirtyDaysAgo.toISOString());
+        .gte('data_emissao', thirtyDaysAgo.toISOString())
+        .range(0, 9999);
 
       if (!isGerente && codigoVendedor) {
         pedidosQuery = pedidosQuery.eq('codigo_vendedor', codigoVendedor);
@@ -79,13 +81,21 @@ export const useMovimentacaoResumoQuery = (codigoVendedor?: string | null, isGer
 
       const pedidoIds = pedidos?.map(p => p.id) || [];
 
-      const { data: itens } = await supabase
-        .from('itens_pedido')
-        .select('pedido_id, quantidade')
-        .in('pedido_id', pedidoIds);
+      // Buscar itens em lotes para evitar limite
+      let allItens: { pedido_id: string; quantidade: number }[] = [];
+      const batchSize = 500;
+      for (let i = 0; i < pedidoIds.length; i += batchSize) {
+        const batch = pedidoIds.slice(i, i + batchSize);
+        const { data: itens } = await supabase
+          .from('itens_pedido')
+          .select('pedido_id, quantidade')
+          .in('pedido_id', batch)
+          .range(0, 9999);
+        allItens = allItens.concat(itens || []);
+      }
 
       const itensPorPedido = new Map<string, number>();
-      itens?.forEach(item => {
+      allItens.forEach(item => {
         const current = itensPorPedido.get(item.pedido_id) || 0;
         itensPorPedido.set(item.pedido_id, current + Number(item.quantidade));
       });
