@@ -40,7 +40,12 @@ export default function Inventario() {
   const itemsPerPage = 10;
   
   // Estados para modal de confirmação
-  const [pendingProduct, setPendingProduct] = useState<{code: string; name: string} | null>(null);
+  const [pendingProduct, setPendingProduct] = useState<{
+    code: string; 
+    name: string; 
+    isRegistered: boolean;
+    hasRemessa: boolean;
+  } | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
@@ -118,21 +123,35 @@ export default function Inventario() {
 
     // Verificar se já existe
     if (items.some(item => item.codigo_auxiliar === code)) {
-      setPendingProduct({ code, name: code });
+      setPendingProduct({ code, name: code, isRegistered: true, hasRemessa: true });
       setShowDuplicateDialog(true);
       return;
     }
 
-    // Buscar informações do produto
-    const { data: produto } = await supabase
-      .from('produtos')
-      .select('nome_produto')
-      .eq('codigo_auxiliar', code)
-      .maybeSingle();
+    // Buscar informações do produto e verificar remessa em paralelo
+    const [produtoResult, remessaResult] = await Promise.all([
+      supabase
+        .from('produtos')
+        .select('nome_produto')
+        .eq('codigo_auxiliar', code)
+        .maybeSingle(),
+      supabase
+        .from('itens_pedido')
+        .select('pedido_id, pedidos!inner(codigo_vendedor, codigo_tipo)')
+        .eq('codigo_auxiliar', code)
+        .eq('pedidos.codigo_vendedor', profile?.codigo_vendedor || '')
+        .eq('pedidos.codigo_tipo', 7)
+        .limit(1)
+    ]);
+
+    const isRegistered = !!produtoResult.data;
+    const hasRemessa = (remessaResult.data?.length || 0) > 0;
 
     setPendingProduct({ 
       code, 
-      name: produto?.nome_produto || code 
+      name: produtoResult.data?.nome_produto || code,
+      isRegistered,
+      hasRemessa
     });
     setShowConfirmDialog(true);
   };
@@ -186,21 +205,35 @@ export default function Inventario() {
     
     // Verificar se já existe
     if (items.some(item => item.codigo_auxiliar === code)) {
-      setPendingProduct({ code, name: code });
+      setPendingProduct({ code, name: code, isRegistered: true, hasRemessa: true });
       setShowDuplicateDialog(true);
       return;
     }
 
-    // Buscar informações do produto
-    const { data: produto } = await supabase
-      .from('produtos')
-      .select('nome_produto')
-      .eq('codigo_auxiliar', code)
-      .maybeSingle();
+    // Buscar informações do produto e verificar remessa em paralelo
+    const [produtoResult, remessaResult] = await Promise.all([
+      supabase
+        .from('produtos')
+        .select('nome_produto')
+        .eq('codigo_auxiliar', code)
+        .maybeSingle(),
+      supabase
+        .from('itens_pedido')
+        .select('pedido_id, pedidos!inner(codigo_vendedor, codigo_tipo)')
+        .eq('codigo_auxiliar', code)
+        .eq('pedidos.codigo_vendedor', profile?.codigo_vendedor || '')
+        .eq('pedidos.codigo_tipo', 7)
+        .limit(1)
+    ]);
+
+    const isRegistered = !!produtoResult.data;
+    const hasRemessa = (remessaResult.data?.length || 0) > 0;
 
     setPendingProduct({ 
       code, 
-      name: produto?.nome_produto || code 
+      name: produtoResult.data?.nome_produto || code,
+      isRegistered,
+      hasRemessa
     });
     setShowConfirmDialog(true);
   };
@@ -461,9 +494,26 @@ export default function Inventario() {
               Deseja adicionar este produto ao inventário?
             </DialogDescription>
           </DialogHeader>
-          <div className="p-4 bg-secondary rounded-lg">
-            <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
-            <p className="text-muted-foreground">{pendingProduct?.name}</p>
+          <div className="space-y-3">
+            <div className="p-4 bg-secondary rounded-lg">
+              <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
+              <p className="text-muted-foreground">{pendingProduct?.name}</p>
+            </div>
+            
+            {/* Alertas */}
+            {pendingProduct && !pendingProduct.isRegistered && (
+              <div className="p-3 bg-[hsl(43,74%,66%)] text-[hsl(0,0%,0%)] rounded-lg border-2 border-[hsl(43,74%,50%)]">
+                <p className="font-medium text-sm">⚠️ Produto não cadastrado</p>
+                <p className="text-xs">Este código não está registrado no sistema.</p>
+              </div>
+            )}
+            
+            {pendingProduct && pendingProduct.isRegistered && !pendingProduct.hasRemessa && (
+              <div className="p-3 bg-[hsl(43,74%,66%)] text-[hsl(0,0%,0%)] rounded-lg border-2 border-[hsl(43,74%,50%)]">
+                <p className="font-medium text-sm">⚠️ Produto sem remessa</p>
+                <p className="text-xs">Este produto não consta em nenhuma remessa enviada para você.</p>
+              </div>
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={cancelAddProduct}>
