@@ -15,7 +15,7 @@ const Toaster = ({ ...props }: ToasterProps) => {
           border: "1px solid hsl(240, 6%, 90%)",
         },
         classNames: {
-          toast: "group toast max-w-[calc(100vw-32px)]",
+          toast: "group toast max-w-[calc(100vw)]",
           description: "text-muted-foreground",
           actionButton: "bg-primary text-primary-foreground",
           cancelButton: "bg-muted text-muted-foreground",
