@@ -1,59 +1,46 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { EstoqueItem } from '@/types/database';
+import { calcularEstoqueTeorico } from '@/lib/estoque';
 
 export const useEstoqueQuery = (codigoVendedor?: string | null, isGerente?: boolean) => {
   return useQuery({
     queryKey: ['estoque', codigoVendedor, isGerente],
     queryFn: async () => {
-      let query = supabase
-        .from('itens_pedido')
-        .select(`
-          codigo_auxiliar,
-          nome_produto,
-          quantidade,
-          pedidos!inner (
-            codigo_vendedor,
-            codigo_tipo
-          )
-        `)
-        .range(0, 49999); // Aumenta limite para cálculo de estoque
-
+      // Vendedor específico: usar função SQL diretamente
       if (!isGerente && codigoVendedor) {
-        query = query.eq('pedidos.codigo_vendedor', codigoVendedor);
+        const estoqueMap = await calcularEstoqueTeorico(codigoVendedor);
+        return Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
       }
 
-      const { data, error } = await query;
-      if (error) throw error;
+      // Gerente: buscar apenas vendedores cadastrados e consolidar
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('codigo_vendedor')
+        .eq('role', 'vendedor')
+        .not('codigo_vendedor', 'is', null);
 
-      const estoqueMap = new Map<string, EstoqueItem>();
+      const allEstoque = new Map<string, EstoqueItem>();
 
-      data?.forEach((item: any) => {
-        const key = item.codigo_auxiliar;
-        const existing = estoqueMap.get(key) || {
-          codigo_auxiliar: item.codigo_auxiliar,
-          nome_produto: item.nome_produto,
-          modelo: item.codigo_auxiliar.split(' ')[0] || '',
-          cor: item.codigo_auxiliar.split(' ')[1] || '',
-          quantidade_remessa: 0,
-          quantidade_venda: 0,
-          estoque_teorico: 0,
-        };
-
-        const quantidade = Number(item.quantidade) || 0;
-        const codigoTipo = item.pedidos?.codigo_tipo;
-
-        if (codigoTipo === 7) {
-          existing.quantidade_remessa += quantidade;
-        } else if (codigoTipo === 2) {
-          existing.quantidade_venda += quantidade;
+      for (const p of profiles || []) {
+        if (p.codigo_vendedor) {
+          const vendedorEstoque = await calcularEstoqueTeorico(p.codigo_vendedor);
+          
+          // Consolidar estoques
+          for (const [key, item] of vendedorEstoque) {
+            const existing = allEstoque.get(key);
+            if (existing) {
+              existing.quantidade_remessa += item.quantidade_remessa;
+              existing.quantidade_venda += item.quantidade_venda;
+              existing.estoque_teorico += item.estoque_teorico;
+            } else {
+              allEstoque.set(key, { ...item });
+            }
+          }
         }
+      }
 
-        existing.estoque_teorico = existing.quantidade_remessa - existing.quantidade_venda;
-        estoqueMap.set(key, existing);
-      });
-
-      return Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
+      return Array.from(allEstoque.values()).filter(e => e.estoque_teorico !== 0);
     },
     enabled: !!codigoVendedor || isGerente === true,
   });
