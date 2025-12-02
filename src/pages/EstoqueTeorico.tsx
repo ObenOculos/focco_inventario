@@ -47,47 +47,54 @@ export default function EstoqueTeorico() {
   const fetchEstoque = async () => {
     if (!profile) return;
 
-    const codigoVendedor = isGerente ? null : profile.codigo_vendedor;
-    
-    if (codigoVendedor) {
-      // Buscar estoque de um vendedor específico
-      const estoqueMap = await calcularEstoqueTeorico(codigoVendedor);
+    // Vendedor: buscar apenas seu próprio estoque
+    if (!isGerente) {
+      if (!profile.codigo_vendedor) {
+        // Vendedor sem código atribuído
+        setEstoque([]);
+        setProdutosNegativos([]);
+        setLoading(false);
+        return;
+      }
+      
+      const estoqueMap = await calcularEstoqueTeorico(profile.codigo_vendedor);
       const estoqueArray = Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
       setEstoque(estoqueArray);
       setProdutosNegativos(estoqueArray.filter(e => e.estoque_teorico < 0));
-    } else {
-      // Gerente: buscar de todos os vendedores
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('codigo_vendedor')
-        .eq('role', 'vendedor')
-        .not('codigo_vendedor', 'is', null);
+      setLoading(false);
+      return;
+    }
 
-      const allEstoque = new Map<string, EstoqueItem>();
+    // Gerente: buscar de todos os vendedores
+    const { data: profiles } = await supabase
+      .from('profiles')
+      .select('codigo_vendedor')
+      .eq('role', 'vendedor')
+      .not('codigo_vendedor', 'is', null);
 
-      for (const p of profiles || []) {
-        if (p.codigo_vendedor) {
-          const vendedorEstoque = await calcularEstoqueTeorico(p.codigo_vendedor);
-          
-          // Consolidar estoques
-          for (const [key, item] of vendedorEstoque) {
-            const existing = allEstoque.get(key);
-            if (existing) {
-              existing.quantidade_remessa += item.quantidade_remessa;
-              existing.quantidade_venda += item.quantidade_venda;
-              existing.estoque_teorico += item.estoque_teorico;
-            } else {
-              allEstoque.set(key, { ...item });
-            }
+    const allEstoque = new Map<string, EstoqueItem>();
+
+    for (const p of profiles || []) {
+      if (p.codigo_vendedor) {
+        const vendedorEstoque = await calcularEstoqueTeorico(p.codigo_vendedor);
+        
+        // Consolidar estoques
+        for (const [key, item] of vendedorEstoque) {
+          const existing = allEstoque.get(key);
+          if (existing) {
+            existing.quantidade_remessa += item.quantidade_remessa;
+            existing.quantidade_venda += item.quantidade_venda;
+            existing.estoque_teorico += item.estoque_teorico;
+          } else {
+            allEstoque.set(key, { ...item });
           }
         }
       }
-
-      const estoqueArray = Array.from(allEstoque.values()).filter(e => e.estoque_teorico !== 0);
-      setEstoque(estoqueArray);
-      setProdutosNegativos(estoqueArray.filter(e => e.estoque_teorico < 0));
     }
-    
+
+    const estoqueArray = Array.from(allEstoque.values()).filter(e => e.estoque_teorico !== 0);
+    setEstoque(estoqueArray);
+    setProdutosNegativos(estoqueArray.filter(e => e.estoque_teorico < 0));
     setLoading(false);
   };
 
