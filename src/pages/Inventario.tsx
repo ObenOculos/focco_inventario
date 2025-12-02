@@ -330,24 +330,24 @@ export default function Inventario() {
             <CardContent>
               <div className="space-y-3">
                 {items.map((item, index) => (
-                  <div key={item.codigo_auxiliar} className="flex items-center gap-3 p-3 border-2 border-border">
+                  <div key={item.codigo_auxiliar} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 border-2 border-border">
                     <div className="flex-1 min-w-0">
-                      <p className="font-mono font-medium">{item.codigo_auxiliar}</p>
-                      <p className="text-sm text-muted-foreground truncate">{item.nome_produto}</p>
+                      <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
+                      <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 justify-between sm:justify-end">
                       <Input
                         type="number"
                         min="0"
                         value={item.quantidade_fisica}
                         onChange={(e) => updateQuantidade(index, parseInt(e.target.value) || 0)}
-                        className="w-20 border-2 text-center"
+                        className="w-16 sm:w-20 border-2 text-center"
                       />
                       <Button
                         variant="outline"
                         size="icon"
                         onClick={() => removeItem(index)}
-                        className="border-2 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                        className="border-2 text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0"
                       >
                         <Trash2 size={16} />
                       </Button>
