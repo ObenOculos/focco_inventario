@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import { AppLayout } from '@/components/layout/AppLayout';
-import { useAuth } from '@/contexts/AuthContext';
-import { useInventariosQuery } from '@/hooks/useInventariosQuery';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { format } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
-import { ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
-import { Inventario, ItemInventario, InventoryStatus } from '@/types/database';
+import { useState } from "react";
+import { AppLayout } from "@/components/layout/AppLayout";
+import { useAuth } from "@/contexts/AuthContext";
+import { useInventariosQuery } from "@/hooks/useInventariosQuery";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
+import { ClipboardList, ChevronDown, ChevronUp } from "lucide-react";
+import { Inventario, ItemInventario, InventoryStatus } from "@/types/database";
 
 interface InventarioComItens extends Inventario {
   itens_inventario: ItemInventario[];
@@ -21,32 +21,26 @@ export default function Historico() {
 
   const getStatusBadge = (status: InventoryStatus) => {
     const styles = {
-      pendente: 'bg-yellow-100 text-yellow-800 border-yellow-300',
-      aprovado: 'bg-green-100 text-green-800 border-green-300',
-      revisao: 'bg-red-100 text-red-800 border-red-300',
+      pendente: "bg-yellow-100 text-yellow-800 border-yellow-300",
+      aprovado: "bg-green-100 text-green-800 border-green-300",
+      revisao: "bg-red-100 text-red-800 border-red-300",
     };
 
     const labels = {
-      pendente: 'Pendente',
-      aprovado: 'Aprovado',
-      revisao: 'Em Revisão',
+      pendente: "Pendente",
+      aprovado: "Aprovado",
+      revisao: "Em Revisão",
     };
 
-    return (
-      <span className={`px-3 py-1 text-xs font-bold border-2 ${styles[status]}`}>
-        {labels[status]}
-      </span>
-    );
+    return <span className={`px-3 py-1 text-xs font-bold border-2 ${styles[status]}`}>{labels[status]}</span>;
   };
 
   return (
     <AppLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Histórico de Inventários</h1>
-          <p className="text-muted-foreground">
-            Acompanhe seus inventários anteriores e seus status
-          </p>
+          <h1 className="text-2xl pt-5 font-bold tracking-tight">Histórico de Inventários</h1>
+          <p className="text-muted-foreground">Acompanhe seus inventários anteriores e seus status</p>
         </div>
 
         {loading ? (
@@ -56,16 +50,14 @@ export default function Historico() {
             <CardContent className="py-12 text-center">
               <ClipboardList size={48} className="mx-auto mb-4 text-muted-foreground" />
               <h2 className="text-xl font-bold mb-2">Nenhum inventário encontrado</h2>
-              <p className="text-muted-foreground">
-                Você ainda não realizou nenhum inventário.
-              </p>
+              <p className="text-muted-foreground">Você ainda não realizou nenhum inventário.</p>
             </CardContent>
           </Card>
         ) : (
           <div className="space-y-4">
             {inventarios.map((inventario) => (
               <Card key={inventario.id} className="border-2">
-                <CardHeader 
+                <CardHeader
                   className="cursor-pointer"
                   onClick={() => setExpandedId(expandedId === inventario.id ? null : inventario.id)}
                 >
@@ -75,20 +67,17 @@ export default function Historico() {
                         {format(new Date(inventario.data_inventario), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {inventario.itens_inventario.length} itens • {format(new Date(inventario.data_inventario), 'HH:mm')}
+                        {inventario.itens_inventario.length} itens •{" "}
+                        {format(new Date(inventario.data_inventario), "HH:mm")}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(inventario.status)}
-                      {expandedId === inventario.id ? (
-                        <ChevronUp size={20} />
-                      ) : (
-                        <ChevronDown size={20} />
-                      )}
+                      {expandedId === inventario.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </div>
                   </div>
                 </CardHeader>
-                
+
                 {expandedId === inventario.id && (
                   <CardContent className="border-t-2 border-border">
                     {inventario.observacoes && (
