@@ -9,15 +9,19 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       style={{ maxWidth: 'calc(100vw - 32px)' }}
       toastOptions={{
+        style: {
+          background: 'hsl(0, 0%, 100%)',
+          color: 'hsl(240, 10%, 4%)',
+          border: '1px solid hsl(240, 6%, 90%)',
+        },
         classNames: {
-          toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:max-w-[calc(100vw-32px)]",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton: "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton: "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
-          success: "group-[.toaster]:bg-[hsl(173,58%,39%)] group-[.toaster]:text-white group-[.toaster]:border-[hsl(173,58%,30%)]",
-          error: "group-[.toaster]:bg-destructive group-[.toaster]:text-destructive-foreground group-[.toaster]:border-[hsl(0,84%,50%)]",
-          warning: "group-[.toaster]:bg-[hsl(43,74%,66%)] group-[.toaster]:text-[hsl(0,0%,0%)] group-[.toaster]:border-[hsl(43,74%,50%)]",
+          toast: "group toast max-w-[calc(100vw-32px)]",
+          description: "text-muted-foreground",
+          actionButton: "bg-primary text-primary-foreground",
+          cancelButton: "bg-muted text-muted-foreground",
+          success: "!bg-[hsl(173,58%,39%)] !text-white !border-[hsl(173,58%,30%)]",
+          error: "!bg-[hsl(0,84%,60%)] !text-white !border-[hsl(0,84%,50%)]",
+          warning: "!bg-[hsl(43,74%,66%)] !text-[hsl(0,0%,0%)] !border-[hsl(43,74%,50%)]",
         },
       }}
       {...props}
