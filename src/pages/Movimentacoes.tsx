@@ -84,8 +84,15 @@ export default function Movimentacoes() {
     const quantidade = parseFloat(formData.quantidade);
     const tipo = parseInt(formData.tipo_movimentacao);
 
-    // Para tipos de saída (4=Devolução Empresa, 5=Perda), quantidade deve ser negativa
-    const quantidadeAjustada = (tipo === 4 || tipo === 5) && quantidade > 0 ? -quantidade : quantidade;
+    // Tipo 3 (Devolução Cliente) = entrada, sempre positivo
+    // Tipos 4 e 5 (Devolução Empresa, Perda) = saída, sempre negativo
+    // Tipo 6 (Ajuste) = mantém o sinal informado pelo usuário
+    let quantidadeAjustada = quantidade;
+    if (tipo === 3 && quantidade < 0) {
+      quantidadeAjustada = Math.abs(quantidade);
+    } else if ((tipo === 4 || tipo === 5) && quantidade > 0) {
+      quantidadeAjustada = -quantidade;
+    }
 
     createMovimentacao.mutate({
       user_id: profile.id,
