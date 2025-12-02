@@ -22,7 +22,8 @@ export const useMovimentacoesQuery = (codigoVendedor?: string | null, isGerente?
       let query = supabase
         .from('movimentacoes_estoque')
         .select('*')
-        .order('data_movimentacao', { ascending: false });
+        .order('data_movimentacao', { ascending: false })
+        .range(0, 9999); // Aumenta limite padrão
 
       if (!isGerente && codigoVendedor) {
         query = query.eq('codigo_vendedor', codigoVendedor);

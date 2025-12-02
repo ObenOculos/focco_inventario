@@ -11,7 +11,7 @@ import { EstoqueItem } from '@/types/database';
  * - Ajuste (tipo 6): entrada ou saída
  */
 export async function calcularEstoqueTeorico(codigoVendedor: string): Promise<Map<string, EstoqueItem>> {
-  // Buscar itens dos pedidos
+  // Buscar itens dos pedidos com range maior para evitar limite de 1000
   const { data: pedidosData } = await supabase
     .from('itens_pedido')
     .select(`
@@ -23,13 +23,15 @@ export async function calcularEstoqueTeorico(codigoVendedor: string): Promise<Ma
         codigo_tipo
       )
     `)
-    .eq('pedidos.codigo_vendedor', codigoVendedor);
+    .eq('pedidos.codigo_vendedor', codigoVendedor)
+    .range(0, 49999);
 
   // Buscar movimentações avulsas
   const { data: movimentacoesData } = await supabase
     .from('movimentacoes_estoque')
     .select('*')
-    .eq('codigo_vendedor', codigoVendedor);
+    .eq('codigo_vendedor', codigoVendedor)
+    .range(0, 9999);
 
   const estoqueMap = new Map<string, EstoqueItem>();
 
