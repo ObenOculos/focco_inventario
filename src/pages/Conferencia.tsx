@@ -88,7 +88,7 @@ export default function Conferencia() {
         itens_inventario (*),
         profiles!inventarios_user_id_fkey (nome)
       `)
-      .eq('status', 'pendente')
+      .in('status', ['pendente', 'revisao'])
       .order('created_at', { ascending: false });
 
     if (error) {
