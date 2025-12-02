@@ -28,6 +28,12 @@ export default function Inventario() {
 
   const startScanner = async () => {
     try {
+      // Primeiro mostra o elemento, depois inicia o scanner
+      setScanning(true);
+      
+      // Aguarda o elemento estar visível no DOM
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       const html5QrCode = new Html5Qrcode("qr-reader");
       scannerRef.current = html5QrCode;
       
@@ -42,10 +48,10 @@ export default function Inventario() {
         },
         () => {}
       );
-      setScanning(true);
     } catch (err) {
       console.error('Erro ao iniciar scanner:', err);
-      toast.error('Não foi possível acessar a câmera');
+      toast.error('Não foi possível acessar a câmera. Verifique as permissões.');
+      setScanning(false);
     }
   };
 
