@@ -39,7 +39,7 @@ export default function Historico() {
     <AppLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl pt-5 font-bold tracking-tight">Histórico de Inventários</h1>
+          <h1 className="text-2xl px-3 font-bold tracking-tight">Histórico de Inventários</h1>
           <p className="text-muted-foreground">Acompanhe seus inventários anteriores e seus status</p>
         </div>
 
