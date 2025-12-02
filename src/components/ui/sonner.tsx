@@ -7,12 +7,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
     <Sonner
       theme="light"
       className="toaster group"
-      style={{ maxWidth: 'calc(100vw - 32px)' }}
+      style={{ maxWidth: "calc(100vw)" }}
       toastOptions={{
         style: {
-          background: 'hsl(0, 0%, 100%)',
-          color: 'hsl(240, 10%, 4%)',
-          border: '1px solid hsl(240, 6%, 90%)',
+          background: "hsl(0, 0%, 100%)",
+          color: "hsl(240, 10%, 4%)",
+          border: "1px solid hsl(240, 6%, 90%)",
         },
         classNames: {
           toast: "group toast max-w-[calc(100vw-32px)]",
