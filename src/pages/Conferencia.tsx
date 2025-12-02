@@ -85,7 +85,7 @@ export default function Conferencia() {
         itens_inventario (*),
         profiles!inventarios_user_id_fkey (nome)
       `)
-      .eq('status', 'pendente')
+      .in('status', ['pendente', 'revisao'])
       .order('created_at', { ascending: false });
 
     if (error) {
@@ -438,7 +438,7 @@ export default function Conferencia() {
         ) : (
           <div className="grid gap-4">
             {inventarios.map((inventario) => (
-              <Card key={inventario.id} className="border-2 hover:border-primary transition-colors">
+              <Card key={inventario.id} className={`border-2 hover:border-primary transition-colors ${inventario.status === 'revisao' ? 'border-yellow-400 bg-yellow-50/50' : ''}`}>
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1">
@@ -447,6 +447,15 @@ export default function Conferencia() {
                         <Badge variant="outline" className="font-mono">
                           {inventario.codigo_vendedor}
                         </Badge>
+                        {inventario.status === 'revisao' ? (
+                          <Badge className="bg-yellow-500 text-yellow-950 border-0">
+                            Em Revisão
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-blue-500 text-white border-0">
+                            Pendente
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-sm text-muted-foreground">
                         {inventario.itens_inventario.length} itens contados
