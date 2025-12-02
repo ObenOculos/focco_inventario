@@ -5,12 +5,13 @@ import { Inventario, ItemInventario, InventoryStatus } from '@/types/database';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, CheckCircle, XCircle, Eye, AlertTriangle, TrendingUp, TrendingDown } from 'lucide-react';
+import { ClipboardList, CheckCircle, XCircle, Eye, AlertTriangle, TrendingUp, TrendingDown, Save, Edit2 } from 'lucide-react';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -42,6 +43,8 @@ export default function Conferencia() {
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [observacoes, setObservacoes] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editedValues, setEditedValues] = useState<Record<string, number>>({});
+  const [saving, setSaving] = useState(false);
 
   // Filtrar divergências antes da paginação
   const filteredDivergencias = divergencias.filter(item => {
@@ -101,6 +104,7 @@ export default function Conferencia() {
     setObservacoes('');
     setSearchTerm('');
     setFilterTipo('todos');
+    setEditedValues({});
 
     const estoque = await calcularEstoqueTeorico(inventario.codigo_vendedor);
     
@@ -173,7 +177,7 @@ export default function Conferencia() {
     if (!selectedInventario) return;
 
     if (!observacoes.trim()) {
-      toast.error('Informe o motivo da revisão');
+      toast.error('Informe o motivo da não aprovação');
       return;
     }
 
@@ -186,13 +190,80 @@ export default function Conferencia() {
       .eq('id', selectedInventario.id);
 
     if (error) {
-      toast.error('Erro ao solicitar revisão');
+      toast.error('Erro ao rejeitar inventário');
     } else {
-      toast.success('Revisão solicitada!');
+      toast.success('Inventário não aprovado!');
       setDialogOpen(false);
       fetchInventarios();
     }
   };
+
+  const handleEditValue = (codigoAuxiliar: string, value: number) => {
+    setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: value }));
+  };
+
+  const handleSaveEdits = async () => {
+    if (!selectedInventario || Object.keys(editedValues).length === 0) return;
+
+    setSaving(true);
+    try {
+      // Update each edited item
+      for (const [codigoAuxiliar, novaQuantidade] of Object.entries(editedValues)) {
+        const item = selectedInventario.itens_inventario.find(i => i.codigo_auxiliar === codigoAuxiliar);
+        
+        if (item) {
+          // Update existing item
+          const { error } = await supabase
+            .from('itens_inventario')
+            .update({ quantidade_fisica: novaQuantidade })
+            .eq('id', item.id);
+          
+          if (error) throw error;
+        } else {
+          // Insert new item (for products not originally counted)
+          const divergencia = divergencias.find(d => d.codigo_auxiliar === codigoAuxiliar);
+          const { error } = await supabase
+            .from('itens_inventario')
+            .insert({
+              inventario_id: selectedInventario.id,
+              codigo_auxiliar: codigoAuxiliar,
+              nome_produto: divergencia?.nome_produto || '',
+              quantidade_fisica: novaQuantidade,
+            });
+          
+          if (error) throw error;
+        }
+      }
+
+      // Update divergencias state with new values
+      setDivergencias(prev => prev.map(d => {
+        const editedValue = editedValues[d.codigo_auxiliar];
+        if (editedValue !== undefined) {
+          const diferenca = editedValue - d.estoque_teorico;
+          const percentual = d.estoque_teorico > 0 
+            ? ((diferenca / d.estoque_teorico) * 100) 
+            : (editedValue > 0 ? 100 : 0);
+          let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
+          if (diferenca > 0) tipo = 'sobra';
+          else if (diferenca < 0) tipo = 'falta';
+          
+          return { ...d, quantidade_fisica: editedValue, diferenca, percentual, tipo };
+        }
+        return d;
+      }));
+
+      setEditedValues({});
+      toast.success('Alterações salvas!');
+      fetchInventarios(); // Refresh to get updated data
+    } catch (error) {
+      console.error('Erro ao salvar:', error);
+      toast.error('Erro ao salvar alterações');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const hasEdits = Object.keys(editedValues).length > 0;
 
   // Estatísticas
   const itensCorretos = divergencias.filter(d => d.diferenca === 0).length;
@@ -343,7 +414,15 @@ export default function Conferencia() {
                             <span className="text-xs text-muted-foreground">{item.nome_produto}</span>
                           </td>
                           <td className="py-3 px-3 text-center font-bold text-blue-600">{item.estoque_teorico}</td>
-                          <td className="py-3 px-3 text-center font-bold">{item.quantidade_fisica}</td>
+                          <td className="py-3 px-3 text-center">
+                            <Input
+                              type="number"
+                              min="0"
+                              value={editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica}
+                              onChange={(e) => handleEditValue(item.codigo_auxiliar, parseInt(e.target.value) || 0)}
+                              className="w-20 text-center font-bold border-2 mx-auto"
+                            />
+                          </td>
                           <td className="py-3 px-3 text-center">
                             <span className={`font-bold text-lg ${
                               item.diferenca > 0 
@@ -404,6 +483,13 @@ export default function Conferencia() {
                   />
                 </div>
 
+                {hasEdits && (
+                  <Button onClick={handleSaveEdits} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700">
+                    <Save className="mr-2" size={16} />
+                    {saving ? 'Salvando...' : 'Salvar Alterações'}
+                  </Button>
+                )}
+
                 <div className="flex gap-3">
                   <Button onClick={handleAprovar} className="flex-1 bg-green-600 hover:bg-green-700">
                     <CheckCircle className="mr-2" size={16} />
@@ -415,7 +501,7 @@ export default function Conferencia() {
                     className="flex-1"
                   >
                     <XCircle className="mr-2" size={16} />
-                    Solicitar Revisão
+                    Não Aprovar
                   </Button>
                 </div>
               </div>
