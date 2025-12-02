@@ -1,7 +1,7 @@
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-interface Pedido {
+export interface Pedido {
   id: string;
   numero_pedido: string;
   data_emissao: string;
@@ -15,7 +15,7 @@ interface Pedido {
   codigo_cliente: string | null;
 }
 
-interface ItemPedido {
+export interface ItemPedido {
   id: string;
   codigo_auxiliar: string;
   nome_produto: string;
@@ -23,6 +23,98 @@ interface ItemPedido {
   valor_produto: number;
 }
 
+interface PedidosFilters {
+  codigoVendedor?: string | null;
+  isGerente?: boolean;
+  tipoFilter?: string;
+  vendedorFilter?: string;
+  searchTerm?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+interface PedidosResult {
+  data: Pedido[];
+  totalCount: number;
+  totalPages: number;
+}
+
+export const usePedidosPaginatedQuery = (filters: PedidosFilters) => {
+  const {
+    codigoVendedor,
+    isGerente,
+    tipoFilter = 'todos',
+    vendedorFilter = 'todos',
+    searchTerm = '',
+    page = 1,
+    pageSize = 20,
+  } = filters;
+
+  return useQuery({
+    queryKey: ['pedidos-paginated', codigoVendedor, isGerente, tipoFilter, vendedorFilter, searchTerm, page, pageSize],
+    queryFn: async (): Promise<PedidosResult> => {
+      // Build base query for count
+      let countQuery = supabase
+        .from('pedidos')
+        .select('*', { count: 'exact', head: true });
+
+      // Build base query for data
+      let dataQuery = supabase
+        .from('pedidos')
+        .select('*')
+        .order('data_emissao', { ascending: false });
+
+      // Apply vendedor filter based on role
+      if (!isGerente && codigoVendedor) {
+        countQuery = countQuery.eq('codigo_vendedor', codigoVendedor);
+        dataQuery = dataQuery.eq('codigo_vendedor', codigoVendedor);
+      }
+
+      // Apply tipo filter
+      if (tipoFilter !== 'todos') {
+        countQuery = countQuery.eq('codigo_tipo', parseInt(tipoFilter));
+        dataQuery = dataQuery.eq('codigo_tipo', parseInt(tipoFilter));
+      }
+
+      // Apply vendedor filter (for gerentes filtering by specific vendedor)
+      if (vendedorFilter !== 'todos') {
+        countQuery = countQuery.eq('codigo_vendedor', vendedorFilter);
+        dataQuery = dataQuery.eq('codigo_vendedor', vendedorFilter);
+      }
+
+      // Apply search filter
+      if (searchTerm) {
+        const searchFilter = `numero_pedido.ilike.%${searchTerm}%,nome_vendedor.ilike.%${searchTerm}%,numero_nota_fiscal.ilike.%${searchTerm}%`;
+        countQuery = countQuery.or(searchFilter);
+        dataQuery = dataQuery.or(searchFilter);
+      }
+
+      // Get total count
+      const { count, error: countError } = await countQuery;
+      if (countError) throw countError;
+
+      // Apply pagination
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+      dataQuery = dataQuery.range(from, to);
+
+      const { data, error } = await dataQuery;
+      if (error) throw error;
+
+      const totalCount = count || 0;
+      const totalPages = Math.ceil(totalCount / pageSize);
+
+      return {
+        data: (data || []) as Pedido[],
+        totalCount,
+        totalPages,
+      };
+    },
+    enabled: !!codigoVendedor || isGerente === true,
+  });
+};
+
+// Manter hook antigo para compatibilidade com outras páginas (busca limitada por vendedor)
 export const usePedidosQuery = (codigoVendedor?: string | null, isGerente?: boolean) => {
   return useQuery({
     queryKey: ['pedidos', codigoVendedor, isGerente],
@@ -30,11 +122,15 @@ export const usePedidosQuery = (codigoVendedor?: string | null, isGerente?: bool
       let query = supabase
         .from('pedidos')
         .select('*')
-        .order('data_emissao', { ascending: false })
-        .range(0, 9999); // Aumenta o limite padrão de 1000
+        .order('data_emissao', { ascending: false });
 
+      // Para vendedores, busca apenas seus pedidos (limite natural)
+      // Para gerentes, precisa de paginação - usar usePedidosPaginatedQuery
       if (!isGerente && codigoVendedor) {
         query = query.eq('codigo_vendedor', codigoVendedor);
+      } else {
+        // Limita a 1000 mais recentes para evitar sobrecarga
+        query = query.limit(1000);
       }
 
       const { data, error } = await query;

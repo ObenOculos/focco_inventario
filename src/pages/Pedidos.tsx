@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePedidosQuery, useVendedoresQuery, usePedidoDetalhesQuery } from '@/hooks/usePedidosQuery';
+import { usePedidosPaginatedQuery, useVendedoresQuery, usePedidoDetalhesQuery, Pedido } from '@/hooks/usePedidosQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -11,23 +11,8 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Package, DollarSign, AlertTriangle, FileText } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { usePagination } from '@/hooks/usePagination';
 import { Pagination as PaginationComponent } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
-
-interface Pedido {
-  id: string;
-  numero_pedido: string;
-  data_emissao: string;
-  codigo_vendedor: string;
-  nome_vendedor: string | null;
-  valor_total: number;
-  codigo_tipo: number;
-  situacao: string | null;
-  numero_nota_fiscal: string | null;
-  serie_nota_fiscal: string | null;
-  codigo_cliente: string | null;
-}
 
 interface ItemPedido {
   id: string;
@@ -50,37 +35,46 @@ export default function Pedidos() {
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
   const [selectedPedidoId, setSelectedPedidoId] = useState<string | null>(null);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(20);
 
-  const { data: pedidos = [], isLoading: loading } = usePedidosQuery(profile?.codigo_vendedor, isGerente);
+  // Paginação no servidor com filtros
+  const { data: pedidosResult, isLoading: loading } = usePedidosPaginatedQuery({
+    codigoVendedor: profile?.codigo_vendedor,
+    isGerente,
+    tipoFilter,
+    vendedorFilter,
+    searchTerm,
+    page: currentPage,
+    pageSize: itemsPerPage,
+  });
+
+  const pedidos = pedidosResult?.data || [];
+  const totalItems = pedidosResult?.totalCount || 0;
+  const totalPages = pedidosResult?.totalPages || 1;
+
   const { data: vendedores = [] } = useVendedoresQuery();
   const { data: itensPedido = [] } = usePedidoDetalhesQuery(selectedPedidoId);
 
-  // Filtrar pedidos antes da paginação
-  const filteredPedidos = pedidos.filter(pedido => {
-    const matchesSearch = pedido.numero_pedido.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pedido.nome_vendedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      pedido.numero_nota_fiscal?.includes(searchTerm);
+  // Reset page when filters change
+  const handleFilterChange = (setter: (value: string) => void) => (value: string) => {
+    setter(value);
+    setCurrentPage(1);
+  };
 
-    const matchesTipo = tipoFilter === 'todos' || pedido.codigo_tipo.toString() === tipoFilter;
-    const matchesVendedor = vendedorFilter === 'todos' || pedido.codigo_vendedor === vendedorFilter;
+  const handleSearchChange = (value: string) => {
+    setSearchTerm(value);
+    setCurrentPage(1);
+  };
 
-    return matchesSearch && matchesTipo && matchesVendedor;
-  });
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+  };
 
-  const {
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    startIndex,
-    endIndex,
-    paginatedData: paginatedPedidos,
-    totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
-  } = usePagination({
-    data: filteredPedidos,
-    itemsPerPage: 20,
-  });
+  const handleItemsPerPageChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1);
+  };
 
   const handleViewPedido = (pedido: Pedido) => {
     setSelectedPedidoId(pedido.id);
@@ -150,10 +144,10 @@ export default function Pedidos() {
             <div className="flex flex-col md:flex-row gap-4">
               <SearchFilter
                 value={searchTerm}
-                onChange={setSearchTerm}
+                onChange={handleSearchChange}
                 placeholder="Buscar por número do pedido, vendedor ou NF..."
               />
-              <Select value={tipoFilter} onValueChange={setTipoFilter}>
+              <Select value={tipoFilter} onValueChange={handleFilterChange(setTipoFilter)}>
                 <SelectTrigger className="w-full md:w-40">
                   <SelectValue placeholder="Tipo" />
                 </SelectTrigger>
@@ -164,7 +158,7 @@ export default function Pedidos() {
                 </SelectContent>
               </Select>
               {isGerente && (
-                <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+                <Select value={vendedorFilter} onValueChange={handleFilterChange(setVendedorFilter)}>
                   <SelectTrigger className="w-full md:w-52">
                     <SelectValue placeholder="Vendedor" />
                   </SelectTrigger>
@@ -195,7 +189,7 @@ export default function Pedidos() {
               <div className="text-center py-8 text-muted-foreground">
                 Carregando pedidos...
               </div>
-            ) : filteredPedidos.length === 0 ? (
+            ) : pedidos.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
                 Nenhum pedido encontrado
               </div>
@@ -214,7 +208,7 @@ export default function Pedidos() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {paginatedPedidos.map((pedido) => (
+                    {pedidos.map((pedido) => (
                       <TableRow key={pedido.id} className="cursor-pointer hover:bg-muted/50">
                         <TableCell className="font-medium">#{pedido.numero_pedido}</TableCell>
                         <TableCell>
@@ -256,8 +250,8 @@ export default function Pedidos() {
                 totalPages={totalPages}
                 itemsPerPage={itemsPerPage}
                 totalItems={totalItems}
-                startIndex={startIndex}
-                endIndex={endIndex}
+                startIndex={(currentPage - 1) * itemsPerPage}
+                endIndex={Math.min(currentPage * itemsPerPage, totalItems)}
                 onPageChange={handlePageChange}
                 onItemsPerPageChange={handleItemsPerPageChange}
               />
