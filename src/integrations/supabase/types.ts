@@ -301,6 +301,18 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      calcular_estoque_vendedor: {
+        Args: { p_codigo_vendedor: string }
+        Returns: {
+          codigo_auxiliar: string
+          cor: string
+          estoque_teorico: number
+          modelo: string
+          nome_produto: string
+          quantidade_remessa: number
+          quantidade_venda: number
+        }[]
+      }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }
       get_user_role: {
         Args: { user_id: string }
