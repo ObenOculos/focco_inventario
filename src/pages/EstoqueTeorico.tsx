@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -12,15 +12,39 @@ import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
-  const [estoque, setEstoque] = useState<EstoqueItem[]>([]);
+  const [estoqueBase, setEstoqueBase] = useState<EstoqueItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [produtosNegativos, setProdutosNegativos] = useState<EstoqueItem[]>([]);
+  const [tipoFilter, setTipoFilter] = useState<string>('todos');
+  const [saldoFilter, setSaldoFilter] = useState<string>('todos');
 
   const isGerente = profile?.role === 'gerente';
+
+  // Aplicar filtros de tipo e saldo
+  const estoque = useMemo(() => {
+    let filtered = estoqueBase;
+
+    // Filtro por tipo de movimento
+    if (tipoFilter === 'remessa') {
+      filtered = filtered.filter(e => e.quantidade_remessa > 0);
+    } else if (tipoFilter === 'venda') {
+      filtered = filtered.filter(e => e.quantidade_venda > 0);
+    }
+
+    // Filtro por saldo
+    if (saldoFilter === 'positivo') {
+      filtered = filtered.filter(e => e.estoque_teorico > 0);
+    } else if (saldoFilter === 'negativo') {
+      filtered = filtered.filter(e => e.estoque_teorico < 0);
+    }
+
+    return filtered;
+  }, [estoqueBase, tipoFilter, saldoFilter]);
 
   const {
     currentPage,
@@ -51,15 +75,15 @@ export default function EstoqueTeorico() {
     if (!isGerente) {
       if (!profile.codigo_vendedor) {
         // Vendedor sem código atribuído
-        setEstoque([]);
-        setProdutosNegativos([]);
+      setEstoqueBase([]);
+      setProdutosNegativos([]);
         setLoading(false);
         return;
       }
       
       const estoqueMap = await calcularEstoqueTeorico(profile.codigo_vendedor);
       const estoqueArray = Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
-      setEstoque(estoqueArray);
+      setEstoqueBase(estoqueArray);
       setProdutosNegativos(estoqueArray.filter(e => e.estoque_teorico < 0));
       setLoading(false);
       return;
@@ -93,7 +117,7 @@ export default function EstoqueTeorico() {
     }
 
     const estoqueArray = Array.from(allEstoque.values()).filter(e => e.estoque_teorico !== 0);
-    setEstoque(estoqueArray);
+    setEstoqueBase(estoqueArray);
     setProdutosNegativos(estoqueArray.filter(e => e.estoque_teorico < 0));
     setLoading(false);
   };
@@ -172,12 +196,34 @@ export default function EstoqueTeorico() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Search */}
-            <SearchFilter
-              value={searchTerm}
-              onChange={setSearchTerm}
-              placeholder="Buscar por código ou produto..."
-            />
+            {/* Filtros */}
+            <div className="flex flex-col md:flex-row gap-4">
+              <SearchFilter
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder="Buscar por código ou produto..."
+              />
+              <Select value={tipoFilter} onValueChange={setTipoFilter}>
+                <SelectTrigger className="w-full md:w-44">
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os tipos</SelectItem>
+                  <SelectItem value="remessa">Com Remessa</SelectItem>
+                  <SelectItem value="venda">Com Venda</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={saldoFilter} onValueChange={setSaldoFilter}>
+                <SelectTrigger className="w-full md:w-44">
+                  <SelectValue placeholder="Saldo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos os saldos</SelectItem>
+                  <SelectItem value="positivo">Saldo Positivo</SelectItem>
+                  <SelectItem value="negativo">Saldo Negativo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
 
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Carregando...</div>
