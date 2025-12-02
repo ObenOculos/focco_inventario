@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Camera, Plus, Trash2, Send, QrCode, Check, X } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Check, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
   Dialog,
@@ -34,10 +34,36 @@ export default function Inventario() {
   const [loading, setLoading] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   
+  // Estados para filtro e paginação
+  const [filterText, setFilterText] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
   // Estados para modal de confirmação
   const [pendingProduct, setPendingProduct] = useState<{code: string; name: string} | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+
+  // Filtrar e paginar itens
+  const filteredItems = useMemo(() => {
+    if (!filterText.trim()) return items;
+    const search = filterText.toLowerCase();
+    return items.filter(item => 
+      item.codigo_auxiliar.toLowerCase().includes(search) ||
+      item.nome_produto.toLowerCase().includes(search)
+    );
+  }, [items, filterText]);
+
+  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
+  const paginatedItems = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredItems.slice(start, start + itemsPerPage);
+  }, [filteredItems, currentPage, itemsPerPage]);
+
+  // Reset para página 1 quando filtrar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filterText]);
 
   const startScanner = async () => {
     try {
@@ -326,35 +352,82 @@ export default function Inventario() {
           <Card className="border-2">
             <CardHeader>
               <CardTitle>Itens Escaneados ({items.length})</CardTitle>
+              <div className="relative mt-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+                <Input
+                  placeholder="Filtrar por código ou nome..."
+                  value={filterText}
+                  onChange={(e) => setFilterText(e.target.value)}
+                  className="pl-9 border-2"
+                />
+              </div>
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {items.map((item, index) => (
-                  <div key={item.codigo_auxiliar} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 border-2 border-border">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
-                      <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
+                {paginatedItems.map((item) => {
+                  const originalIndex = items.findIndex(i => i.codigo_auxiliar === item.codigo_auxiliar);
+                  return (
+                    <div key={item.codigo_auxiliar} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 border-2 border-border">
+                      <div className="flex-1 min-w-0">
+                        <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
+                        <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
+                      </div>
+                      <div className="flex items-center gap-2 justify-between sm:justify-end">
+                        <Input
+                          type="number"
+                          min="0"
+                          value={item.quantidade_fisica}
+                          onChange={(e) => updateQuantidade(originalIndex, parseInt(e.target.value) || 0)}
+                          className="w-16 sm:w-20 border-2 text-center"
+                        />
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => removeItem(originalIndex)}
+                          className="border-2 text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0"
+                        >
+                          <Trash2 size={16} />
+                        </Button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2 justify-between sm:justify-end">
-                      <Input
-                        type="number"
-                        min="0"
-                        value={item.quantidade_fisica}
-                        onChange={(e) => updateQuantidade(index, parseInt(e.target.value) || 0)}
-                        className="w-16 sm:w-20 border-2 text-center"
-                      />
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        onClick={() => removeItem(index)}
-                        className="border-2 text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0"
-                      >
-                        <Trash2 size={16} />
-                      </Button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
+
+              {/* Paginação */}
+              {totalPages > 1 && (
+                <div className="flex items-center justify-between mt-4 pt-4 border-t-2 border-border">
+                  <span className="text-sm text-muted-foreground">
+                    Página {currentPage} de {totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="border-2"
+                    >
+                      <ChevronLeft size={16} />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="border-2"
+                    >
+                      <ChevronRight size={16} />
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {filteredItems.length === 0 && filterText && (
+                <p className="text-center text-muted-foreground py-4">
+                  Nenhum item encontrado para "{filterText}"
+                </p>
+              )}
 
               <div className="mt-4">
                 <Label className="font-medium">Observações</Label>
