@@ -29,7 +29,7 @@ export default function Historico() {
     const labels = {
       pendente: "Pendente",
       aprovado: "Aprovado",
-      revisao: "Em Revisão",
+      revisao: "Não aprovado",
     };
 
     return <span className={`px-3 py-1 text-xs font-bold border-2 ${styles[status]}`}>{labels[status]}</span>;
