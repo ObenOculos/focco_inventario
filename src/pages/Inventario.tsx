@@ -8,8 +8,16 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Camera, Plus, Trash2, Send, QrCode } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Check, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface InventarioItem {
   codigo_auxiliar: string;
@@ -25,6 +33,11 @@ export default function Inventario() {
   const [observacoes, setObservacoes] = useState('');
   const [loading, setLoading] = useState(false);
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  
+  // Estados para modal de confirmação
+  const [pendingProduct, setPendingProduct] = useState<{code: string; name: string} | null>(null);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
 
   const startScanner = async () => {
     try {
@@ -68,9 +81,19 @@ export default function Inventario() {
   };
 
   const handleQrCodeScanned = async (code: string) => {
+    // Pausar scanner imediatamente
+    if (scannerRef.current) {
+      try {
+        await scannerRef.current.pause(true);
+      } catch (err) {
+        console.error('Erro ao pausar scanner:', err);
+      }
+    }
+
     // Verificar se já existe
     if (items.some(item => item.codigo_auxiliar === code)) {
-      toast.info('Este produto já foi escaneado');
+      setPendingProduct({ code, name: code });
+      setShowDuplicateDialog(true);
       return;
     }
 
@@ -81,23 +104,79 @@ export default function Inventario() {
       .eq('codigo_auxiliar', code)
       .maybeSingle();
 
+    setPendingProduct({ 
+      code, 
+      name: produto?.nome_produto || code 
+    });
+    setShowConfirmDialog(true);
+  };
+
+  const confirmAddProduct = () => {
+    if (!pendingProduct) return;
+    
     const newItem: InventarioItem = {
-      codigo_auxiliar: code,
-      nome_produto: produto?.nome_produto || code,
+      codigo_auxiliar: pendingProduct.code,
+      nome_produto: pendingProduct.name,
       quantidade_fisica: 1,
     };
 
-    setItems([...items, newItem]);
-    toast.success(`Produto ${code} adicionado`);
+    setItems(prev => [...prev, newItem]);
+    toast.success(`Produto ${pendingProduct.code} adicionado`);
+    
+    setShowConfirmDialog(false);
+    setPendingProduct(null);
+    resumeScanner();
   };
 
-  const handleManualAdd = () => {
+  const cancelAddProduct = () => {
+    setShowConfirmDialog(false);
+    setPendingProduct(null);
+    resumeScanner();
+  };
+
+  const closeDuplicateDialog = () => {
+    setShowDuplicateDialog(false);
+    setPendingProduct(null);
+    resumeScanner();
+  };
+
+  const resumeScanner = () => {
+    if (scannerRef.current && scanning) {
+      try {
+        scannerRef.current.resume();
+      } catch (err) {
+        console.error('Erro ao retomar scanner:', err);
+      }
+    }
+  };
+
+  const handleManualAdd = async () => {
     if (!manualCode.trim()) {
       toast.error('Digite o código do produto');
       return;
     }
-    handleQrCodeScanned(manualCode.trim().toUpperCase());
+    const code = manualCode.trim().toUpperCase();
     setManualCode('');
+    
+    // Verificar se já existe
+    if (items.some(item => item.codigo_auxiliar === code)) {
+      setPendingProduct({ code, name: code });
+      setShowDuplicateDialog(true);
+      return;
+    }
+
+    // Buscar informações do produto
+    const { data: produto } = await supabase
+      .from('produtos')
+      .select('nome_produto')
+      .eq('codigo_auxiliar', code)
+      .maybeSingle();
+
+    setPendingProduct({ 
+      code, 
+      name: produto?.nome_produto || code 
+    });
+    setShowConfirmDialog(true);
   };
 
   const updateQuantidade = (index: number, quantidade: number) => {
@@ -299,6 +378,53 @@ export default function Inventario() {
           </Card>
         )}
       </div>
+
+      {/* Modal de Confirmação */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirmar Produto</DialogTitle>
+            <DialogDescription>
+              Deseja adicionar este produto ao inventário?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 bg-secondary rounded-lg">
+            <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
+            <p className="text-muted-foreground">{pendingProduct?.name}</p>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={cancelAddProduct}>
+              <X className="mr-2" size={16} />
+              Cancelar
+            </Button>
+            <Button onClick={confirmAddProduct}>
+              <Check className="mr-2" size={16} />
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Produto Duplicado */}
+      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Produto Já Adicionado</DialogTitle>
+            <DialogDescription>
+              Este produto já está na lista do inventário.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="p-4 bg-destructive/10 border-2 border-destructive/20 rounded-lg">
+            <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
+            <p className="text-muted-foreground">Já foi escaneado anteriormente</p>
+          </div>
+          <DialogFooter>
+            <Button onClick={closeDuplicateDialog}>
+              Entendi
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }
