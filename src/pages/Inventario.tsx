@@ -487,7 +487,7 @@ export default function Inventario() {
 
       {/* Modal de Confirmação */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent>
+        <DialogContent className="max-w-md shadow-none">
           <DialogHeader>
             <DialogTitle>Confirmar Produto</DialogTitle>
             <DialogDescription>
