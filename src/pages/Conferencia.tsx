@@ -110,7 +110,7 @@ export default function Conferencia() {
     
     const divergenciasList: DivergenciaItem[] = [];
 
-    // Verificar itens do inventário
+    // Verificar apenas os itens que o vendedor escaneou
     for (const item of inventario.itens_inventario) {
       const estoqueItem = estoque.get(item.codigo_auxiliar);
       const estoqueTeoricoValue = estoqueItem?.estoque_teorico || 0;
@@ -132,21 +132,6 @@ export default function Conferencia() {
         percentual,
         tipo,
       });
-    }
-
-    // Verificar itens em estoque que não foram inventariados
-    for (const [codigo, estoqueItem] of estoque) {
-      if (estoqueItem.estoque_teorico > 0 && !inventario.itens_inventario.some(i => i.codigo_auxiliar === codigo)) {
-        divergenciasList.push({
-          codigo_auxiliar: codigo,
-          nome_produto: estoqueItem.nome_produto,
-          estoque_teorico: estoqueItem.estoque_teorico,
-          quantidade_fisica: 0,
-          diferenca: -estoqueItem.estoque_teorico,
-          percentual: -100,
-          tipo: 'falta',
-        });
-      }
     }
 
     setDivergencias(divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca)));
