@@ -20,7 +20,7 @@ BEGIN
     SELECT 
       ip.codigo_auxiliar,
       ip.nome_produto,
-      SUM(CASE WHEN p.codigo_tipo = 7 THEN ip.quantidade ELSE 0 END) as qtd_remessa,
+      SUM(CASE WHEN p.codigo_tipo IN (7, 99) THEN ip.quantidade ELSE 0 END) as qtd_remessa,
       SUM(CASE WHEN p.codigo_tipo = 2 THEN ip.quantidade ELSE 0 END) as qtd_venda
     FROM itens_pedido ip
     INNER JOIN pedidos p ON p.id = ip.pedido_id

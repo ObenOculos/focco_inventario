@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
-import { Inventario, ItemInventario, InventoryStatus } from '@/types/database';
+import { Database } from '@/integrations/supabase/types';
+import { DivergenciaItem, InventoryStatus } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,20 +20,10 @@ import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
 
-interface InventarioComItens extends Inventario {
-  itens_inventario: ItemInventario[];
+type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
+  itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
   profiles?: { nome: string };
-}
-
-interface DivergenciaItem {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  estoque_teorico: number;
-  quantidade_fisica: number;
-  diferenca: number;
-  percentual: number;
-  tipo: 'ok' | 'sobra' | 'falta';
-}
+};
 
 export default function Conferencia() {
   const [inventarios, setInventarios] = useState<InventarioComItens[]>([]);

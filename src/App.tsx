@@ -20,6 +20,7 @@ import Conferencia from "./pages/Conferencia";
 import Pedidos from "./pages/Pedidos";
 import Movimentacoes from "./pages/Movimentacoes";
 import ControleVendedores from "./pages/ControleVendedores";
+import AnaliseInventario from "./pages/AnaliseInventario";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -47,6 +48,11 @@ const App = () => (
             <Route path="/estoque-teorico" element={
               <ProtectedRoute>
                 <EstoqueTeorico />
+              </ProtectedRoute>
+            } />
+             <Route path="/analise-inventario" element={
+              <ProtectedRoute>
+                <AnaliseInventario />
               </ProtectedRoute>
             } />
             

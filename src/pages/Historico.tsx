@@ -7,11 +7,12 @@ import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ClipboardList, ChevronDown, ChevronUp } from "lucide-react";
-import { Inventario, ItemInventario, InventoryStatus } from "@/types/database";
+import { Database } from '@/integrations/supabase/types';
+import { InventoryStatus } from '@/types/app';
 
-interface InventarioComItens extends Inventario {
-  itens_inventario: ItemInventario[];
-}
+type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
+  itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
+};
 
 export default function Historico() {
   const { profile } = useAuth();

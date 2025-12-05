@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
-import { ExcelRow } from '@/types/database';
+import { ExcelRow } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -360,9 +360,9 @@ export default function Importar() {
                           <td className="py-2 px-1">{row.codigo_vendedor}</td>
                           <td className="py-2 px-1">
                             <span className={`px-2 py-0.5 text-xs font-bold ${
-                              row.codigo_tipo === 7 ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                              row.codigo_tipo === 7 || row.codigo_tipo === 99 ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
                             }`}>
-                              {row.codigo_tipo === 7 ? 'REMESSA' : 'VENDA'}
+                              {row.codigo_tipo === 7 || row.codigo_tipo === 99 ? 'REMESSA' : 'VENDA'}
                             </span>
                           </td>
                           <td className="py-2 px-1 font-mono">{row.codigo_auxiliar}</td>
@@ -562,6 +562,7 @@ export default function Importar() {
               <ul className="text-sm text-muted-foreground mt-2 space-y-1">
                 <li><strong>2</strong> = Venda (saída de estoque)</li>
                 <li><strong>7</strong> = Remessa (entrada de estoque)</li>
+                <li><strong>99</strong> = Remessa (entrada de estoque)</li>
               </ul>
             </div>
             <div className="mt-3 p-3 bg-secondary">

@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Inventario, ItemInventario, InventoryStatus } from '@/types/database';
+import { Database } from '@/integrations/supabase/types';
 
-interface InventarioComItens extends Inventario {
-  itens_inventario: ItemInventario[];
-}
+type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
+  itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
+};
 
 export const useInventariosQuery = (codigoVendedor?: string | null) => {
   return useQuery({

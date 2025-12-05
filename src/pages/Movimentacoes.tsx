@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { useMovimentacoesQuery, useCreateMovimentacao } from '@/hooks/useMovimentacoesQuery';
+import { MovimentacaoTipo } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,24 +19,12 @@ import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 
-interface Movimentacao {
-  id: string;
-  codigo_vendedor: string;
-  codigo_auxiliar: string;
-  nome_produto: string | null;
-  tipo_movimentacao: number;
-  quantidade: number;
-  motivo: string | null;
-  observacoes: string | null;
-  data_movimentacao: string;
-  created_at: string;
-}
-
 const TIPOS_MOVIMENTACAO = {
-  3: { label: 'Devolução Cliente', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
-  4: { label: 'Devolução Empresa', icon: TrendingDown, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
-  5: { label: 'Perda/Avaria', icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
-  6: { label: 'Ajuste', icon: RefreshCw, color: 'text-purple-600', bg: 'bg-purple-50 border-purple-200' },
+  'ajuste_entrada': { label: 'Ajuste Entrada', icon: TrendingUp, color: 'text-green-600', bg: 'bg-green-50 border-green-200' },
+  'ajuste_saida': { label: 'Ajuste Saída', icon: TrendingDown, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
+  'devolucao_cliente': { label: 'Devolução Cliente', icon: TrendingUp, color: 'text-blue-600', bg: 'bg-blue-50 border-blue-200' },
+  'devolucao_empresa': { label: 'Devolução Empresa', icon: TrendingDown, color: 'text-orange-600', bg: 'bg-orange-50 border-orange-200' },
+  'perda_avaria': { label: 'Perda/Avaria', icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50 border-red-200' },
 };
 
 export default function Movimentacoes() {
@@ -82,15 +71,16 @@ export default function Movimentacoes() {
     }
 
     const quantidade = parseFloat(formData.quantidade);
-    const tipo = parseInt(formData.tipo_movimentacao);
+    const tipo = formData.tipo_movimentacao;
 
-    // Tipo 3 (Devolução Cliente) = entrada, sempre positivo
-    // Tipos 4 e 5 (Devolução Empresa, Perda) = saída, sempre negativo
-    // Tipo 6 (Ajuste) = mantém o sinal informado pelo usuário
+    // Mapeamento dos tipos para determinar sinal da quantidade
+    const tiposEntrada = ['devolucao_cliente', 'ajuste_entrada'];
+    const tiposSaida = ['devolucao_empresa', 'perda_avaria', 'ajuste_saida'];
+
     let quantidadeAjustada = quantidade;
-    if (tipo === 3 && quantidade < 0) {
+    if (tiposEntrada.includes(tipo) && quantidade < 0) {
       quantidadeAjustada = Math.abs(quantidade);
-    } else if ((tipo === 4 || tipo === 5) && quantidade > 0) {
+    } else if (tiposSaida.includes(tipo) && quantidade > 0) {
       quantidadeAjustada = -quantidade;
     }
 
@@ -99,7 +89,7 @@ export default function Movimentacoes() {
       codigo_vendedor: profile.codigo_vendedor,
       codigo_auxiliar: formData.codigo_auxiliar.toUpperCase(),
       nome_produto: formData.nome_produto,
-      tipo_movimentacao: tipo,
+      tipo_movimentacao: tipo as MovimentacaoTipo,
       quantidade: quantidadeAjustada,
       motivo: formData.motivo,
       observacoes: formData.observacoes || null,
@@ -122,7 +112,7 @@ export default function Movimentacoes() {
     });
   };
 
-  const getTipoInfo = (tipo: number) => {
+  const getTipoInfo = (tipo: string) => {
     return TIPOS_MOVIMENTACAO[tipo as keyof typeof TIPOS_MOVIMENTACAO] || {
       label: 'Desconhecido',
       icon: RefreshCw,
@@ -184,10 +174,11 @@ export default function Movimentacoes() {
                         <SelectValue placeholder="Selecione o tipo" />
                       </SelectTrigger>
                       <SelectContent className="bg-background border-2 z-50">
-                        <SelectItem value="3">🔵 Devolução de Cliente (Entrada)</SelectItem>
-                        <SelectItem value="4">🟠 Devolução para Empresa (Saída)</SelectItem>
-                        <SelectItem value="5">🔴 Perda/Avaria (Saída)</SelectItem>
-                        <SelectItem value="6">🟣 Ajuste de Estoque</SelectItem>
+                        <SelectItem value="devolucao_cliente">🔵 Devolução de Cliente (Entrada)</SelectItem>
+                        <SelectItem value="devolucao_empresa">🟠 Devolução para Empresa (Saída)</SelectItem>
+                        <SelectItem value="perda_avaria">🔴 Perda/Avaria (Saída)</SelectItem>
+                        <SelectItem value="ajuste_entrada">🟢 Ajuste Entrada</SelectItem>
+                        <SelectItem value="ajuste_saida">🔴 Ajuste Saída</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -203,9 +194,9 @@ export default function Movimentacoes() {
                       required
                     />
                     <p className="text-xs text-muted-foreground mt-1">
-                      {formData.tipo_movimentacao === '4' || formData.tipo_movimentacao === '5'
+                      {formData.tipo_movimentacao === 'devolucao_empresa' || formData.tipo_movimentacao === 'perda_avaria'
                         ? 'Será registrado como saída (negativo)'
-                        : formData.tipo_movimentacao === '3'
+                        : formData.tipo_movimentacao === 'devolucao_cliente'
                         ? 'Será registrado como entrada (positivo)'
                         : 'Para ajustes: positivo=entrada, negativo=saída'}
                     </p>

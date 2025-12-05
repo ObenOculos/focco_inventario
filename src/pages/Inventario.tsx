@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Camera, Plus, Trash2, Send, QrCode, Check, X, Search, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Check, X, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
+import { useEstoqueTeoricoPorVendedor } from '@/hooks/useEstoqueTeoricoPorVendedor';
 import {
   Dialog,
   DialogContent,
@@ -31,9 +32,13 @@ export default function Inventario() {
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [observacoes, setObservacoes] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false); // Loading para envio
+  const [initialLoading, setInitialLoading] = useState(true); // Loading para carga inicial
   const scannerRef = useRef<Html5Qrcode | null>(null);
   
+  // Busca o estoque teórico inicial
+  const { data: estoqueTeorico, isLoading: isEstoqueLoading } = useEstoqueTeoricoPorVendedor(profile?.codigo_vendedor);
+
   // Estados para filtro e paginação
   const [filterText, setFilterText] = useState('');
   const [currentPage, setCurrentPage] = useState(1);
@@ -45,9 +50,22 @@ export default function Inventario() {
     name: string; 
     isRegistered: boolean;
     hasRemessa: boolean;
+    isIncrement: boolean;
   } | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [showDuplicateDialog, setShowDuplicateDialog] = useState(false);
+
+  // Popula a lista de itens com o estoque teórico quando carregado
+  useEffect(() => {
+    if (!isEstoqueLoading && estoqueTeorico) {
+      const initialItems = estoqueTeorico.map(item => ({
+        codigo_auxiliar: item.codigo_auxiliar,
+        nome_produto: item.nome_produto,
+        quantidade_fisica: 0, // Inicia com 0, aguardando contagem
+      }));
+      setItems(initialItems);
+      setInitialLoading(false);
+    }
+  }, [estoqueTeorico, isEstoqueLoading]);
 
   // Filtrar e paginar itens
   const filteredItems = useMemo(() => {
@@ -72,29 +90,19 @@ export default function Inventario() {
 
   const startScanner = async () => {
     try {
-      // Primeiro mostra o elemento, depois inicia o scanner
       setScanning(true);
-      
-      // Aguarda o elemento estar visível no DOM
       await new Promise(resolve => setTimeout(resolve, 100));
-      
       const html5QrCode = new Html5Qrcode("qr-reader");
       scannerRef.current = html5QrCode;
-      
       await html5QrCode.start(
         { facingMode: "environment" },
-        {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-        },
-        (decodedText) => {
-          handleQrCodeScanned(decodedText);
-        },
+        { fps: 10, qrbox: { width: 250, height: 250 } },
+        (decodedText) => handleCodeScanned(decodedText),
         () => {}
       );
     } catch (err) {
       console.error('Erro ao iniciar scanner:', err);
-      toast.error('Não foi possível acessar a câmera. Verifique as permissões.');
+      toast.error('Não foi possível acessar a câmera.');
       setScanning(false);
     }
   };
@@ -111,37 +119,42 @@ export default function Inventario() {
     setScanning(false);
   };
 
-  const handleQrCodeScanned = async (code: string) => {
-    // Pausar scanner imediatamente
+  const handleCodeScanned = async (code: string) => {
     if (scannerRef.current) {
       try {
         await scannerRef.current.pause(true);
-      } catch (err) {
-        console.error('Erro ao pausar scanner:', err);
-      }
+      } catch (err) { console.error('Erro ao pausar scanner:', err); }
     }
+    
+    processCode(code);
+  };
 
-    // Verificar se já existe
-    if (items.some(item => item.codigo_auxiliar === code)) {
-      setPendingProduct({ code, name: code, isRegistered: true, hasRemessa: true });
-      setShowDuplicateDialog(true);
+  const handleManualAdd = () => {
+    if (!manualCode.trim()) {
+      toast.error('Digite o código do produto');
+      return;
+    }
+    const code = manualCode.trim().toUpperCase();
+    setManualCode('');
+    processCode(code);
+  };
+
+  const processCode = async (code: string) => {
+    // Verificar se o item já existe na lista
+    const existingItemIndex = items.findIndex(item => item.codigo_auxiliar === code);
+
+    if (existingItemIndex !== -1) {
+      const existingItem = items[existingItemIndex];
+      incrementItemQuantity(existingItem.codigo_auxiliar);
+      toast.success(`'${existingItem.nome_produto}' incrementado.`);
+      resumeScanner();
       return;
     }
 
-    // Buscar informações do produto e verificar remessa em paralelo
+    // Se for um item novo, buscar informações
     const [produtoResult, remessaResult] = await Promise.all([
-      supabase
-        .from('produtos')
-        .select('nome_produto')
-        .eq('codigo_auxiliar', code)
-        .maybeSingle(),
-      supabase
-        .from('itens_pedido')
-        .select('pedido_id, pedidos!inner(codigo_vendedor, codigo_tipo)')
-        .eq('codigo_auxiliar', code)
-        .eq('pedidos.codigo_vendedor', profile?.codigo_vendedor || '')
-        .eq('pedidos.codigo_tipo', 7)
-        .limit(1)
+      supabase.from('produtos').select('nome_produto').eq('codigo_auxiliar', code).maybeSingle(),
+      supabase.from('itens_pedido').select('pedido_id, pedidos!inner(codigo_vendedor, codigo_tipo)').eq('codigo_auxiliar', code).eq('pedidos.codigo_vendedor', profile?.codigo_vendedor || '').eq('pedidos.codigo_tipo', 7).limit(1)
     ]);
 
     const isRegistered = !!produtoResult.data;
@@ -149,11 +162,31 @@ export default function Inventario() {
 
     setPendingProduct({ 
       code, 
-      name: produtoResult.data?.nome_produto || code,
+      name: produtoResult.data?.nome_produto || `Produto não cadastrado (${code})`,
       isRegistered,
-      hasRemessa
+      hasRemessa,
+      isIncrement: false
     });
     setShowConfirmDialog(true);
+  };
+  
+  const incrementItemQuantity = (codigo_auxiliar: string) => {
+    setItems(prevItems => {
+      const itemIndex = prevItems.findIndex(i => i.codigo_auxiliar === codigo_auxiliar);
+      if (itemIndex === -1) return prevItems;
+      
+      const updatedItems = [...prevItems];
+      const item = updatedItems[itemIndex];
+      
+      // Incrementa a quantidade
+      updatedItems[itemIndex] = { ...item, quantidade_fisica: item.quantidade_fisica + 1 };
+      
+      // Move o item para o topo da lista
+      const [movedItem] = updatedItems.splice(itemIndex, 1);
+      updatedItems.unshift(movedItem);
+
+      return updatedItems;
+    });
   };
 
   const confirmAddProduct = () => {
@@ -165,7 +198,7 @@ export default function Inventario() {
       quantidade_fisica: 1,
     };
 
-    setItems(prev => [...prev, newItem]);
+    setItems(prev => [newItem, ...prev]);
     toast.success(`Produto ${pendingProduct.code} adicionado`);
     
     setShowConfirmDialog(false);
@@ -175,12 +208,6 @@ export default function Inventario() {
 
   const cancelAddProduct = () => {
     setShowConfirmDialog(false);
-    setPendingProduct(null);
-    resumeScanner();
-  };
-
-  const closeDuplicateDialog = () => {
-    setShowDuplicateDialog(false);
     setPendingProduct(null);
     resumeScanner();
   };
@@ -195,57 +222,19 @@ export default function Inventario() {
     }
   };
 
-  const handleManualAdd = async () => {
-    if (!manualCode.trim()) {
-      toast.error('Digite o código do produto');
-      return;
-    }
-    const code = manualCode.trim().toUpperCase();
-    setManualCode('');
-    
-    // Verificar se já existe
-    if (items.some(item => item.codigo_auxiliar === code)) {
-      setPendingProduct({ code, name: code, isRegistered: true, hasRemessa: true });
-      setShowDuplicateDialog(true);
-      return;
-    }
+  const updateQuantidade = (codigo_auxiliar: string, quantidade: number) => {
+    setItems(prevItems => {
+        const itemIndex = prevItems.findIndex(i => i.codigo_auxiliar === codigo_auxiliar);
+        if (itemIndex === -1) return prevItems;
 
-    // Buscar informações do produto e verificar remessa em paralelo
-    const [produtoResult, remessaResult] = await Promise.all([
-      supabase
-        .from('produtos')
-        .select('nome_produto')
-        .eq('codigo_auxiliar', code)
-        .maybeSingle(),
-      supabase
-        .from('itens_pedido')
-        .select('pedido_id, pedidos!inner(codigo_vendedor, codigo_tipo)')
-        .eq('codigo_auxiliar', code)
-        .eq('pedidos.codigo_vendedor', profile?.codigo_vendedor || '')
-        .eq('pedidos.codigo_tipo', 7)
-        .limit(1)
-    ]);
-
-    const isRegistered = !!produtoResult.data;
-    const hasRemessa = (remessaResult.data?.length || 0) > 0;
-
-    setPendingProduct({ 
-      code, 
-      name: produtoResult.data?.nome_produto || code,
-      isRegistered,
-      hasRemessa
+        const newItems = [...prevItems];
+        newItems[itemIndex].quantidade_fisica = Math.max(0, quantidade);
+        return newItems;
     });
-    setShowConfirmDialog(true);
   };
 
-  const updateQuantidade = (index: number, quantidade: number) => {
-    const newItems = [...items];
-    newItems[index].quantidade_fisica = Math.max(0, quantidade);
-    setItems(newItems);
-  };
-
-  const removeItem = (index: number) => {
-    setItems(items.filter((_, i) => i !== index));
+  const removeItem = (codigo_auxiliar: string) => {
+    setItems(items.filter(item => item.codigo_auxiliar !== codigo_auxiliar));
   };
 
   const handleSubmit = async () => {
@@ -254,15 +243,16 @@ export default function Inventario() {
       return;
     }
 
-    if (items.length === 0) {
-      toast.error('Adicione pelo menos um item ao inventário');
+    const itemsContados = items.filter(item => item.quantidade_fisica > 0);
+
+    if (itemsContados.length === 0) {
+      toast.error('Conte pelo menos um item para enviar o inventário');
       return;
     }
 
     setLoading(true);
 
     try {
-      // Criar inventário
       const { data: inventario, error: invError } = await supabase
         .from('inventarios')
         .insert({
@@ -275,8 +265,7 @@ export default function Inventario() {
 
       if (invError) throw invError;
 
-      // Criar itens do inventário
-      const itensData = items.map(item => ({
+      const itensData = itemsContados.map(item => ({
         inventario_id: inventario.id,
         codigo_auxiliar: item.codigo_auxiliar,
         nome_produto: item.nome_produto,
@@ -292,6 +281,8 @@ export default function Inventario() {
       toast.success('Inventário enviado para conferência!');
       setItems([]);
       setObservacoes('');
+      // Recarregar a lista inicial
+      setInitialLoading(true);
     } catch (error: any) {
       console.error('Erro ao salvar inventário:', error);
       toast.error('Erro ao salvar inventário');
@@ -331,7 +322,7 @@ export default function Inventario() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Novo Inventário</h1>
           <p className="text-muted-foreground">
-            Escaneie os QR Codes ou adicione manualmente os produtos
+            A lista de produtos do seu estoque foi pré-carregada. Conte os itens e preencha as quantidades.
           </p>
         </div>
 
@@ -340,7 +331,7 @@ export default function Inventario() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Camera size={20} />
-              Scanner QR Code
+              Scanner e Adição Manual
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -363,10 +354,9 @@ export default function Inventario() {
             </div>
 
             <div className="border-t-2 border-border pt-4">
-              <Label className="font-medium">Adicionar Manualmente</Label>
-              <div className="flex gap-2 mt-2">
+              <div className="flex gap-2">
                 <Input
-                  placeholder="Ex: OB1215 Q01"
+                  placeholder="Ou digite o código aqui..."
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
                   onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
@@ -381,25 +371,29 @@ export default function Inventario() {
         </Card>
 
         {/* Items */}
-        {items.length > 0 && (
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle>Itens Escaneados ({items.length})</CardTitle>
-              <div className="relative mt-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
-                <Input
-                  placeholder="Filtrar por código ou nome..."
-                  value={filterText}
-                  onChange={(e) => setFilterText(e.target.value)}
-                  className="pl-9 border-2"
-                />
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle>Itens do Inventário ({items.length})</CardTitle>
+            <div className="relative mt-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <Input
+                placeholder="Filtrar por código ou nome..."
+                value={filterText}
+                onChange={(e) => setFilterText(e.target.value)}
+                className="pl-9 border-2"
+              />
+            </div>
+          </CardHeader>
+          <CardContent>
+            {initialLoading ? (
+              <div className="flex flex-col items-center gap-4 py-10">
+                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
+                <p className="text-muted-foreground">Carregando seu estoque teórico...</p>
               </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {paginatedItems.map((item) => {
-                  const originalIndex = items.findIndex(i => i.codigo_auxiliar === item.codigo_auxiliar);
-                  return (
+            ) : (
+              <>
+                <div className="space-y-3">
+                  {paginatedItems.map((item) => (
                     <div key={item.codigo_auxiliar} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 border-2 border-border">
                       <div className="flex-1 min-w-0">
                         <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
@@ -410,88 +404,93 @@ export default function Inventario() {
                           type="number"
                           min="0"
                           value={item.quantidade_fisica}
-                          onChange={(e) => updateQuantidade(originalIndex, parseInt(e.target.value) || 0)}
-                          className="w-16 sm:w-20 border-2 text-center"
+                          onChange={(e) => updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)}
+                          className="w-20 border-2 text-center"
                         />
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => removeItem(originalIndex)}
+                          onClick={() => removeItem(item.codigo_auxiliar)}
                           className="border-2 text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0"
                         >
                           <Trash2 size={16} />
                         </Button>
                       </div>
                     </div>
-                  );
-                })}
-              </div>
-
-              {/* Paginação */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-between mt-4 pt-4 border-t-2 border-border">
-                  <span className="text-sm text-muted-foreground">
-                    Página {currentPage} de {totalPages}
-                  </span>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                      disabled={currentPage === 1}
-                      className="border-2"
-                    >
-                      <ChevronLeft size={16} />
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                      disabled={currentPage === totalPages}
-                      className="border-2"
-                    >
-                      <ChevronRight size={16} />
-                    </Button>
-                  </div>
+                  ))}
                 </div>
-              )}
 
-              {filteredItems.length === 0 && filterText && (
-                <p className="text-center text-muted-foreground py-4">
-                  Nenhum item encontrado para "{filterText}"
-                </p>
-              )}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-between mt-4 pt-4 border-t-2 border-border">
+                    <span className="text-sm text-muted-foreground">
+                      Página {currentPage} de {totalPages}
+                    </span>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                        disabled={currentPage === 1}
+                        className="border-2"
+                      >
+                        <ChevronLeft size={16} />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                        disabled={currentPage === totalPages}
+                        className="border-2"
+                      >
+                        <ChevronRight size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                )}
 
-              <div className="mt-4">
-                <Label className="font-medium">Observações</Label>
-                <Textarea
-                  placeholder="Observações sobre o inventário..."
-                  value={observacoes}
-                  onChange={(e) => setObservacoes(e.target.value)}
-                  className="mt-2 border-2"
-                />
-              </div>
+                {filteredItems.length === 0 && filterText && (
+                  <p className="text-center text-muted-foreground py-4">
+                    Nenhum item encontrado para "{filterText}"
+                  </p>
+                )}
+                
+                {items.length === 0 && !initialLoading && (
+                   <p className="text-center text-muted-foreground py-4">
+                    Seu estoque teórico está vazio. Comece escaneando itens.
+                  </p>
+                )}
 
-              <Button 
-                className="w-full mt-4" 
-                onClick={handleSubmit}
-                disabled={loading}
-              >
-                <Send className="mr-2" size={16} />
-                {loading ? 'Enviando...' : 'Enviar para Conferência'}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
+                <div className="mt-4 pt-4 border-t-2">
+                  <Label className="font-medium">Observações</Label>
+                  <Textarea
+                    placeholder="Observações sobre o inventário..."
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    className="mt-2 border-2"
+                  />
+                </div>
+
+                <Button 
+                  className="w-full mt-4" 
+                  onClick={handleSubmit}
+                  disabled={loading || initialLoading}
+                >
+                  <Send className="mr-2" size={16} />
+                  {loading ? 'Enviando...' : 'Enviar para Conferência'}
+                </Button>
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Modal de Confirmação */}
+      {/* Modal de Confirmação para NOVOS itens */}
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent className="max-w-md shadow-none w-[calc(100%-2rem)]">
           <DialogHeader>
-            <DialogTitle>Confirmar Produto</DialogTitle>
+            <DialogTitle>Adicionar Novo Produto?</DialogTitle>
             <DialogDescription>
-              Deseja adicionar este produto ao inventário?
+              Este produto não estava no seu estoque teórico. Deseja adicioná-lo?
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -500,18 +499,17 @@ export default function Inventario() {
               <p className="text-muted-foreground">{pendingProduct?.name}</p>
             </div>
             
-            {/* Alertas */}
             {pendingProduct && !pendingProduct.isRegistered && (
-              <div className="p-3 bg-[hsl(43,74%,66%)] text-[hsl(0,0%,0%)] rounded-lg border-2 border-[hsl(43,74%,50%)]">
+              <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
                 <p className="font-medium text-sm">⚠️ Produto não cadastrado</p>
-                <p className="text-xs">Este código não está registrado no sistema.</p>
+                <p className="text-xs">Este código não existe no sistema.</p>
               </div>
             )}
             
             {pendingProduct && pendingProduct.isRegistered && !pendingProduct.hasRemessa && (
-              <div className="p-3 bg-[hsl(43,74%,66%)] text-[hsl(0,0%,0%)] rounded-lg border-2 border-[hsl(43,74%,50%)]">
+              <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
                 <p className="font-medium text-sm">⚠️ Produto sem remessa</p>
-                <p className="text-xs">Este produto não consta em nenhuma remessa enviada para você.</p>
+                <p className="text-xs">Este produto não consta em nenhuma remessa para você.</p>
               </div>
             )}
           </div>
@@ -522,28 +520,7 @@ export default function Inventario() {
             </Button>
             <Button onClick={confirmAddProduct}>
               <Check className="mr-2" size={16} />
-              Confirmar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal de Produto Duplicado */}
-      <Dialog open={showDuplicateDialog} onOpenChange={setShowDuplicateDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Produto Já Adicionado</DialogTitle>
-            <DialogDescription>
-              Este produto já está na lista do inventário.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="p-4 bg-destructive/10 border-2 border-destructive/20 rounded-lg">
-            <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
-            <p className="text-muted-foreground">Já foi escaneado anteriormente</p>
-          </div>
-          <DialogFooter>
-            <Button onClick={closeDuplicateDialog}>
-              Entendi
+              Confirmar e Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>

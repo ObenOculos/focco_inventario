@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { useEstoqueQuery, useMovimentacaoResumoQuery } from '@/hooks/useDashboardQuery';
 import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
-import { EstoqueItem } from '@/types/database';
+import { EstoqueItem } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Package, TrendingUp, TrendingDown, ClipboardList, AlertTriangle, Users, ArrowRight, Clock, CheckCircle2, XCircle, FileCheck } from 'lucide-react';

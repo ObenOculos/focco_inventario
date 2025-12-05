@@ -1,19 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { Database } from '@/integrations/supabase/types';
 
-interface Movimentacao {
-  id: string;
-  codigo_vendedor: string;
-  codigo_auxiliar: string;
-  nome_produto: string | null;
-  tipo_movimentacao: number;
-  quantidade: number;
-  motivo: string | null;
-  observacoes: string | null;
-  data_movimentacao: string;
-  created_at: string;
-}
+type Movimentacao = Database['public']['Tables']['movimentacoes_estoque']['Row'];
+type MovimentacaoInsert = Database['public']['Tables']['movimentacoes_estoque']['Insert'];
 
 export const useMovimentacoesQuery = (codigoVendedor?: string | null, isGerente?: boolean) => {
   return useQuery({
@@ -41,16 +32,7 @@ export const useCreateMovimentacao = () => {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (movimentacao: {
-      user_id: string;
-      codigo_vendedor: string;
-      codigo_auxiliar: string;
-      nome_produto: string;
-      tipo_movimentacao: number;
-      quantidade: number;
-      motivo: string;
-      observacoes: string | null;
-    }) => {
+    mutationFn: async (movimentacao: MovimentacaoInsert) => {
       const { error } = await supabase
         .from('movimentacoes_estoque')
         .insert(movimentacao);

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { EstoqueItem } from '@/types/database';
+import { EstoqueItem } from '@/types/app';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
 
 export const useEstoqueQuery = (codigoVendedor?: string | null, isGerente?: boolean) => {

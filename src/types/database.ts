@@ -1,6 +1,9 @@
 export type UserRole = 'vendedor' | 'gerente';
 export type InventoryStatus = 'pendente' | 'aprovado' | 'revisao';
 
+// Novo enum para tipos de movimentação (alinhado com o banco)
+export type MovimentacaoTipo = 'ajuste_entrada' | 'ajuste_saida' | 'devolucao_cliente' | 'devolucao_empresa' | 'perda_avaria';
+
 export interface Profile {
   id: string;
   email: string;
@@ -71,6 +74,48 @@ export interface ItemInventario {
   nome_produto: string | null;
   quantidade_fisica: number;
   created_at: string;
+}
+
+export interface MovimentacaoEstoque {
+  id: string;
+  codigo_vendedor: string;
+  codigo_auxiliar: string;
+  nome_produto: string | null;
+  tipo_movimentacao: MovimentacaoTipo;
+  quantidade: number;
+  motivo: string | null;
+  observacoes: string | null;
+  data_movimentacao: string;
+  origem_id?: string;
+  origem_tipo?: string;
+  created_at: string;
+}
+
+export interface DivergenciaItem {
+  codigo_auxiliar: string;
+  nome_produto: string;
+  estoque_teorico: number;
+  quantidade_fisica: number;
+  diferenca: number;
+  percentual: number;
+  tipo: 'ok' | 'sobra' | 'falta';
+}
+
+export interface MetricConfig {
+  id: string;
+  label: string;
+  source: string;
+  dimensions: string[];
+  subscribed: boolean;
+  hasData: boolean;
+  resolution?: string;
+  windowMinutes?: number;
+}
+
+export interface MetricDataPoint {
+  timestamp: string;
+  value: number;
+  dimensions?: Record<string, string>;
 }
 
 export interface EstoqueItem {

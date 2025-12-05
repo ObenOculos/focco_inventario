@@ -3,7 +3,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
-import { EstoqueItem } from '@/types/database';
+import { EstoqueItem } from '@/types/app';
 import { Users, AlertTriangle, Package, TrendingUp, TrendingDown, FileText, CalendarIcon } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
