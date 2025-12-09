@@ -163,7 +163,7 @@ export default function ControleVendedores() {
         if (!item.codigo_vendedor || !item.data_emissao) return;
 
         const dateKey = new Date(item.data_emissao).toISOString().split('T')[0];
-        const key = `${item.codigo_vendedor}-${item.codigo_tipo}-${item.codigo_auxiliar}-${dateKey}`;
+        const key = `${item.codigo_vendedor}-${item.codigo_tipo}-${item.codigo_auxiliar}-${dateKey}-${item.numero_pedido || ''}-${item.numero_nota_fiscal || ''}`;
         
         const existing = aggregatedMap.get(key);
         
@@ -192,18 +192,8 @@ export default function ControleVendedores() {
       </AppLayout>
     );
   }
-
-  const getTipoLabel = (codigo: number) => {
-    switch (codigo) {
-      case 7:
-      case 99:
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Remessa</Badge>;
-      case 2:
-        return <Badge variant="secondary" className="bg-green-100 text-green-800">Venda</Badge>;
-      default:
-        return <Badge variant="outline">{codigo}</Badge>;
-    }
-  };
+  
+  // Removed getTipoLabel as it's no longer used for display
 
   return (
     <AppLayout>
@@ -276,7 +266,9 @@ export default function ControleVendedores() {
                     <TableHeader>
                       <TableRow>
                         <TableHead>Vendedor</TableHead>
-                        <TableHead>Tipo</TableHead>
+                        <TableHead>Cód. Tipo</TableHead>
+                        <TableHead>Num. Pedido</TableHead>
+                        <TableHead>Nota Fiscal</TableHead>
                         <TableHead>Produto (Cód. Aux.)</TableHead>
                         <TableHead className="text-center">Quantidade</TableHead>
                         <TableHead className="text-right">Data</TableHead>
@@ -286,7 +278,9 @@ export default function ControleVendedores() {
                       {paginatedData.map((item) => (
                         <TableRow key={item.id}>
                           <TableCell className="font-medium">{item.nome_vendedor}</TableCell>
-                          <TableCell>{getTipoLabel(item.codigo_tipo)}</TableCell>
+                          <TableCell>{item.codigo_tipo}</TableCell>
+                          <TableCell>{item.numero_pedido || '-'}</TableCell>
+                          <TableCell>{item.numero_nota_fiscal || '-'}</TableCell>
                           <TableCell>{item.codigo_auxiliar}</TableCell>
                           <TableCell className="text-center font-bold">{item.quantidade}</TableCell>
                           <TableCell className="text-right text-muted-foreground">
