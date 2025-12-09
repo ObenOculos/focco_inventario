@@ -193,75 +193,153 @@ export default function ControleVendedores() {
     );
   }
   
-  // Removed getTipoLabel as it's no longer used for display
-
-  return (
-    <AppLayout>
-      <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Controle de Vendedores</h1>
-          <p className="text-muted-foreground">
-            Listagem de todas as movimentações de produtos por vendedor.
-          </p>
-        </div>
-
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <span className="flex items-center gap-2">
-                    <List size={20} />
-                    Movimentações
-                </span>
-                <Badge variant="secondary" className="text-lg px-3 py-1">
-                    {totalItems}
-                </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
-                <SearchFilter
-                value={searchTerm}
-                onChange={setSearchTerm}
-                placeholder="Buscar por vendedor ou produto..."
-                />
-                <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-                    <SelectTrigger className="w-full md:w-48">
-                        <SelectValue placeholder="Filtrar por vendedor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="todos">Todos os Vendedores</SelectItem>
-                        {vendedores.map(v => (
-                            <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>{v.nome}</SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
-                <Select value={selectedTipo} onValueChange={setSelectedTipo}>
-                    <SelectTrigger className="w-full md:w-48">
-                        <SelectValue placeholder="Filtrar por tipo" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value="todos">Todos os Tipos</SelectItem>
-                        <SelectItem value="remessa">Remessa</SelectItem>
-                        <SelectItem value="venda">Venda</SelectItem>
-                    </SelectContent>
-                </Select>
-            </div>
-
-            {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-            ) : totalItems === 0 ? (
-              <div className="text-center py-8">
-                <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">
-                    {searchTerm || selectedVendedor !== 'todos' || selectedTipo !== 'todos'
-                        ? 'Nenhuma movimentação encontrada para os filtros aplicados.'
-                        : 'Nenhuma movimentação encontrada.'
-                    }
-                </p>
-              </div>
-            ) : (
-              <>
-                <div className="border rounded-lg overflow-hidden">
+          // Calculate the sum of quantities
+  
+          const sumOfQuantities = useMemo(() => {
+  
+            return filteredMovimentacoes.reduce((sum, mov) => sum + mov.quantidade, 0);
+  
+          }, [filteredMovimentacoes]);
+  
+    
+  
+          // Removed getTipoLabel as it's no longer used for display
+  
+    
+  
+          return (
+  
+            <AppLayout>
+  
+              <div className="space-y-6">
+  
+                <div>
+  
+                  <h1 className="text-2xl font-bold tracking-tight">Controle de Vendedores</h1>
+  
+                  <p className="text-muted-foreground">
+  
+                    Listagem de todas as movimentações de produtos por vendedor.
+  
+                  </p>
+  
+                </div>
+  
+    
+  
+                <Card className="border-2">
+  
+                  <CardHeader>
+  
+                    <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+  
+                        <span className="flex items-center gap-2">
+  
+                            <List size={20} />
+  
+                            Movimentações
+  
+                        </span>
+  
+                        <Badge variant="secondary" className="text-lg px-3 py-1">
+  
+                            {sumOfQuantities}
+  
+                        </Badge>
+  
+                    </CardTitle>
+  
+                  </CardHeader>
+  
+                  <CardContent className="space-y-4">
+  
+                    <div className="flex flex-col md:flex-row gap-4">
+  
+                        <SearchFilter
+  
+                        value={searchTerm}
+  
+                        onChange={setSearchTerm}
+  
+                        placeholder="Buscar por vendedor ou produto..."
+  
+                        />
+  
+                        <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
+  
+                            <SelectTrigger className="w-full md:w-48">
+  
+                                <SelectValue placeholder="Filtrar por vendedor" />
+  
+                            </SelectTrigger>
+  
+                            <SelectContent>
+  
+                                <SelectItem value="todos">Todos os Vendedores</SelectItem>
+  
+                                {vendedores.map(v => (
+  
+                                    <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>{v.nome}</SelectItem>
+  
+                                ))}
+  
+                            </SelectContent>
+  
+                        </Select>
+  
+                        <Select value={selectedTipo} onValueChange={setSelectedTipo}>
+  
+                            <SelectTrigger className="w-full md:w-48">
+  
+                                <SelectValue placeholder="Filtrar por tipo" />
+  
+                            </SelectTrigger>
+  
+                            <SelectContent>
+  
+                                <SelectItem value="todos">Todos os Tipos</SelectItem>
+  
+                                <SelectItem value="remessa">Remessa</SelectItem>
+  
+                                <SelectItem value="venda">Venda</SelectItem>
+  
+                            </SelectContent>
+  
+                        </Select>
+  
+                    </div>
+  
+    
+  
+                    {loading ? (
+  
+                      <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+  
+                    ) : sumOfQuantities === 0 ? (
+  
+                      <div className="text-center py-8">
+  
+                        <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
+  
+                        <p className="text-muted-foreground">
+  
+                            {searchTerm || selectedVendedor !== 'todos' || selectedTipo !== 'todos'
+  
+                                ? 'Nenhuma movimentação encontrada para os filtros aplicados.'
+  
+                                : 'Nenhuma movimentação encontrada.'
+  
+                            }
+  
+                        </p>
+  
+                      </div>
+  
+                    ) : (
+  
+                      <>
+  
+                        <div className="border rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow>
