@@ -19,8 +19,8 @@ export const useEstoqueTeoricoPorVendedor = (codigoVendedor?: string | null) => 
       // Converte o Map para um Array para facilitar a renderização
       const estoqueArray = Array.from(estoqueMap.values());
       
-      // Retorna apenas produtos que deveriam ter estoque
-      return estoqueArray.filter(item => item.estoque_teorico > 0);
+      // Retorna todos os produtos que já tiveram movimentação para o vendedor
+      return estoqueArray;
     },
     enabled: !!codigoVendedor,
   });

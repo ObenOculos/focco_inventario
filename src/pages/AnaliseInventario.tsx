@@ -13,6 +13,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { AlertTriangle, PackageSearch, CheckCircle, Loader2 } from 'lucide-react';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/Pagination';
+import { SearchFilter } from '@/components/SearchFilter';
 
 interface InventarioInfo {
   id: string;
@@ -36,8 +39,25 @@ export default function AnaliseInventario() {
   const [isApproving, setIsApproving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [comparativo, setComparativo] = useState<ComparativoItem[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
 
   const isGerente = profile?.role === 'gerente';
+
+  const {
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    startIndex,
+    endIndex,
+    paginatedData: paginatedComparativo,
+    totalItems,
+    handlePageChange,
+    handleItemsPerPageChange,
+  } = usePagination({
+    data: comparativo,
+    searchTerm,
+    searchFields: ['codigo_auxiliar', 'nome_produto'],
+  });
 
   useEffect(() => {
     const fetchInventarios = async () => {
@@ -83,7 +103,8 @@ export default function AnaliseInventario() {
 
       if (rpcError) {
         console.error('Erro ao buscar comparativo:', rpcError);
-        setError('Erro ao gerar a análise. Verifique se as funções SQL (`comparar_estoque_inventario` e `calcular_estoque_vendedor_ate_data`) foram criadas corretamente no banco de dados.');
+        console.error('Detalhes do erro:', JSON.stringify(rpcError, null, 2));
+        setError(`Erro ao gerar a análise: ${rpcError.message || rpcError.details || JSON.stringify(rpcError)}. Verifique as funções SQL no banco de dados.`);
         setComparativo([]);
       } else {
         setComparativo(data || []);
@@ -215,33 +236,57 @@ export default function AnaliseInventario() {
                 </div>
                 
                 <div className="border-2 rounded-lg">
+                    <div className="p-4 border-b-2">
+                        <SearchFilter
+                            value={searchTerm}
+                            onChange={setSearchTerm}
+                            placeholder="Buscar por código ou produto..."
+                        />
+                    </div>
                     <div className="p-4 bg-muted/50 text-sm font-medium grid grid-cols-4 gap-4">
                         <div>Produto</div>
                         <div className="text-center">Est. Teórico</div>
                         <div className="text-center">Est. Físico</div>
                         <div className="text-center">Divergência</div>
                     </div>
-                    {comparativo.length === 0 && (
-                        <div className="text-center p-8 text-muted-foreground">Nenhum item para comparar neste inventário.</div>
+                    {totalItems === 0 ? (
+                        <div className="text-center p-8 text-muted-foreground">
+                            {searchTerm ? `Nenhum item encontrado para "${searchTerm}"` : 'Nenhum item para comparar neste inventário.'}
+                        </div>
+                    ) : (
+                        <div className="space-y-2 p-4">
+                            {paginatedComparativo.map(item => (
+                                <div key={item.codigo_auxiliar} className={`grid grid-cols-4 gap-4 items-center p-2 rounded-md ${item.divergencia !== 0 ? 'bg-amber-500/10' : ''}`}>
+                                    <div>
+                                        <p className="font-semibold truncate">{item.nome_produto}</p>
+                                        <p className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</p>
+                                    </div>
+                                    <div className="text-center font-medium">{item.estoque_teorico}</div>
+                                    <div className="text-center font-medium">{item.quantidade_fisica}</div>
+                                    <div className={`text-center font-bold text-lg ${
+                                        item.divergencia > 0 ? 'text-green-600' :
+                                        item.divergencia < 0 ? 'text-destructive' : ''
+                                    }`}>
+                                        {item.divergencia > 0 ? `+${item.divergencia}` : item.divergencia}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
                     )}
-                    <div className="space-y-2 p-4">
-                        {comparativo.map(item => (
-                            <div key={item.codigo_auxiliar} className={`grid grid-cols-4 gap-4 items-center p-2 rounded-md ${item.divergencia !== 0 ? 'bg-amber-500/10' : ''}`}>
-                                <div>
-                                    <p className="font-semibold truncate">{item.nome_produto}</p>
-                                    <p className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</p>
-                                </div>
-                                <div className="text-center font-medium">{item.estoque_teorico}</div>
-                                <div className="text-center font-medium">{item.quantidade_fisica}</div>
-                                <div className={`text-center font-bold text-lg ${
-                                    item.divergencia > 0 ? 'text-green-600' :
-                                    item.divergencia < 0 ? 'text-destructive' : ''
-                                }`}>
-                                    {item.divergencia > 0 ? `+${item.divergencia}` : item.divergencia}
-                                </div>
-                            </div>
-                        ))}
-                    </div>
+                     {totalPages > 1 && (
+                        <div className="p-4 border-t-2">
+                            <Pagination
+                                currentPage={currentPage}
+                                totalPages={totalPages}
+                                itemsPerPage={itemsPerPage}
+                                totalItems={totalItems}
+                                startIndex={startIndex}
+                                endIndex={endIndex}
+                                onPageChange={handlePageChange}
+                                onItemsPerPageChange={handleItemsPerPageChange}
+                            />
+                        </div>
+                    )}
                 </div>
 
               </div>

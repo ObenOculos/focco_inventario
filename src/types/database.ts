@@ -1,95 +1,16 @@
-export type UserRole = 'vendedor' | 'gerente';
-export type InventoryStatus = 'pendente' | 'aprovado' | 'revisao';
+import { Tables, Enums } from '@/integrations/supabase/types';
 
-// Novo enum para tipos de movimentação (alinhado com o banco)
-export type MovimentacaoTipo = 'ajuste_entrada' | 'ajuste_saida' | 'devolucao_cliente' | 'devolucao_empresa' | 'perda_avaria';
+export type UserRole = Enums<'user_role'>;
+export type InventoryStatus = Enums<'inventory_status'>;
+export type MovimentacaoTipo = Enums<'movimentacao_tipo'>;
 
-export interface Profile {
-  id: string;
-  email: string;
-  nome: string;
-  codigo_vendedor: string | null;
-  telefone: string | null;
-  role: UserRole;
-  ativo: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Produto {
-  id: string;
-  codigo_produto: string;
-  codigo_auxiliar: string;
-  nome_produto: string;
-  modelo: string;
-  cor: string;
-  valor_produto: number;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface Pedido {
-  id: string;
-  numero_pedido: string;
-  data_emissao: string;
-  codigo_cliente: string | null;
-  codigo_vendedor: string;
-  nome_vendedor: string | null;
-  valor_total: number;
-  codigo_tipo: number;
-  situacao: string;
-  numero_nota_fiscal: string | null;
-  serie_nota_fiscal: string | null;
-  codigo_empresa: number | null;
-  empresa: string | null;
-  created_at: string;
-}
-
-export interface ItemPedido {
-  id: string;
-  pedido_id: string;
-  codigo_auxiliar: string;
-  nome_produto: string;
-  quantidade: number;
-  valor_produto: number;
-  created_at: string;
-}
-
-export interface Inventario {
-  id: string;
-  codigo_vendedor: string;
-  user_id: string;
-  data_inventario: string;
-  status: InventoryStatus;
-  observacoes: string | null;
-  observacoes_gerente: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface ItemInventario {
-  id: string;
-  inventario_id: string;
-  codigo_auxiliar: string;
-  nome_produto: string | null;
-  quantidade_fisica: number;
-  created_at: string;
-}
-
-export interface MovimentacaoEstoque {
-  id: string;
-  codigo_vendedor: string;
-  codigo_auxiliar: string;
-  nome_produto: string | null;
-  tipo_movimentacao: MovimentacaoTipo;
-  quantidade: number;
-  motivo: string | null;
-  observacoes: string | null;
-  data_movimentacao: string;
-  origem_id?: string;
-  origem_tipo?: string;
-  created_at: string;
-}
+export type Profile = Tables<'profiles'>;
+export type Produto = Tables<'produtos'>;
+export type Pedido = Tables<'pedidos'>;
+export type ItemPedido = Tables<'itens_pedido'>;
+export type Inventario = Tables<'inventarios'>;
+export type ItemInventario = Tables<'itens_inventario'>;
+export type MovimentacaoEstoque = Tables<'movimentacoes_estoque'>;
 
 export interface DivergenciaItem {
   codigo_auxiliar: string;

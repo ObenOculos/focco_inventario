@@ -1,118 +1,182 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { calcularEstoqueTeorico } from '@/lib/estoque';
-import { EstoqueItem } from '@/types/app';
-import { Users, AlertTriangle, Package, TrendingUp, TrendingDown, FileText, CalendarIcon } from 'lucide-react';
+import { AlertTriangle, List, Package } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Calendar } from '@/components/ui/calendar';
-import { format } from 'date-fns';
-import { cn } from '@/lib/utils';
-import { DateRange } from 'react-day-picker';
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/Pagination';
+import { SearchFilter } from '@/components/SearchFilter';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-interface VendedorEstoque {
-  codigo_vendedor: string;
+interface Movimentacao {
+  id: string;
   nome_vendedor: string;
-  totalRemessas: number;
-  totalVendas: number;
-  estoqueAtual: number;
-  itens: EstoqueItem[];
-  pedidosRecentes: any[];
+  codigo_vendedor: string;
+  codigo_tipo: number;
+  codigo_auxiliar: string;
+  quantidade: number;
+  data_emissao: string;
+  numero_pedido: string | null;
+  numero_nota_fiscal: string | null;
+}
+
+interface Vendedor {
+    codigo_vendedor: string;
+    nome: string;
 }
 
 export default function ControleVendedores() {
   const { profile } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [vendedores, setVendedores] = useState<VendedorEstoque[]>([]);
-  const [selectedVendedor, setSelectedVendedor] = useState<string>('');
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+  const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
+  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedVendedor, setSelectedVendedor] = useState('todos');
+  const [selectedTipo, setSelectedTipo] = useState('todos');
+
+  // Aplicar filtros
+  const filteredMovimentacoes = useMemo(() => {
+    return movimentacoes.filter(item => {
+      const vendedorMatch = selectedVendedor === 'todos' || item.codigo_vendedor === selectedVendedor;
+      
+      let tipoMatch = true;
+      if (selectedTipo === 'remessa') {
+        tipoMatch = [7, 99].includes(item.codigo_tipo);
+      } else if (selectedTipo === 'venda') {
+        tipoMatch = item.codigo_tipo === 2;
+      }
+
+      return vendedorMatch && tipoMatch;
+    });
+  }, [movimentacoes, selectedVendedor, selectedTipo]);
+
+  const {
+    currentPage,
+    totalPages,
+    itemsPerPage,
+    startIndex,
+    endIndex,
+    paginatedData,
+    totalItems,
+    handlePageChange,
+    handleItemsPerPageChange,
+  } = usePagination({
+    data: filteredMovimentacoes,
+    searchTerm,
+    searchFields: ['nome_vendedor', 'codigo_auxiliar', 'numero_pedido', 'numero_nota_fiscal'],
+  });
 
   useEffect(() => {
     if (profile?.role === 'gerente') {
-      fetchVendedoresEstoque();
+      fetchMovimentacoes();
+      fetchVendedores();
     }
   }, [profile]);
 
-  useEffect(() => {
-    // Selecionar o primeiro vendedor automaticamente quando carregar
-    if (vendedores.length > 0 && !selectedVendedor) {
-      setSelectedVendedor(vendedores[0].codigo_vendedor);
-    }
-  }, [vendedores, selectedVendedor]);
-
-  const fetchVendedoresEstoque = async () => {
-    setLoading(true);
-    
-    const { data: profiles, error: profilesError } = await supabase
+  const fetchVendedores = async () => {
+    const { data, error } = await supabase
       .from('profiles')
       .select('codigo_vendedor, nome')
       .eq('role', 'vendedor')
-      .not('codigo_vendedor', 'is', null);
+      .not('codigo_vendedor', 'is', null)
+      .order('nome');
 
-    if (profilesError || !profiles) {
-      console.error('Erro ao buscar vendedores:', profilesError);
-      setLoading(false);
-      return;
+    if (error) {
+        console.error('Erro ao buscar vendedores:', error);
+    } else {
+        setVendedores(data);
+    }
+  }
+
+  const fetchMovimentacoes = async () => {
+    setLoading(true);
+    let allData: any[] = [];
+    let page = 0;
+    const pageSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error } = await supabase
+            .from('itens_pedido')
+            .select(`
+                id,
+                quantidade,
+                codigo_auxiliar,
+                pedidos (
+                    codigo_tipo,
+                    nome_vendedor,
+                    codigo_vendedor,
+                    data_emissao,
+                    numero_pedido,
+                    numero_nota_fiscal
+                )
+            `)
+            .order('data_emissao', { referencedTable: 'pedidos', ascending: false })
+            .range(page * pageSize, (page + 1) * pageSize - 1);
+
+        if (error) {
+            console.error('Erro ao buscar movimentações:', error);
+            hasMore = false;
+            setMovimentacoes([]);
+            setLoading(false);
+            return;
+        }
+
+        if (data) {
+            allData = [...allData, ...data];
+        }
+
+        if (!data || data.length < pageSize) {
+            hasMore = false;
+        }
+        else {
+            page++;
+        }
     }
 
-    const vendedoresData: VendedorEstoque[] = [];
+    const flattenedData = allData.map(item => ({
+        id: item.id,
+        quantidade: item.quantidade,
+        codigo_auxiliar: item.codigo_auxiliar,
+        // @ts-ignore
+        codigo_tipo: item.pedidos?.codigo_tipo,
+        // @ts-ignore
+        nome_vendedor: item.pedidos?.nome_vendedor,
+        // @ts-ignore
+        codigo_vendedor: item.pedidos?.codigo_vendedor,
+        // @ts-ignore
+        data_emissao: item.pedidos?.data_emissao,
+        // @ts-ignore
+        numero_pedido: item.pedidos?.numero_pedido || null,
+        // @ts-ignore
+        numero_nota_fiscal: item.pedidos?.numero_nota_fiscal || null,
+    }));
 
-    for (const vendedor of profiles) {
-      // Calcular estoque teórico total (sem filtro de período)
-      const estoqueMap = await calcularEstoqueTeorico(vendedor.codigo_vendedor!);
-      const itensArray = Array.from(estoqueMap.values());
-      const estoqueAtual = itensArray.reduce((sum, item) => sum + item.estoque_teorico, 0);
+    // Aggregate data
+    const aggregatedMap = new Map<string, Movimentacao>();
 
-      // Buscar pedidos recentes para a tabela
-      const { data: pedidosRecentes } = await supabase
-        .from('pedidos')
-        .select('numero_pedido, data_emissao, codigo_tipo, situacao, valor_total')
-        .eq('codigo_vendedor', vendedor.codigo_vendedor)
-        .order('data_emissao', { ascending: false })
-        .limit(50);
+    flattenedData.forEach(item => {
+        if (!item.codigo_vendedor || !item.data_emissao) return;
 
-      // Buscar e contar pedidos por tipo
-      const { data: pedidosRemessa } = await supabase
-        .from('pedidos')
-        .select('id')
-        .eq('codigo_vendedor', vendedor.codigo_vendedor)
-        .eq('codigo_tipo', 7);
-
-      const { data: pedidosVenda } = await supabase
-        .from('pedidos')
-        .select('id')
-        .eq('codigo_vendedor', vendedor.codigo_vendedor)
-        .eq('codigo_tipo', 2);
-
-      const totalRemessas = pedidosRemessa?.length || 0;
-      const totalVendas = pedidosVenda?.length || 0;
-
-      vendedoresData.push({
-        codigo_vendedor: vendedor.codigo_vendedor!,
-        nome_vendedor: vendedor.nome,
-        totalRemessas: totalRemessas || 0,
-        totalVendas: totalVendas || 0,
-        estoqueAtual,
-        itens: itensArray.sort((a, b) => b.estoque_teorico - a.estoque_teorico),
-        pedidosRecentes: pedidosRecentes || [],
-      });
-    }
-
-    vendedoresData.sort((a, b) => {
-      if (a.estoqueAtual < 0 && b.estoqueAtual >= 0) return -1;
-      if (a.estoqueAtual >= 0 && b.estoqueAtual < 0) return 1;
-      return Math.abs(b.estoqueAtual) - Math.abs(a.estoqueAtual);
+        const dateKey = new Date(item.data_emissao).toISOString().split('T')[0];
+        const key = `${item.codigo_vendedor}-${item.codigo_tipo}-${item.codigo_auxiliar}-${dateKey}`;
+        
+        const existing = aggregatedMap.get(key);
+        
+        if (existing) {
+            existing.quantidade += item.quantidade;
+        } else {
+            aggregatedMap.set(key, { ...item, id: key });
+        }
     });
 
-    setVendedores(vendedoresData);
+    const aggregatedData = Array.from(aggregatedMap.values());
+
+    setMovimentacoes(aggregatedData);
     setLoading(false);
   };
 
@@ -129,307 +193,125 @@ export default function ControleVendedores() {
     );
   }
 
-  const vendedorSelecionado = vendedores.find(v => v.codigo_vendedor === selectedVendedor);
-
-  // Filtrar pedidos pelo período selecionado
-  const pedidosFiltrados = vendedorSelecionado?.pedidosRecentes.filter((pedido) => {
-    if (!dateRange?.from) return true;
-    const dataPedido = new Date(pedido.data_emissao);
-    const dataInicio = dateRange.from;
-    const dataFim = dateRange.to || new Date();
-    return dataPedido >= dataInicio && dataPedido <= dataFim;
-  }) || [];
-
-  // Calcular totais do período
-  let remessasPeriodo = 0;
-  let vendasPeriodo = 0;
-  
-  pedidosFiltrados.forEach(pedido => {
-    if (pedido.codigo_tipo === 7) {
-      remessasPeriodo += Number(pedido.valor_total || 0);
-    } else if (pedido.codigo_tipo === 2) {
-      vendasPeriodo += Number(pedido.valor_total || 0);
+  const getTipoLabel = (codigo: number) => {
+    switch (codigo) {
+      case 7:
+      case 99:
+        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Remessa</Badge>;
+      case 2:
+        return <Badge variant="secondary" className="bg-green-100 text-green-800">Venda</Badge>;
+      default:
+        return <Badge variant="outline">{codigo}</Badge>;
     }
-  });
+  };
 
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            <Users className="text-primary" />
-            Controle de Vendedores
-          </h1>
-          <p className="text-muted-foreground text-base">
-            Visualize remessas, vendas, pedidos e itens em estoque de cada vendedor
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Controle de Vendedores</h1>
+          <p className="text-muted-foreground">
+            Listagem de todas as movimentações de produtos por vendedor.
           </p>
         </div>
 
-        {/* Filtros */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* Seletor de Vendedor */}
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="text-base">Selecione um Vendedor</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-                <SelectTrigger className="w-full border-2">
-                  <SelectValue placeholder="Escolha um vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vendedores.map((v) => (
-                    <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{v.nome_vendedor}</span>
-                        <span className="text-xs text-muted-foreground">({v.codigo_vendedor})</span>
-                        {v.estoqueAtual < 0 && (
-                          <Badge variant="destructive" className="ml-2">Negativo</Badge>
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </CardContent>
-          </Card>
-
-          {/* Filtro de Período */}
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="text-base">Período dos Pedidos</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    className={cn(
-                      'w-full justify-start text-left font-normal border-2',
-                      !dateRange && 'text-muted-foreground'
-                    )}
-                  >
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {dateRange?.from ? (
-                      dateRange.to ? (
-                        <>
-                          {format(dateRange.from, 'dd/MM/yyyy')} -{' '}
-                          {format(dateRange.to, 'dd/MM/yyyy')}
-                        </>
-                      ) : (
-                        format(dateRange.from, 'dd/MM/yyyy')
-                      )
-                    ) : (
-                      <span>Selecione o período</span>
-                    )}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0" align="start">
-                  <Calendar
-                    initialFocus
-                    mode="range"
-                    defaultMonth={dateRange?.from}
-                    selected={dateRange}
-                    onSelect={setDateRange}
-                    numberOfMonths={2}
-                    className={cn('p-3 pointer-events-auto')}
-                  />
-                </PopoverContent>
-              </Popover>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Conteúdo do Vendedor Selecionado */}
-        {loading ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Carregando dados dos vendedores...</p>
-          </div>
-        ) : !vendedorSelecionado ? (
-          <div className="text-center py-12">
-            <p className="text-muted-foreground">Nenhum vendedor cadastrado.</p>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {/* Header do Vendedor com Stats Inline */}
-            <Card className={`border-2 ${
-              vendedorSelecionado.estoqueAtual < 0 ? 'border-destructive' : ''
-            }`}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <CardTitle className="text-xl">{vendedorSelecionado.nome_vendedor}</CardTitle>
-                    <p className="text-sm text-muted-foreground mt-1">
-                      Código: {vendedorSelecionado.codigo_vendedor}
-                    </p>
-                  </div>
-                  {vendedorSelecionado.estoqueAtual < 0 && (
-                    <Badge variant="destructive" className="text-base px-3 py-1">
-                      <AlertTriangle size={16} className="mr-1" />
-                      Estoque Negativo
-                    </Badge>
-                  )}
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-blue-100 dark:bg-blue-900 rounded">
-                      <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{vendedorSelecionado.totalRemessas.toLocaleString('pt-BR')}</p>
-                      <p className="text-xs text-muted-foreground">Remessas (Pedidos)</p>
-                      <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                        {pedidosFiltrados.filter(p => p.codigo_tipo === 7).length} no período
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className="p-2 bg-green-100 dark:bg-green-900 rounded">
-                      <TrendingDown className="text-green-600 dark:text-green-400" size={20} />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-bold">{vendedorSelecionado.totalVendas.toLocaleString('pt-BR')}</p>
-                      <p className="text-xs text-muted-foreground">Vendas (Pedidos)</p>
-                      <p className="text-xs text-green-600 dark:text-green-400 font-medium">
-                        {pedidosFiltrados.filter(p => p.codigo_tipo === 2).length} no período
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <div className={`p-2 rounded ${
-                      vendedorSelecionado.estoqueAtual < 0 
-                        ? 'bg-destructive/10' 
-                        : 'bg-muted'
-                    }`}>
-                      <Package className={
-                        vendedorSelecionado.estoqueAtual < 0 
-                          ? 'text-destructive' 
-                          : 'text-muted-foreground'
-                      } size={20} />
-                    </div>
-                    <div>
-                      <p className={`text-2xl font-bold ${
-                        vendedorSelecionado.estoqueAtual < 0 ? 'text-destructive' : ''
-                      }`}>
-                        {vendedorSelecionado.estoqueAtual}
-                      </p>
-                      <p className="text-xs text-muted-foreground">Estoque Atual</p>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Tabelas */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Itens em Estoque */}
-              <Card className="border-2">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <Package size={18} />
-                    Itens em Estoque ({vendedorSelecionado.itens.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {vendedorSelecionado.itens.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">Nenhum item em estoque</p>
-                  ) : (
-                    <ScrollArea className="h-[400px]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Código</TableHead>
-                            <TableHead className="text-xs text-right">Remessas</TableHead>
-                            <TableHead className="text-xs text-right">Vendas</TableHead>
-                            <TableHead className="text-xs text-right">Estoque</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {vendedorSelecionado.itens.map((item) => (
-                            <TableRow key={item.codigo_auxiliar}>
-                              <TableCell className="text-xs font-medium">
-                                {item.codigo_auxiliar}
-                              </TableCell>
-                              <TableCell className="text-xs text-right text-blue-600 dark:text-blue-400">
-                                {item.quantidade_remessa}
-                              </TableCell>
-                              <TableCell className="text-xs text-right text-green-600 dark:text-green-400">
-                                {item.quantidade_venda}
-                              </TableCell>
-                              <TableCell className={`text-xs text-right font-semibold ${
-                                item.estoque_teorico < 0 ? 'text-destructive' : ''
-                              }`}>
-                                {item.estoque_teorico}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card>
-
-              {/* Pedidos no Período */}
-              <Card className="border-2">
-                <CardHeader>
-                  <CardTitle className="text-base flex items-center gap-2">
-                    <FileText size={18} />
-                    Pedidos no Período ({pedidosFiltrados.length})
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {pedidosFiltrados.length === 0 ? (
-                    <p className="text-center text-muted-foreground py-8">
-                      Nenhum pedido no período selecionado
-                    </p>
-                  ) : (
-                    <ScrollArea className="h-[400px]">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="text-xs">Pedido</TableHead>
-                            <TableHead className="text-xs">Data</TableHead>
-                            <TableHead className="text-xs">Tipo</TableHead>
-                            <TableHead className="text-xs text-right">Valor</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {pedidosFiltrados.map((pedido) => (
-                            <TableRow key={pedido.numero_pedido}>
-                              <TableCell className="text-xs font-medium">
-                                {pedido.numero_pedido}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                {new Date(pedido.data_emissao).toLocaleDateString('pt-BR')}
-                              </TableCell>
-                              <TableCell className="text-xs">
-                                <Badge 
-                                  variant="secondary" 
-                                  className={pedido.codigo_tipo === 7 
-                                    ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200' 
-                                    : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
-                                  }
-                                >
-                                  {pedido.codigo_tipo === 7 ? 'Remessa' : 'Venda'}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-xs text-right">
-                                R$ {pedido.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                        </TableBody>
-                      </Table>
-                    </ScrollArea>
-                  )}
-                </CardContent>
-              </Card>
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <span className="flex items-center gap-2">
+                    <List size={20} />
+                    Movimentações
+                </span>
+                <Badge variant="secondary" className="text-lg px-3 py-1">
+                    {totalItems}
+                </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-col md:flex-row gap-4">
+                <SearchFilter
+                value={searchTerm}
+                onChange={setSearchTerm}
+                placeholder="Buscar por vendedor ou produto..."
+                />
+                <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
+                    <SelectTrigger className="w-full md:w-48">
+                        <SelectValue placeholder="Filtrar por vendedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="todos">Todos os Vendedores</SelectItem>
+                        {vendedores.map(v => (
+                            <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>{v.nome}</SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <Select value={selectedTipo} onValueChange={setSelectedTipo}>
+                    <SelectTrigger className="w-full md:w-48">
+                        <SelectValue placeholder="Filtrar por tipo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value="todos">Todos os Tipos</SelectItem>
+                        <SelectItem value="remessa">Remessa</SelectItem>
+                        <SelectItem value="venda">Venda</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
-          </div>
-        )}
+
+            {loading ? (
+              <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+            ) : totalItems === 0 ? (
+              <div className="text-center py-8">
+                <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                    {searchTerm || selectedVendedor !== 'todos' || selectedTipo !== 'todos'
+                        ? 'Nenhuma movimentação encontrada para os filtros aplicados.'
+                        : 'Nenhuma movimentação encontrada.'
+                    }
+                </p>
+              </div>
+            ) : (
+              <>
+                <div className="border rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Vendedor</TableHead>
+                        <TableHead>Tipo</TableHead>
+                        <TableHead>Produto (Cód. Aux.)</TableHead>
+                        <TableHead className="text-center">Quantidade</TableHead>
+                        <TableHead className="text-right">Data</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedData.map((item) => (
+                        <TableRow key={item.id}>
+                          <TableCell className="font-medium">{item.nome_vendedor}</TableCell>
+                          <TableCell>{getTipoLabel(item.codigo_tipo)}</TableCell>
+                          <TableCell>{item.codigo_auxiliar}</TableCell>
+                          <TableCell className="text-center font-bold">{item.quantidade}</TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {new Date(item.data_emissao).toLocaleDateString('pt-BR')}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+
+                <Pagination
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  itemsPerPage={itemsPerPage}
+                  totalItems={totalItems}
+                  startIndex={startIndex}
+                  endIndex={endIndex}
+                  onPageChange={handlePageChange}
+                  onItemsPerPageChange={handleItemsPerPageChange}
+                />
+              </>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
   );

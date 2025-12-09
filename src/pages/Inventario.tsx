@@ -49,7 +49,6 @@ export default function Inventario() {
     code: string; 
     name: string; 
     isRegistered: boolean;
-    hasRemessa: boolean;
     isIncrement: boolean;
   } | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -152,19 +151,16 @@ export default function Inventario() {
     }
 
     // Se for um item novo, buscar informações
-    const [produtoResult, remessaResult] = await Promise.all([
+    const [produtoResult] = await Promise.all([
       supabase.from('produtos').select('nome_produto').eq('codigo_auxiliar', code).maybeSingle(),
-      supabase.from('itens_pedido').select('pedido_id, pedidos!inner(codigo_vendedor, codigo_tipo)').eq('codigo_auxiliar', code).eq('pedidos.codigo_vendedor', profile?.codigo_vendedor || '').eq('pedidos.codigo_tipo', 7).limit(1)
     ]);
 
     const isRegistered = !!produtoResult.data;
-    const hasRemessa = (remessaResult.data?.length || 0) > 0;
 
     setPendingProduct({ 
       code, 
       name: produtoResult.data?.nome_produto || `Produto não cadastrado (${code})`,
       isRegistered,
-      hasRemessa,
       isIncrement: false
     });
     setShowConfirmDialog(true);
@@ -503,13 +499,6 @@ export default function Inventario() {
               <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
                 <p className="font-medium text-sm">⚠️ Produto não cadastrado</p>
                 <p className="text-xs">Este código não existe no sistema.</p>
-              </div>
-            )}
-            
-            {pendingProduct && pendingProduct.isRegistered && !pendingProduct.hasRemessa && (
-              <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
-                <p className="font-medium text-sm">⚠️ Produto sem remessa</p>
-                <p className="text-xs">Este produto não consta em nenhuma remessa para você.</p>
               </div>
             )}
           </div>
