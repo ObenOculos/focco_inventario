@@ -1,5 +1,6 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -42,6 +43,7 @@ export default function AnaliseInventario() {
   const [searchTerm, setSearchTerm] = useState('');
 
   const isGerente = profile?.role === 'gerente';
+  const queryClient = useQueryClient();
 
   const {
     currentPage,
@@ -128,6 +130,11 @@ export default function AnaliseInventario() {
         if (error) throw error;
 
         toast.success(data.message || "Inventário aprovado e estoque ajustado com sucesso!");
+
+        // Invalidate queries to refetch data across the app
+        queryClient.invalidateQueries({ queryKey: ['movimentacoes'] });
+        queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+        queryClient.invalidateQueries({ queryKey: ['dashboard'] });
 
         // Update local state to reflect the change
         setInventarios(prev => 
