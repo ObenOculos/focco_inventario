@@ -75,6 +75,11 @@ serve(async (req) => {
 
     const divergencias = comparativo.filter((item: any) => item.divergencia !== 0);
 
+    // DEBUG: Temporariamente lançar um erro para inspecionar os dados
+    if (divergencias.length === 0) {
+      throw new Error(`DEBUG: Nenhuma divergência encontrada. Dados do comparativo: ${JSON.stringify(comparativo, null, 2)}`);
+    }
+
     if (divergencias.length > 0) {
       const ajustes = divergencias.map((item: any) => ({
         user_id: user.id,
