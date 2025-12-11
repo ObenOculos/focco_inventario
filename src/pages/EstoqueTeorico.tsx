@@ -24,6 +24,7 @@ export default function EstoqueTeorico() {
   const { profile } = useAuth();
   const [estoqueBase, setEstoqueBase] = useState<EstoqueItem[]>([]);
   const [estoqueReal, setEstoqueReal] = useState<Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>>(new Map());
+  const [ajustesRealizados, setAjustesRealizados] = useState<Set<string>>(new Set()); // códigos que tiveram ajustes
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
@@ -95,14 +96,35 @@ export default function EstoqueTeorico() {
   }, [isGerente, vendedores.length]);
 
   useEffect(() => {
+    const fetchAjustesRealizados = async (vendorCode?: string) => {
+      let query = supabase
+        .from('movimentacoes_estoque')
+        .select('codigo_auxiliar')
+        .in('tipo_movimentacao', ['ajuste_entrada', 'ajuste_saida']);
+
+      if (vendorCode && vendorCode !== 'todos') {
+        query = query.eq('codigo_vendedor', vendorCode);
+      }
+
+      const { data, error } = await query;
+      if (error) {
+        console.error("Erro ao buscar ajustes:", error);
+        return new Set<string>();
+      }
+
+      return new Set(data.map(item => item.codigo_auxiliar));
+    };
+
     const fetchEstoqueForSingleVendor = async (vendorCode: string) => {
-      const [estoqueMap, estoqueRealMap] = await Promise.all([
+      const [estoqueMap, estoqueRealMap, ajustesSet] = await Promise.all([
         calcularEstoqueTeorico(vendorCode),
-        buscarEstoqueReal(vendorCode)
+        buscarEstoqueReal(vendorCode),
+        fetchAjustesRealizados(vendorCode)
       ]);
       const estoqueArray = Array.from(estoqueMap.values());
       setEstoqueBase(estoqueArray);
       setEstoqueReal(estoqueRealMap);
+      setAjustesRealizados(ajustesSet);
     };
 
     const fetchAndConsolidateAllEstoque = async () => {
@@ -116,17 +138,20 @@ export default function EstoqueTeorico() {
         console.error("Erro ao buscar códigos de vendedores:", error);
         setEstoqueBase([]);
         setEstoqueReal(new Map());
+        setAjustesRealizados(new Set());
         return;
       }
 
       const allEstoque = new Map<string, EstoqueItem>();
       const allEstoqueReal = new Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>();
+      const allAjustes = new Set<string>();
       
       for (const p of profiles) {
         if (p.codigo_vendedor) {
-          const [vendedorEstoque, vendedorEstoqueReal] = await Promise.all([
+          const [vendedorEstoque, vendedorEstoqueReal, ajustesSet] = await Promise.all([
             calcularEstoqueTeorico(p.codigo_vendedor),
-            buscarEstoqueReal(p.codigo_vendedor)
+            buscarEstoqueReal(p.codigo_vendedor),
+            fetchAjustesRealizados(p.codigo_vendedor)
           ]);
           
           for (const [key, item] of vendedorEstoque.entries()) {
@@ -149,11 +174,15 @@ export default function EstoqueTeorico() {
               allEstoqueReal.set(key, { ...item });
             }
           }
+
+          // Consolidar ajustes
+          ajustesSet.forEach(codigo => allAjustes.add(codigo));
         }
       }
       const estoqueArray = Array.from(allEstoque.values());
       setEstoqueBase(estoqueArray);
       setEstoqueReal(allEstoqueReal);
+      setAjustesRealizados(allAjustes);
     };
 
     const loadData = async () => {
@@ -187,11 +216,11 @@ export default function EstoqueTeorico() {
     <AppLayout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Estoque Teórico</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Estoque (Teórico x Real)</h1>
           <p className="text-muted-foreground">
             {isGerente 
-              ? 'Visualize o estoque teórico de todos os vendedores' 
-              : 'Seu estoque teórico baseado em remessas e vendas'}
+              ? 'Compare o estoque teórico com o real de todos os vendedores' 
+              : 'Compare seu estoque teórico com o real baseado em inventários'}
           </p>
         </div>
 
@@ -270,7 +299,7 @@ export default function EstoqueTeorico() {
             <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
               <span className="flex items-center gap-2">
                 <Package size={20} />
-                Produtos em Estoque
+                Comparação: Teórico x Real
               </span>
               <Badge variant="secondary" className="text-lg px-3 py-1">
                 {totalItems}
@@ -357,7 +386,7 @@ export default function EstoqueTeorico() {
                           {item.nome_produto}
                         </p>
                       </div>
-                      <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-6 text-sm">
                         <div className="text-center">
                           <p className="text-xs text-muted-foreground">Remessas</p>
                           <p className="font-bold text-blue-600">{item.quantidade_remessa}</p>
@@ -366,15 +395,20 @@ export default function EstoqueTeorico() {
                           <p className="text-xs text-muted-foreground">Vendas</p>
                           <p className="font-bold text-green-600">{item.quantidade_venda}</p>
                         </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Estoque Real</p>
-                          <p className={`font-bold ${estoqueReal.has(item.codigo_auxiliar) ? 'text-purple-600' : 'text-muted-foreground'}`}>
+                        <div className="text-center border-l-2 border-border pl-4">
+                          <p className="text-xs text-muted-foreground font-medium">Estoque Real</p>
+                          <p className={`font-bold text-xl ${estoqueReal.has(item.codigo_auxiliar) ? 'text-purple-600' : 'text-muted-foreground'}`}>
                             {estoqueReal.get(item.codigo_auxiliar)?.quantidade_real ?? '-'}
                           </p>
+                          {estoqueReal.has(item.codigo_auxiliar) && (
+                            <p className="text-xs text-muted-foreground mt-1">
+                              Atualizado
+                            </p>
+                          )}
                         </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Saldo Teórico</p>
-                          <p className={`font-bold text-lg ${
+                        <div className="text-center border-l-2 border-border pl-4">
+                          <p className="text-xs text-muted-foreground font-medium">Saldo Teórico</p>
+                          <p className={`font-bold text-xl ${
                             item.estoque_teorico < 0 
                               ? 'text-destructive' 
                               : 'text-foreground'
@@ -385,21 +419,32 @@ export default function EstoqueTeorico() {
                         {estoqueReal.has(item.codigo_auxiliar) && (() => {
                           const real = estoqueReal.get(item.codigo_auxiliar)!.quantidade_real;
                           const diff = item.estoque_teorico - real;
-                          if (diff === 0) return (
-                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
-                              OK
-                            </Badge>
+                          
+                          // Mostrar "OK" se houve ajustes realizados para este produto
+                          if (ajustesRealizados.has(item.codigo_auxiliar)) return (
+                            <div className="text-center border-l-2 border-border pl-4">
+                              <p className="text-xs text-muted-foreground font-medium">Status</p>
+                              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 text-sm px-2 py-1">
+                                ✓ Ajustado
+                              </Badge>
+                            </div>
                           );
+                          
+                          // Se não houve ajustes, mostrar a diferença
                           return (
-                            <Badge 
-                              variant="outline" 
-                              className={diff > 0 
-                                ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
-                                : 'bg-destructive/10 text-destructive border-destructive/30'
-                              }
-                            >
-                              {diff > 0 ? '+' : ''}{diff}
-                            </Badge>
+                            <div className="text-center border-l-2 border-border pl-4">
+                              <p className="text-xs text-muted-foreground font-medium">Diferença</p>
+                              <Badge 
+                                variant="outline" 
+                                className={`text-sm px-2 py-1 font-bold ${
+                                  diff > 0 
+                                    ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
+                                    : 'bg-destructive/10 text-destructive border-destructive/30'
+                                }`}
+                              >
+                                {diff > 0 ? '+' : ''}{diff}
+                              </Badge>
+                            </div>
                           );
                         })()}
                       </div>
