@@ -10,9 +10,9 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, CheckCircle, XCircle, Eye, AlertTriangle, TrendingUp, TrendingDown, Save, Edit2, PackageX, ChevronDown, ChevronUp } from 'lucide-react';
+import { ClipboardList, CheckCircle, XCircle, Eye, AlertTriangle, TrendingUp, TrendingDown, Save, Edit2, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, Clock } from 'lucide-react';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -588,42 +588,109 @@ export default function Conferencia() {
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4">
-            {inventarios.map((inventario) => (
-              <Card key={inventario.id} className={`border-2 hover:border-primary transition-colors ${inventario.status === 'revisao' ? 'border-yellow-400 bg-yellow-50/50' : ''}`}>
-                <CardContent className="py-4">
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-bold">{inventario.profiles?.nome || 'Vendedor'}</h3>
-                        <Badge variant="outline" className="font-mono">
-                          {inventario.codigo_vendedor}
-                        </Badge>
-                        {inventario.status === 'revisao' ? (
-                          <Badge className="bg-yellow-500 text-yellow-950 border-0">
-                            Em Revisão
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <ClipboardList size={20} />
+                Selecione o Inventário para Análise
+              </h2>
+              <Badge variant="outline" className="text-sm">
+                {inventarios.length} inventário(s)
+              </Badge>
+            </div>
+            
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+              {inventarios.map((inventario) => {
+                const isRevisao = inventario.status === 'revisao';
+                const tempoDecorrido = formatDistanceToNow(new Date(inventario.created_at), { 
+                  addSuffix: true, 
+                  locale: ptBR 
+                });
+                
+                return (
+                  <Card 
+                    key={inventario.id} 
+                    className={`border-2 hover:border-primary hover:shadow-lg transition-all cursor-pointer group ${
+                      isRevisao 
+                        ? 'border-yellow-400 bg-yellow-50/50 dark:bg-yellow-950/20' 
+                        : 'hover:bg-accent/30'
+                    }`}
+                    onClick={() => openConferencia(inventario)}
+                  >
+                    <CardHeader className="pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className={`p-2 rounded-full ${isRevisao ? 'bg-yellow-200' : 'bg-primary/10'}`}>
+                            <User size={18} className={isRevisao ? 'text-yellow-700' : 'text-primary'} />
+                          </div>
+                          <div>
+                            <CardTitle className="text-base">
+                              {inventario.profiles?.nome || 'Vendedor'}
+                            </CardTitle>
+                            <Badge variant="outline" className="font-mono text-xs mt-1">
+                              {inventario.codigo_vendedor}
+                            </Badge>
+                          </div>
+                        </div>
+                        {isRevisao ? (
+                          <Badge className="bg-yellow-500 text-yellow-950 border-0 shrink-0">
+                            <AlertTriangle size={12} className="mr-1" />
+                            Revisão
                           </Badge>
                         ) : (
-                          <Badge className="bg-blue-500 text-white border-0">
+                          <Badge className="bg-blue-500 text-white border-0 shrink-0">
+                            <Clock size={12} className="mr-1" />
                             Pendente
                           </Badge>
                         )}
                       </div>
-                      <p className="text-sm text-muted-foreground">
-                        {inventario.itens_inventario.length} itens contados
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {format(new Date(inventario.data_inventario), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-                      </p>
-                    </div>
-                    <Button onClick={() => openConferencia(inventario)} size="lg">
-                      <Eye className="mr-2" size={16} />
-                      Analisar
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    </CardHeader>
+                    
+                    <CardContent className="space-y-3">
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Package size={14} />
+                          <span className="font-medium text-foreground">{inventario.itens_inventario.length}</span>
+                          <span>itens</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <Calendar size={14} />
+                          <span>{format(new Date(inventario.data_inventario), "dd/MM/yy", { locale: ptBR })}</span>
+                        </div>
+                      </div>
+                      
+                      <div className="text-xs text-muted-foreground">
+                        Enviado {tempoDecorrido}
+                      </div>
+                      
+                      {inventario.observacoes && (
+                        <div className="text-xs text-muted-foreground bg-secondary/50 p-2 rounded truncate">
+                          "{inventario.observacoes}"
+                        </div>
+                      )}
+                      
+                      {isRevisao && inventario.observacoes_gerente && (
+                        <div className="text-xs text-yellow-700 bg-yellow-100 p-2 rounded">
+                          <span className="font-medium">Obs. Gerente:</span> {inventario.observacoes_gerente}
+                        </div>
+                      )}
+                      
+                      <Button 
+                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openConferencia(inventario);
+                        }}
+                      >
+                        <Eye className="mr-2" size={16} />
+                        Analisar Inventário
+                      </Button>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
