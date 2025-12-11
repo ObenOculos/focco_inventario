@@ -32,6 +32,7 @@ export default function Movimentacoes() {
   const isGerente = profile?.role === 'gerente';
 
   const [searchTerm, setSearchTerm] = useState('');
+  const [origemFilter, setOrigemFilter] = useState<string>('todos'); // 'todos', 'manual', 'automatico'
   const [dialogOpen, setDialogOpen] = useState(false);
   const [formData, setFormData] = useState({
     codigo_auxiliar: '',
@@ -56,7 +57,15 @@ export default function Movimentacoes() {
     handlePageChange,
     handleItemsPerPageChange,
   } = usePagination({
-    data: movimentacoes,
+    data: movimentacoes.filter(mov => {
+      // Filtro por origem
+      if (origemFilter === 'manual') {
+        return !mov.origem_tipo || mov.origem_tipo !== 'inventario_ajuste';
+      } else if (origemFilter === 'automatico') {
+        return mov.origem_tipo === 'inventario_ajuste';
+      }
+      return true; // 'todos'
+    }),
     itemsPerPage: 20,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto', 'motivo'],
@@ -128,11 +137,11 @@ export default function Movimentacoes() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Movimentações de Estoque</h1>
             <p className="text-muted-foreground">
-              Registre devoluções, perdas e ajustes de estoque
+              Visualize devoluções, perdas, ajustes e movimentações automáticas de inventário
             </p>
           </div>
           
-          {isGerente && (
+          {isGerente && origemFilter !== 'automatico' && (
             <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
               <DialogTrigger asChild>
                 <Button>
@@ -236,6 +245,19 @@ export default function Movimentacoes() {
           placeholder="Buscar por código, produto ou motivo..."
         />
 
+        <div className="flex flex-col sm:flex-row gap-4">
+          <Select value={origemFilter} onValueChange={setOrigemFilter}>
+            <SelectTrigger className="w-full sm:w-48 border-2">
+              <SelectValue placeholder="Filtrar por origem" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todas as movimentações</SelectItem>
+              <SelectItem value="manual">Apenas manuais</SelectItem>
+              <SelectItem value="automatico">Apenas automáticas</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando...</div>
         ) : totalItems === 0 ? (
@@ -243,12 +265,12 @@ export default function Movimentacoes() {
             <CardContent className="py-12 text-center">
               <RefreshCw size={48} className="mx-auto mb-4 text-muted-foreground" />
               <h2 className="text-xl font-bold mb-2">
-                {searchTerm ? 'Nenhuma movimentação encontrada' : 'Nenhuma movimentação registrada'}
+                {searchTerm || origemFilter !== 'todos' ? 'Nenhuma movimentação encontrada' : 'Nenhuma movimentação registrada'}
               </h2>
               <p className="text-muted-foreground">
-                {searchTerm 
-                  ? 'Tente outro termo de busca' 
-                  : isGerente 
+                {searchTerm || origemFilter !== 'todos'
+                  ? 'Tente outro termo de busca ou filtro'
+                  : isGerente
                     ? 'Registre devoluções, perdas ou ajustes de estoque'
                     : 'Nenhuma movimentação no seu estoque ainda'
                 }
@@ -280,6 +302,11 @@ export default function Movimentacoes() {
                           <p className="text-sm font-medium mb-1">
                             <strong>Motivo:</strong> {mov.motivo}
                           </p>
+                          {mov.origem_tipo === 'inventario_ajuste' && (
+                            <p className="text-xs text-blue-600 font-medium mb-1">
+                              🔄 Ajuste automático de inventário
+                            </p>
+                          )}
                           {mov.observacoes && (
                             <p className="text-sm text-muted-foreground mb-1">
                               {mov.observacoes}

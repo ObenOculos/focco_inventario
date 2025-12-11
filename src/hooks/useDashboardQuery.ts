@@ -115,3 +115,55 @@ export const useMovimentacaoResumoQuery = (codigoVendedor?: string | null, isGer
     enabled: !!codigoVendedor || isGerente === true,
   });
 };
+
+export const useEstoqueRealStatsQuery = (isGerente?: boolean) => {
+  return useQuery({
+    queryKey: ['estoque-real-stats', isGerente],
+    queryFn: async () => {
+      if (!isGerente) return null;
+
+      // Buscar estatísticas de estoque real
+      const { data: stats, error } = await supabase
+        .from('estoque_real')
+        .select(`
+          codigo_vendedor,
+          data_atualizacao,
+          inventario_id
+        `)
+        .order('data_atualizacao', { ascending: false });
+
+      if (error) throw error;
+
+      // Agrupar por vendedor e pegar a data mais recente
+      const vendedorStats = new Map<string, { ultima_atualizacao: string; total_itens: number }>();
+
+      stats?.forEach(item => {
+        const existing = vendedorStats.get(item.codigo_vendedor);
+        if (!existing || new Date(item.data_atualizacao) > new Date(existing.ultima_atualizacao)) {
+          // Contar quantos itens únicos este vendedor tem
+          const itemCount = stats.filter(s => s.codigo_vendedor === item.codigo_vendedor).length;
+          vendedorStats.set(item.codigo_vendedor, {
+            ultima_atualizacao: item.data_atualizacao,
+            total_itens: itemCount
+          });
+        }
+      });
+
+      // Calcular estatísticas
+      const vendedoresComEstoqueReal = vendedorStats.size;
+      const vendedoresAtualizadosRecentemente = Array.from(vendedorStats.values())
+        .filter(stat => {
+          const diffTime = Date.now() - new Date(stat.ultima_atualizacao).getTime();
+          const diffDays = diffTime / (1000 * 60 * 60 * 24);
+          return diffDays <= 7; // Últimos 7 dias
+        }).length;
+
+      return {
+        vendedoresComEstoqueReal,
+        vendedoresAtualizadosRecentemente,
+        totalItensEstoqueReal: stats?.length || 0
+      };
+    },
+    enabled: isGerente === true,
+  });
+};

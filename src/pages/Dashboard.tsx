@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { useEstoqueQuery, useMovimentacaoResumoQuery } from '@/hooks/useDashboardQuery';
+import { useEstoqueQuery, useMovimentacaoResumoQuery, useEstoqueRealStatsQuery } from '@/hooks/useDashboardQuery';
 import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
 import { EstoqueItem } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -53,6 +53,9 @@ export default function Dashboard() {
       valorVenda: 0
     }
   } = useMovimentacaoResumoQuery(profile?.codigo_vendedor, isGerente);
+  const {
+    data: estoqueRealStats
+  } = useEstoqueRealStatsQuery(isGerente);
   const {
     data: inventariosPendentes = 0
   } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'pendente');
@@ -310,6 +313,24 @@ export default function Dashboard() {
                 <p className="text-xs text-muted-foreground mt-1">inventários</p>
               </CardContent>
             </Card>
+
+            {estoqueRealStats && (
+              <Card className="border-2 bg-purple-50 dark:bg-purple-950/20 border-purple-200 dark:border-purple-800">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-purple-700 dark:text-purple-300">
+                    <FileCheck size={18} />
+                    Estoque Real
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold text-purple-700 dark:text-purple-300">{estoqueRealStats.vendedoresComEstoqueReal}</p>
+                  <p className="text-xs text-muted-foreground mt-1">vendedores atualizados</p>
+                  <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
+                    {estoqueRealStats.vendedoresAtualizadosRecentemente} nos últimos 7 dias
+                  </p>
+                </CardContent>
+              </Card>
+            )}
           </div> : <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
             <Card className="border-2">
               <CardHeader className="pb-3">

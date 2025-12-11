@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-serve(async (req) => {
+serve(async (req: Request) => {
   // Trata a requisição OPTIONS (pre-flight) para CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
@@ -75,11 +75,7 @@ serve(async (req) => {
 
     const divergencias = comparativo.filter((item: any) => item.divergencia !== 0);
 
-    // DEBUG: Temporariamente lançar um erro para inspecionar os dados
-    if (divergencias.length === 0) {
-      throw new Error(`DEBUG: Nenhuma divergência encontrada. Dados do comparativo: ${JSON.stringify(comparativo, null, 2)}`);
-    }
-
+    // Se houver divergências, criar ajustes
     if (divergencias.length > 0) {
       const ajustes = divergencias.map((item: any) => ({
         user_id: user.id,
@@ -115,12 +111,57 @@ serve(async (req) => {
       throw new Error("Falha ao aprovar o inventário após criar os ajustes.");
     }
 
-    return new Response(JSON.stringify({ message: 'Inventário aprovado e estoque ajustado com sucesso!' }), {
+    // Atualizar o estoque_real com a contagem física do inventário aprovado
+    const { data: itensInventario, error: itensError } = await supabaseAdmin
+      .from('itens_inventario')
+      .select('codigo_auxiliar, quantidade_fisica')
+      .eq('inventario_id', inventario_id);
+
+    if (itensError) {
+      console.error("Erro ao buscar itens do inventário:", itensError);
+      throw new Error("Falha ao atualizar estoque real.");
+    }
+
+    if (itensInventario && itensInventario.length > 0) {
+      // Preparar dados para upsert no estoque_real
+      const estoqueRealData = itensInventario.map(item => ({
+        codigo_vendedor: inventario.codigo_vendedor,
+        codigo_auxiliar: item.codigo_auxiliar,
+        quantidade_real: item.quantidade_fisica,
+        inventario_id: inventario_id,
+        data_atualizacao: new Date().toISOString()
+      }));
+
+      // Primeiro, deletar registros existentes para este vendedor e inventário
+      const { error: deleteError } = await supabaseAdmin
+        .from('estoque_real')
+        .delete()
+        .eq('codigo_vendedor', inventario.codigo_vendedor)
+        .eq('inventario_id', inventario_id);
+
+      if (deleteError) {
+        console.error("Erro ao limpar estoque real antigo:", deleteError);
+        // Não lançar erro aqui, continuar tentando inserir
+      }
+
+      // Inserir os novos dados
+      const { error: insertError } = await supabaseAdmin
+        .from('estoque_real')
+        .insert(estoqueRealData);
+
+      if (insertError) {
+        console.error("Erro ao inserir estoque real:", insertError);
+        throw new Error("Falha ao salvar o estoque real.");
+      }
+    }
+
+    return new Response(JSON.stringify({ message: 'Inventário aprovado, estoque ajustado e estoque real atualizado com sucesso!' }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
   } catch (err) {
-    return new Response(JSON.stringify({ error: err.message }), {
+    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+    return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
     })

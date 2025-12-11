@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -19,6 +19,7 @@ import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
+import { useQueryClient } from '@tanstack/react-query';
 
 type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
   itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
@@ -36,6 +37,8 @@ export default function Conferencia() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
+
+  const queryClient = useQueryClient();
 
   // Filtrar divergências antes da paginação
   const filteredDivergencias = divergencias.filter(item => {
@@ -132,20 +135,31 @@ export default function Conferencia() {
   const handleAprovar = async () => {
     if (!selectedInventario) return;
 
-    const { error } = await supabase
-      .from('inventarios')
-      .update({ 
-        status: 'aprovado' as InventoryStatus,
-        observacoes_gerente: observacoes 
-      })
-      .eq('id', selectedInventario.id);
+    setSaving(true);
+    try {
+      // Chamar a função Edge para aprovar e ajustar o estoque real
+      const { data, error } = await supabase.functions.invoke('aprovar-e-ajustar-inventario', {
+        body: { inventario_id: selectedInventario.id },
+      });
 
-    if (error) {
-      toast.error('Erro ao aprovar inventário');
-    } else {
-      toast.success('Inventário aprovado!');
+      if (error) throw error;
+
+      toast.success(data.message || 'Inventário aprovado e estoque real atualizado!');
+
+      // Invalidate queries to refetch data across the app
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+
       setDialogOpen(false);
       fetchInventarios();
+    } catch (error: any) {
+      console.error('Erro ao aprovar inventário:', error);
+      toast.error('Erro ao aprovar inventário', {
+        description: error.message || error.data?.error || 'Ocorreu um erro inesperado.',
+      });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -290,6 +304,9 @@ export default function Conferencia() {
           <DialogContent className="border-2 max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Análise de Divergências</DialogTitle>
+              <DialogDescription>
+                Analise as divergências entre o estoque teórico e físico. Você pode editar as quantidades antes de aprovar.
+              </DialogDescription>
             </DialogHeader>
             
             {selectedInventario && (

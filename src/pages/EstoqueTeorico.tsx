@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
-import { calcularEstoqueTeorico } from '@/lib/estoque';
+import { calcularEstoqueTeorico, buscarEstoqueReal } from '@/lib/estoque';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface VendedorProfile {
@@ -23,6 +23,7 @@ interface VendedorProfile {
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
   const [estoqueBase, setEstoqueBase] = useState<EstoqueItem[]>([]);
+  const [estoqueReal, setEstoqueReal] = useState<Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>>(new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [tipoFilter, setTipoFilter] = useState<string>('todos');
@@ -95,9 +96,13 @@ export default function EstoqueTeorico() {
 
   useEffect(() => {
     const fetchEstoqueForSingleVendor = async (vendorCode: string) => {
-      const estoqueMap = await calcularEstoqueTeorico(vendorCode);
+      const [estoqueMap, estoqueRealMap] = await Promise.all([
+        calcularEstoqueTeorico(vendorCode),
+        buscarEstoqueReal(vendorCode)
+      ]);
       const estoqueArray = Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
       setEstoqueBase(estoqueArray);
+      setEstoqueReal(estoqueRealMap);
     };
 
     const fetchAndConsolidateAllEstoque = async () => {
@@ -110,13 +115,20 @@ export default function EstoqueTeorico() {
       if (error || !profiles) {
         console.error("Erro ao buscar códigos de vendedores:", error);
         setEstoqueBase([]);
+        setEstoqueReal(new Map());
         return;
       }
 
       const allEstoque = new Map<string, EstoqueItem>();
+      const allEstoqueReal = new Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>();
+      
       for (const p of profiles) {
         if (p.codigo_vendedor) {
-          const vendedorEstoque = await calcularEstoqueTeorico(p.codigo_vendedor);
+          const [vendedorEstoque, vendedorEstoqueReal] = await Promise.all([
+            calcularEstoqueTeorico(p.codigo_vendedor),
+            buscarEstoqueReal(p.codigo_vendedor)
+          ]);
+          
           for (const [key, item] of vendedorEstoque.entries()) {
             const existing = allEstoque.get(key);
             if (existing) {
@@ -127,10 +139,21 @@ export default function EstoqueTeorico() {
               allEstoque.set(key, { ...item });
             }
           }
+          
+          // Consolidar estoque real
+          for (const [key, item] of vendedorEstoqueReal.entries()) {
+            const existing = allEstoqueReal.get(key);
+            if (existing) {
+              existing.quantidade_real += item.quantidade_real;
+            } else {
+              allEstoqueReal.set(key, { ...item });
+            }
+          }
         }
       }
       const estoqueArray = Array.from(allEstoque.values()).filter(e => e.estoque_teorico !== 0);
       setEstoqueBase(estoqueArray);
+      setEstoqueReal(allEstoqueReal);
     };
 
     const loadData = async () => {
@@ -344,7 +367,13 @@ export default function EstoqueTeorico() {
                           <p className="font-bold text-green-600">{item.quantidade_venda}</p>
                         </div>
                         <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Saldo</p>
+                          <p className="text-xs text-muted-foreground">Estoque Real</p>
+                          <p className={`font-bold ${estoqueReal.has(item.codigo_auxiliar) ? 'text-purple-600' : 'text-gray-400'}`}>
+                            {estoqueReal.get(item.codigo_auxiliar)?.quantidade_real ?? '-'}
+                          </p>
+                        </div>
+                        <div className="text-center">
+                          <p className="text-xs text-muted-foreground">Saldo Teórico</p>
                           <p className={`font-bold text-lg ${
                             item.estoque_teorico < 0 
                               ? 'text-destructive' 
