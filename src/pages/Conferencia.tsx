@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, CheckCircle, XCircle, Eye, AlertTriangle, TrendingUp, TrendingDown, Save, Edit2 } from 'lucide-react';
+import { ClipboardList, CheckCircle, XCircle, Eye, AlertTriangle, TrendingUp, TrendingDown, Save, Edit2, PackageX, ChevronDown, ChevronUp } from 'lucide-react';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -26,17 +26,26 @@ type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
   profiles?: { nome: string };
 };
 
+// Tipo para itens não contados (com estoque teórico mas sem contagem física)
+type ItemNaoContado = {
+  codigo_auxiliar: string;
+  nome_produto: string;
+  estoque_teorico: number;
+};
+
 export default function Conferencia() {
   const [inventarios, setInventarios] = useState<InventarioComItens[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedInventario, setSelectedInventario] = useState<InventarioComItens | null>(null);
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
+  const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [observacoes, setObservacoes] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
+  const [showItensNaoContados, setShowItensNaoContados] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -99,12 +108,15 @@ export default function Conferencia() {
     setSearchTerm('');
     setFilterTipo('todos');
     setEditedValues({});
+    setShowItensNaoContados(false);
 
     const estoque = await calcularEstoqueTeorico(inventario.codigo_vendedor);
     
     const divergenciasList: DivergenciaItem[] = [];
+    const itensContadosCodigos = new Set(inventario.itens_inventario.map(i => i.codigo_auxiliar));
+    const itensNaoContadosList: ItemNaoContado[] = [];
 
-    // Verificar apenas os itens que o vendedor escaneou
+    // Verificar itens que o vendedor escaneou
     for (const item of inventario.itens_inventario) {
       const estoqueItem = estoque.get(item.codigo_auxiliar);
       const estoqueTeoricoValue = estoqueItem?.estoque_teorico || 0;
@@ -128,6 +140,18 @@ export default function Conferencia() {
       });
     }
 
+    // Identificar produtos com estoque teórico que NÃO foram contados
+    estoque.forEach((item, codigo) => {
+      if (!itensContadosCodigos.has(codigo) && item.estoque_teorico > 0) {
+        itensNaoContadosList.push({
+          codigo_auxiliar: codigo,
+          nome_produto: item.nome_produto,
+          estoque_teorico: item.estoque_teorico,
+        });
+      }
+    });
+
+    setItensNaoContados(itensNaoContadosList.sort((a, b) => b.estoque_teorico - a.estoque_teorico));
     setDivergencias(divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca)));
     setDialogOpen(true);
   };
@@ -360,6 +384,55 @@ export default function Conferencia() {
                         {itensFalta > 0 && `${itensFalta} produto(s) com falta`}
                       </p>
                     </div>
+                  </div>
+                )}
+
+                {/* Alerta de itens não contados */}
+                {itensNaoContados.length > 0 && (
+                  <div className="p-3 bg-orange-50 border-2 border-orange-400 space-y-2">
+                    <div 
+                      className="flex items-start gap-2 cursor-pointer"
+                      onClick={() => setShowItensNaoContados(!showItensNaoContados)}
+                    >
+                      <PackageX className="text-orange-700 shrink-0 mt-0.5" size={18} />
+                      <div className="flex-1">
+                        <p className="font-medium text-orange-800">
+                          {itensNaoContados.length} produto(s) com estoque teórico NÃO foram contados
+                        </p>
+                        <p className="text-sm text-orange-700">
+                          O vendedor possui estoque teórico destes produtos, mas não os incluiu na contagem física.
+                        </p>
+                      </div>
+                      {showItensNaoContados ? (
+                        <ChevronUp className="text-orange-700 shrink-0" size={18} />
+                      ) : (
+                        <ChevronDown className="text-orange-700 shrink-0" size={18} />
+                      )}
+                    </div>
+                    
+                    {showItensNaoContados && (
+                      <div className="mt-3 border-t border-orange-300 pt-3">
+                        <div className="max-h-48 overflow-y-auto space-y-1">
+                          {itensNaoContados.map((item) => (
+                            <div 
+                              key={item.codigo_auxiliar} 
+                              className="flex items-center justify-between text-sm bg-orange-100 p-2 rounded"
+                            >
+                              <div>
+                                <span className="font-mono font-bold text-orange-900">{item.codigo_auxiliar}</span>
+                                <span className="text-orange-700 ml-2">{item.nome_produto}</span>
+                              </div>
+                              <Badge className="bg-orange-600 text-white border-0">
+                                Teórico: {item.estoque_teorico}
+                              </Badge>
+                            </div>
+                          ))}
+                        </div>
+                        <p className="text-xs text-orange-600 mt-2">
+                          * Se estes produtos não foram encontrados fisicamente, pode indicar falta no estoque.
+                        </p>
+                      </div>
+                    )}
                   </div>
                 )}
 
