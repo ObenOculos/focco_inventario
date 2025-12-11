@@ -368,7 +368,7 @@ export default function EstoqueTeorico() {
                         </div>
                         <div className="text-center">
                           <p className="text-xs text-muted-foreground">Estoque Real</p>
-                          <p className={`font-bold ${estoqueReal.has(item.codigo_auxiliar) ? 'text-purple-600' : 'text-gray-400'}`}>
+                          <p className={`font-bold ${estoqueReal.has(item.codigo_auxiliar) ? 'text-purple-600' : 'text-muted-foreground'}`}>
                             {estoqueReal.get(item.codigo_auxiliar)?.quantidade_real ?? '-'}
                           </p>
                         </div>
@@ -382,6 +382,26 @@ export default function EstoqueTeorico() {
                             {item.estoque_teorico}
                           </p>
                         </div>
+                        {estoqueReal.has(item.codigo_auxiliar) && (() => {
+                          const real = estoqueReal.get(item.codigo_auxiliar)!.quantidade_real;
+                          const diff = item.estoque_teorico - real;
+                          if (diff === 0) return (
+                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                              OK
+                            </Badge>
+                          );
+                          return (
+                            <Badge 
+                              variant="outline" 
+                              className={diff > 0 
+                                ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
+                                : 'bg-destructive/10 text-destructive border-destructive/30'
+                              }
+                            >
+                              {diff > 0 ? '+' : ''}{diff}
+                            </Badge>
+                          );
+                        })()}
                       </div>
                     </div>
                   </div>
