@@ -100,7 +100,7 @@ export default function EstoqueTeorico() {
         calcularEstoqueTeorico(vendorCode),
         buscarEstoqueReal(vendorCode)
       ]);
-      const estoqueArray = Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
+      const estoqueArray = Array.from(estoqueMap.values());
       setEstoqueBase(estoqueArray);
       setEstoqueReal(estoqueRealMap);
     };
@@ -151,7 +151,7 @@ export default function EstoqueTeorico() {
           }
         }
       }
-      const estoqueArray = Array.from(allEstoque.values()).filter(e => e.estoque_teorico !== 0);
+      const estoqueArray = Array.from(allEstoque.values());
       setEstoqueBase(estoqueArray);
       setEstoqueReal(allEstoqueReal);
     };
