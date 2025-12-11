@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, List, Package } from 'lucide-react';
+import { AlertTriangle, List, Package, FileDown } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -11,6 +11,8 @@ import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
+import * as XLSX from 'xlsx';
 
 interface Movimentacao {
   id: string;
@@ -180,6 +182,28 @@ export default function ControleVendedores() {
     setLoading(false);
   };
 
+  // Calculate the sum of quantities
+  const sumOfQuantities = useMemo(() => {
+    return filteredMovimentacoes.reduce((sum, mov) => sum + mov.quantidade, 0);
+  }, [filteredMovimentacoes]);
+
+  const handleExport = () => {
+    const dataToExport = filteredMovimentacoes.map(item => ({
+      'Vendedor': item.nome_vendedor,
+      'Cód. Tipo': item.codigo_tipo,
+      'Num. Pedido': item.numero_pedido || '-',
+      'Nota Fiscal': item.numero_nota_fiscal || '-',
+      'Produto (Cód. Aux.)': item.codigo_auxiliar,
+      'Quantidade': item.quantidade,
+      'Data': new Date(item.data_emissao).toLocaleDateString('pt-BR'),
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Movimentacoes');
+    XLSX.writeFile(workbook, 'movimentacoes_vendedores.xlsx');
+  };
+
   if (profile?.role !== 'gerente') {
     return (
       <AppLayout>
@@ -192,16 +216,6 @@ export default function ControleVendedores() {
       </AppLayout>
     );
   }
-  
-          // Calculate the sum of quantities
-  
-          const sumOfQuantities = useMemo(() => {
-  
-            return filteredMovimentacoes.reduce((sum, mov) => sum + mov.quantidade, 0);
-  
-          }, [filteredMovimentacoes]);
-  
-    
   
           // Removed getTipoLabel as it's no longer used for display
   
@@ -307,6 +321,10 @@ export default function ControleVendedores() {
   
                         </Select>
   
+                        <Button onClick={handleExport} className="w-full md:w-auto flex items-center gap-2">
+                            <FileDown size={16} />
+                            Exportar
+                        </Button>
                     </div>
   
     
