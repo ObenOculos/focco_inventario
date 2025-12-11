@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
@@ -8,11 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, CheckCircle, XCircle, Eye, AlertTriangle, TrendingUp, TrendingDown, Save, Edit2, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, Clock } from 'lucide-react';
+import { ClipboardList, CheckCircle, XCircle, AlertTriangle, TrendingUp, TrendingDown, Save, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, Clock, ChevronsRight, Loader2 } from 'lucide-react';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -20,13 +19,20 @@ import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
 import { useQueryClient } from '@tanstack/react-query';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
   itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
   profiles?: { nome: string };
 };
 
-// Tipo para itens não contados (com estoque teórico mas sem contagem física)
 type ItemNaoContado = {
   codigo_auxiliar: string;
   nome_produto: string;
@@ -42,89 +48,77 @@ export default function Conferencia() {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [observacoes, setObservacoes] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
   const [showItensNaoContados, setShowItensNaoContados] = useState(false);
+  const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   const queryClient = useQueryClient();
 
-  // Filtrar divergências antes da paginação
-  const filteredDivergencias = divergencias.filter(item => {
-    const matchesSearch = 
-      item.codigo_auxiliar.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.nome_produto.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesTipo = 
-      filterTipo === 'todos' ||
-      (filterTipo === 'ok' && item.tipo === 'ok') ||
-      (filterTipo === 'sobra' && item.tipo === 'sobra') ||
-      (filterTipo === 'falta' && item.tipo === 'falta');
-
-    return matchesSearch && matchesTipo;
-  });
+  const filteredDivergencias = useMemo(() => {
+    let filtered = divergencias;
+    if (filterTipo === 'ok') filtered = filtered.filter(item => item.tipo === 'ok');
+    if (filterTipo === 'sobra') filtered = filtered.filter(item => item.tipo === 'sobra');
+    if (filterTipo === 'falta') filtered = filtered.filter(item => item.tipo === 'falta');
+    return filtered;
+  }, [divergencias, filterTipo]);
 
   const {
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    startIndex,
-    endIndex,
     paginatedData: paginatedDivergencias,
-    totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
+    ...paginationProps
   } = usePagination({
     data: filteredDivergencias,
+    searchTerm,
+    searchFields: ['codigo_auxiliar', 'nome_produto'],
     itemsPerPage: 20,
   });
 
   useEffect(() => {
     fetchInventarios();
   }, []);
-
+  
   const fetchInventarios = async () => {
+    setLoading(true);
     const { data, error } = await supabase
       .from('inventarios')
-      .select(`
-        *,
-        itens_inventario (*),
-        profiles!inventarios_user_id_fkey (nome)
-      `)
+      .select(`*, itens_inventario (*), profiles!inventarios_user_id_fkey (nome)`)
       .in('status', ['pendente', 'revisao'])
       .order('created_at', { ascending: false });
 
     if (error) {
       console.error('Erro ao buscar inventários:', error);
+      toast.error("Falha ao carregar inventários.");
     } else {
       setInventarios(data as unknown as InventarioComItens[]);
+      if (data.length > 0 && !selectedInventario) {
+        handleSelectInventario(data[0]);
+      }
     }
     setLoading(false);
   };
-
-  const openConferencia = async (inventario: InventarioComItens) => {
+  
+  const handleSelectInventario = async (inventario: InventarioComItens) => {
+    if (selectedInventario?.id === inventario.id) return;
+    
+    setIsDetailLoading(true);
     setSelectedInventario(inventario);
     setObservacoes('');
     setSearchTerm('');
     setFilterTipo('todos');
     setEditedValues({});
     setShowItensNaoContados(false);
-
+  
     const estoque = await calcularEstoqueTeorico(inventario.codigo_vendedor);
     
     const divergenciasList: DivergenciaItem[] = [];
     const itensContadosCodigos = new Set(inventario.itens_inventario.map(i => i.codigo_auxiliar));
     const itensNaoContadosList: ItemNaoContado[] = [];
 
-    // Verificar itens que o vendedor escaneou
     for (const item of inventario.itens_inventario) {
       const estoqueItem = estoque.get(item.codigo_auxiliar);
       const estoqueTeoricoValue = estoqueItem?.estoque_teorico || 0;
       const diferenca = item.quantidade_fisica - estoqueTeoricoValue;
-      const percentual = estoqueTeoricoValue > 0 
-        ? ((diferenca / estoqueTeoricoValue) * 100) 
-        : (item.quantidade_fisica > 0 ? 100 : 0);
-
+      const percentual = estoqueTeoricoValue !== 0 ? ((diferenca / estoqueTeoricoValue) * 100) : (item.quantidade_fisica > 0 ? 100 : 0);
       let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
       if (diferenca > 0) tipo = 'sobra';
       else if (diferenca < 0) tipo = 'falta';
@@ -134,13 +128,10 @@ export default function Conferencia() {
         nome_produto: item.nome_produto || '',
         estoque_teorico: estoqueTeoricoValue,
         quantidade_fisica: item.quantidade_fisica,
-        diferenca,
-        percentual,
-        tipo,
+        diferenca, percentual, tipo,
       });
     }
 
-    // Identificar produtos com estoque teórico que NÃO foram contados
     estoque.forEach((item, codigo) => {
       if (!itensContadosCodigos.has(codigo) && item.estoque_teorico > 0) {
         itensNaoContadosList.push({
@@ -153,67 +144,48 @@ export default function Conferencia() {
 
     setItensNaoContados(itensNaoContadosList.sort((a, b) => b.estoque_teorico - a.estoque_teorico));
     setDivergencias(divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca)));
-    setDialogOpen(true);
+    setIsDetailLoading(false);
   };
-
-  const handleAprovar = async () => {
+  
+  const handleManagerAction = async (action: 'aprovar' | 'revisao') => {
     if (!selectedInventario) return;
-
+  
+    if (action === 'revisao' && !observacoes.trim()) {
+      toast.error('Informe o motivo da não aprovação para enviar para revisão.');
+      return;
+    }
+  
     setSaving(true);
     try {
-      // Chamar a função Edge para aprovar e ajustar o estoque real
-      const { data, error } = await supabase.functions.invoke('aprovar-e-ajustar-inventario', {
-        body: { inventario_id: selectedInventario.id },
-      });
-
-      if (error) throw error;
-
-      toast.success(data.message || 'Inventário aprovado e estoque real atualizado!');
-
-      // Invalidate queries to refetch data across the app
-      queryClient.invalidateQueries({ queryKey: ['movimentacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['inventarios'] });
-      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-
-      setDialogOpen(false);
-      fetchInventarios();
+      if (action === 'aprovar') {
+        const { data, error } = await supabase.functions.invoke('aprovar-e-ajustar-inventario', {
+          body: { inventario_id: selectedInventario.id },
+        });
+        if (error) throw error;
+        toast.success(data.message || 'Inventário aprovado e estoque ajustado!');
+      } else {
+        const { error } = await supabase
+          .from('inventarios')
+          .update({ status: 'revisao', observacoes_gerente: observacoes })
+          .eq('id', selectedInventario.id);
+        if (error) throw error;
+        toast.info('Inventário enviado para revisão.');
+      }
+  
+      queryClient.invalidateQueries({ queryKey: ['movimentacoes', 'inventarios', 'dashboard'] });
+      setSelectedInventario(null); // Clear selection
+      fetchInventarios(); // Refresh list
     } catch (error: any) {
-      console.error('Erro ao aprovar inventário:', error);
-      toast.error('Erro ao aprovar inventário', {
-        description: error.message || error.data?.error || 'Ocorreu um erro inesperado.',
-      });
+      console.error(`Erro ao ${action} inventário:`, error);
+      toast.error(`Erro ao ${action} inventário`, { description: error.message || 'Ocorreu um erro.' });
     } finally {
       setSaving(false);
     }
   };
-
-  const handleRevisao = async () => {
-    if (!selectedInventario) return;
-
-    if (!observacoes.trim()) {
-      toast.error('Informe o motivo da não aprovação');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('inventarios')
-      .update({ 
-        status: 'revisao' as InventoryStatus,
-        observacoes_gerente: observacoes 
-      })
-      .eq('id', selectedInventario.id);
-
-    if (error) {
-      toast.error('Erro ao rejeitar inventário');
-    } else {
-      toast.success('Inventário não aprovado!');
-      setDialogOpen(false);
-      fetchInventarios();
-    }
-  };
-
-  const handleEditValue = (codigoAuxiliar: string, value: number) => {
-    setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: value }));
+  
+  const handleEditValue = (codigoAuxiliar: string, value: string) => {
+    const numValue = parseInt(value, 10);
+    setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: isNaN(numValue) ? 0 : numValue }));
   };
 
   const handleSaveEdits = async () => {
@@ -221,97 +193,43 @@ export default function Conferencia() {
 
     setSaving(true);
     try {
-      // Update each edited item
-      for (const [codigoAuxiliar, novaQuantidade] of Object.entries(editedValues)) {
-        const item = selectedInventario.itens_inventario.find(i => i.codigo_auxiliar === codigoAuxiliar);
-        
-        if (item) {
-          // Update existing item
-          const { error } = await supabase
-            .from('itens_inventario')
-            .update({ quantidade_fisica: novaQuantidade })
-            .eq('id', item.id);
-          
-          if (error) throw error;
-        } else {
-          // Insert new item (for products not originally counted)
-          const divergencia = divergencias.find(d => d.codigo_auxiliar === codigoAuxiliar);
-          const { error } = await supabase
-            .from('itens_inventario')
-            .insert({
-              inventario_id: selectedInventario.id,
-              codigo_auxiliar: codigoAuxiliar,
-              nome_produto: divergencia?.nome_produto || '',
-              quantidade_fisica: novaQuantidade,
-            });
-          
-          if (error) throw error;
-        }
-      }
+      const updates = Object.entries(editedValues).map(([codigo, quantidade]) => {
+        const item = selectedInventario.itens_inventario.find(i => i.codigo_auxiliar === codigo);
+        return supabase.from('itens_inventario').update({ quantidade_fisica: quantidade }).eq('id', item!.id);
+      });
+      const results = await Promise.all(updates);
+      results.forEach(res => { if (res.error) throw res.error; });
 
-      // Update divergencias state with new values
       setDivergencias(prev => prev.map(d => {
-        const editedValue = editedValues[d.codigo_auxiliar];
-        if (editedValue !== undefined) {
-          const diferenca = editedValue - d.estoque_teorico;
-          const percentual = d.estoque_teorico > 0 
-            ? ((diferenca / d.estoque_teorico) * 100) 
-            : (editedValue > 0 ? 100 : 0);
-          let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
-          if (diferenca > 0) tipo = 'sobra';
-          else if (diferenca < 0) tipo = 'falta';
-          
-          return { ...d, quantidade_fisica: editedValue, diferenca, percentual, tipo };
+        if (editedValues[d.codigo_auxiliar] !== undefined) {
+          const novaQuantidade = editedValues[d.codigo_auxiliar];
+          const diferenca = novaQuantidade - d.estoque_teorico;
+          return { ...d, quantidade_fisica: novaQuantidade, diferenca };
         }
         return d;
       }));
 
       setEditedValues({});
-      toast.success('Alterações salvas!');
-      fetchInventarios(); // Refresh to get updated data
+      toast.success('Alterações salvas com sucesso!');
     } catch (error) {
       console.error('Erro ao salvar:', error);
-      toast.error('Erro ao salvar alterações');
+      toast.error('Erro ao salvar alterações.');
     } finally {
       setSaving(false);
     }
   };
 
   const hasEdits = Object.keys(editedValues).length > 0;
+  const stats = useMemo(() => ({
+    itensCorretos: divergencias.filter(d => d.diferenca === 0).length,
+    itensSobra: divergencias.filter(d => d.diferenca > 0).length,
+    itensFalta: divergencias.filter(d => d.diferenca < 0).length,
+    valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
+  }), [divergencias]);
 
-  // Estatísticas
-  const itensCorretos = divergencias.filter(d => d.diferenca === 0).length;
-  const itensSobra = divergencias.filter(d => d.diferenca > 0).length;
-  const itensFalta = divergencias.filter(d => d.diferenca < 0).length;
-  const valorTotalDivergencia = divergencias.reduce((acc, d) => acc + d.diferenca, 0);
-  const hasDivergencias = divergencias.some(d => d.diferenca !== 0);
-
-  const getTipoIcon = (tipo: 'ok' | 'sobra' | 'falta') => {
-    switch (tipo) {
-      case 'ok':
-        return <CheckCircle size={14} className="text-green-600" />;
-      case 'sobra':
-        return <TrendingUp size={14} className="text-yellow-600" />;
-      case 'falta':
-        return <TrendingDown size={14} className="text-red-600" />;
-    }
-  };
-
-  const getTipoLabel = (tipo: 'ok' | 'sobra' | 'falta') => {
-    switch (tipo) {
-      case 'ok': return 'OK';
-      case 'sobra': return 'SOBRA';
-      case 'falta': return 'FALTA';
-    }
-  };
-
-  const getTipoBgClass = (tipo: 'ok' | 'sobra' | 'falta') => {
-    switch (tipo) {
-      case 'ok': return 'bg-green-50 border-green-200';
-      case 'sobra': return 'bg-yellow-50 border-yellow-200';
-      case 'falta': return 'bg-red-50 border-red-200';
-    }
-  };
+  if (loading) {
+    return <AppLayout><div className="text-center py-8 text-muted-foreground">Carregando inventários...</div></AppLayout>;
+  }
 
   return (
     <AppLayout>
@@ -322,377 +240,182 @@ export default function Conferencia() {
             Compare inventários físicos com o estoque teórico e analise divergências
           </p>
         </div>
-
-        {/* Dialog de conferência */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogContent className="border-2 max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Análise de Divergências</DialogTitle>
-              <DialogDescription>
-                Analise as divergências entre o estoque teórico e físico. Você pode editar as quantidades antes de aprovar.
-              </DialogDescription>
-            </DialogHeader>
-            
-            {selectedInventario && (
-              <div className="space-y-4">
-                <div className="p-3 bg-secondary border-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Vendedor</p>
-                      <p className="font-bold">{selectedInventario.profiles?.nome}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Código</p>
-                      <p className="font-mono font-bold">{selectedInventario.codigo_vendedor}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Data do Inventário</p>
-                      <p className="font-medium">{format(new Date(selectedInventario.data_inventario), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total de Itens</p>
-                      <p className="font-bold">{divergencias.length}</p>
-                    </div>
-                  </div>
-                  {selectedInventario.observacoes && (
-                    <div className="mt-3 pt-3 border-t">
-                      <p className="text-sm text-muted-foreground">Observações do vendedor:</p>
-                      <p className="text-sm mt-1">{selectedInventario.observacoes}</p>
-                    </div>
-                  )}
-                </div>
-
-                {/* Estatísticas */}
-                <DivergenciaStats
-                  totalItens={divergencias.length}
-                  itensCorretos={itensCorretos}
-                  itensSobra={itensSobra}
-                  itensFalta={itensFalta}
-                  valorTotalDivergencia={valorTotalDivergencia}
-                />
-
-                {hasDivergencias && (
-                  <div className="p-3 bg-yellow-50 border-2 border-yellow-300 flex items-start gap-2">
-                    <AlertTriangle className="text-yellow-800 shrink-0 mt-0.5" size={18} />
-                    <div>
-                      <p className="font-medium text-yellow-800">
-                        Atenção: {itensSobra + itensFalta} divergências encontradas
-                      </p>
-                      <p className="text-sm text-yellow-700">
-                        {itensSobra > 0 && `${itensSobra} produto(s) com sobra`}
-                        {itensSobra > 0 && itensFalta > 0 && ' • '}
-                        {itensFalta > 0 && `${itensFalta} produto(s) com falta`}
-                      </p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Alerta de itens não contados */}
-                {itensNaoContados.length > 0 && (
-                  <div className="p-3 bg-orange-50 border-2 border-orange-400 space-y-2">
-                    <div 
-                      className="flex items-start gap-2 cursor-pointer"
-                      onClick={() => setShowItensNaoContados(!showItensNaoContados)}
+        
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
+          {/* Coluna de Inventários (Master) */}
+          <div className="lg:col-span-1 overflow-y-auto pr-2">
+            <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+              <ClipboardList size={20} />
+              Inventários para Análise
+              <Badge variant="secondary">{inventarios.length}</Badge>
+            </h2>
+            {inventarios.length === 0 ? (
+              <Card className="border-2">
+                <CardContent className="py-12 text-center">
+                  <CheckCircle size={48} className="mx-auto mb-4 text-green-500" />
+                  <h2 className="text-xl font-bold mb-2">Nenhum inventário pendente</h2>
+                  <p className="text-muted-foreground">Não há nada para conferir no momento.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {inventarios.map((inv) => {
+                  const isRevisao = inv.status === 'revisao';
+                  return (
+                    <Card
+                      key={inv.id}
+                      className={`border-2 transition-all cursor-pointer group ${selectedInventario?.id === inv.id ? 'border-primary shadow-lg' : 'hover:border-primary/70'}`}
+                      onClick={() => handleSelectInventario(inv)}
                     >
-                      <PackageX className="text-orange-700 shrink-0 mt-0.5" size={18} />
-                      <div className="flex-1">
-                        <p className="font-medium text-orange-800">
-                          {itensNaoContados.length} produto(s) com estoque teórico NÃO foram contados
-                        </p>
-                        <p className="text-sm text-orange-700">
-                          O vendedor possui estoque teórico destes produtos, mas não os incluiu na contagem física.
-                        </p>
-                      </div>
-                      {showItensNaoContados ? (
-                        <ChevronUp className="text-orange-700 shrink-0" size={18} />
-                      ) : (
-                        <ChevronDown className="text-orange-700 shrink-0" size={18} />
-                      )}
-                    </div>
-                    
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <User size={16} /> {inv.profiles?.nome || 'Vendedor'}
+                          </CardTitle>
+                          <Badge variant={isRevisao ? 'destructive' : 'outline'}>{isRevisao ? 'Revisão' : 'Pendente'}</Badge>
+                        </div>
+                        <p className="font-mono text-xs text-muted-foreground pt-1">{inv.codigo_vendedor}</p>
+                      </CardHeader>
+                      <CardContent className="text-sm space-y-2">
+                        <div className="flex justify-between items-center text-muted-foreground">
+                          <span className="flex items-center gap-1.5"><Package size={14} /> {inv.itens_inventario.length} itens</span>
+                          <span className="flex items-center gap-1.5"><Calendar size={14} /> {format(new Date(inv.data_inventario), "dd/MM/yy")}</span>
+                        </div>
+                        <div className="text-xs text-muted-foreground pt-1">
+                          Enviado {formatDistanceToNow(new Date(inv.created_at), { addSuffix: true, locale: ptBR })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Coluna de Detalhes (Detail) */}
+          <div className="lg:col-span-2 overflow-y-auto pr-2 border-l-2 pl-6">
+            {!selectedInventario ? (
+              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
+                <ChevronsRight size={48} className="mb-4" />
+                <h2 className="text-xl font-bold">Selecione um inventário</h2>
+                <p>Escolha um inventário da lista para iniciar a análise.</p>
+              </div>
+            ) : isDetailLoading ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground">
+                <Loader2 className="mr-2 h-8 w-8 animate-spin" /> Carregando detalhes...
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <DivergenciaStats totalItens={divergencias.length} {...stats} />
+                
+                {itensNaoContados.length > 0 && (
+                  <Card className="bg-amber-50 border-amber-300">
+                    <CardHeader className="pb-3">
+                      <CardTitle 
+                        className="text-base flex items-center justify-between cursor-pointer"
+                        onClick={() => setShowItensNaoContados(!showItensNaoContados)}
+                      >
+                        <span className="flex items-center gap-2 text-amber-800"><PackageX size={18} /> {itensNaoContados.length} Itens Não Contados</span>
+                        {showItensNaoContados ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                      </CardTitle>
+                    </CardHeader>
                     {showItensNaoContados && (
-                      <div className="mt-3 border-t border-orange-300 pt-3">
-                        <div className="max-h-48 overflow-y-auto space-y-1">
+                      <CardContent>
+                        <p className="text-sm text-amber-700 mb-3">Estes itens possuem estoque teórico mas não foram contados.</p>
+                        <div className="max-h-40 overflow-y-auto space-y-1">
                           {itensNaoContados.map((item) => (
-                            <div 
-                              key={item.codigo_auxiliar} 
-                              className="flex items-center justify-between text-sm bg-orange-100 p-2 rounded"
-                            >
-                              <div>
-                                <span className="font-mono font-bold text-orange-900">{item.codigo_auxiliar}</span>
-                                <span className="text-orange-700 ml-2">{item.nome_produto}</span>
-                              </div>
-                              <Badge className="bg-orange-600 text-white border-0">
-                                Teórico: {item.estoque_teorico}
-                              </Badge>
+                            <div key={item.codigo_auxiliar} className="flex justify-between items-center text-sm bg-amber-100 p-2 rounded">
+                              <span><span className="font-mono font-bold">{item.codigo_auxiliar}</span> - {item.nome_produto}</span>
+                              <Badge className="bg-amber-600">Teórico: {item.estoque_teorico}</Badge>
                             </div>
                           ))}
                         </div>
-                        <p className="text-xs text-orange-600 mt-2">
-                          * Se estes produtos não foram encontrados fisicamente, pode indicar falta no estoque.
-                        </p>
-                      </div>
+                      </CardContent>
                     )}
-                  </div>
+                  </Card>
                 )}
 
-                {/* Filtros */}
+                <Card>
+                  <CardHeader>
+                    <div className="flex flex-col md:flex-row gap-3">
+                      <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
+                      <Select value={filterTipo} onValueChange={setFilterTipo}>
+                        <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="todos">Todos os Itens</SelectItem>
+                          <SelectItem value="ok">Apenas OK</SelectItem>
+                          <SelectItem value="sobra">Apenas Sobras</SelectItem>
+                          <SelectItem value="falta">Apenas Faltas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="border-2 rounded-lg overflow-hidden">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[45%]">Produto</TableHead>
+                            <TableHead className="text-center">Teórico</TableHead>
+                            <TableHead className="text-center">Físico</TableHead>
+                            <TableHead className="text-center">Divergência</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {paginatedDivergencias.length > 0 ? paginatedDivergencias.map((item) => (
+                            <TableRow key={item.codigo_auxiliar} className={item.tipo !== 'ok' ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5` : ''}>
+                              <TableCell>
+                                <p className="font-medium truncate">{item.nome_produto}</p>
+                                <p className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</p>
+                              </TableCell>
+                              <TableCell className="text-center font-medium">{item.estoque_teorico}</TableCell>
+                              <TableCell className="text-center">
+                                <Input
+                                  type="text"
+                                  value={editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica}
+                                  onChange={(e) => handleEditValue(item.codigo_auxiliar, e.target.value)}
+                                  className="w-20 h-8 text-center font-bold border-2 mx-auto"
+                                />
+                              </TableCell>
+                              <TableCell className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}>
+                                {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                              </TableCell>
+                            </TableRow>
+                          )) : (
+                            <TableRow><TableCell colSpan={4} className="h-24 text-center">Nenhum item corresponde ao filtro.</TableCell></TableRow>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {paginationProps.totalPages > 1 && (
+                      <div className="pt-4"><Pagination {...paginationProps} /></div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                <div className="space-y-2">
+                  <label className="font-medium">Observações para o Vendedor (opcional)</label>
+                  <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Se não aprovar, explique o motivo aqui..." />
+                </div>
+
                 <div className="flex flex-col sm:flex-row gap-3">
-                  <SearchFilter
-                    value={searchTerm}
-                    onChange={setSearchTerm}
-                    placeholder="Buscar por código ou produto..."
-                  />
-                  <Select value={filterTipo} onValueChange={setFilterTipo}>
-                    <SelectTrigger className="w-full sm:w-40 border-2">
-                      <SelectValue placeholder="Filtrar" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background border-2 z-50">
-                      <SelectItem value="todos">Todos</SelectItem>
-                      <SelectItem value="ok">Apenas OK</SelectItem>
-                      <SelectItem value="sobra">Apenas Sobras</SelectItem>
-                      <SelectItem value="falta">Apenas Faltas</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="overflow-x-auto border-2 rounded-lg">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b-2 bg-secondary">
-                        <th className="text-left py-3 px-3">Produto</th>
-                        <th className="text-center py-3 px-3">Teórico</th>
-                        <th className="text-center py-3 px-3">Físico</th>
-                        <th className="text-center py-3 px-3">Diferença</th>
-                        <th className="text-center py-3 px-3">%</th>
-                        <th className="text-center py-3 px-3">Status</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedDivergencias.map((item) => (
-                        <tr 
-                          key={item.codigo_auxiliar} 
-                          className={`border-b ${getTipoBgClass(item.tipo)}`}
-                        >
-                          <td className="py-3 px-3">
-                            <span className="font-mono font-bold text-sm">{item.codigo_auxiliar}</span>
-                            <br />
-                            <span className="text-xs text-muted-foreground">{item.nome_produto}</span>
-                          </td>
-                          <td className="py-3 px-3 text-center font-bold text-blue-600">{item.estoque_teorico}</td>
-                          <td className="py-3 px-3 text-center">
-                            <Input
-                              type="number"
-                              min="0"
-                              value={editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica}
-                              onChange={(e) => handleEditValue(item.codigo_auxiliar, parseInt(e.target.value) || 0)}
-                              className="w-20 text-center font-bold border-2 mx-auto"
-                            />
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <span className={`font-bold text-lg ${
-                              item.diferenca > 0 
-                                ? 'text-yellow-600' 
-                                : item.diferenca < 0 
-                                  ? 'text-red-600' 
-                                  : 'text-green-600'
-                            }`}>
-                              {item.diferenca > 0 ? '+' : ''}{item.diferenca}
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <span className={`text-sm font-medium ${
-                              item.percentual > 0 
-                                ? 'text-yellow-700' 
-                                : item.percentual < 0 
-                                  ? 'text-red-700' 
-                                  : 'text-green-700'
-                            }`}>
-                              {item.percentual > 0 ? '+' : ''}{item.percentual.toFixed(0)}%
-                            </span>
-                          </td>
-                          <td className="py-3 px-3 text-center">
-                            <Badge variant="outline" className={`${getTipoBgClass(item.tipo)} border-2 font-bold`}>
-                              <span className="flex items-center gap-1">
-                                {getTipoIcon(item.tipo)}
-                                {getTipoLabel(item.tipo)}
-                              </span>
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {totalItems > itemsPerPage && (
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    itemsPerPage={itemsPerPage}
-                    totalItems={totalItems}
-                    startIndex={startIndex}
-                    endIndex={endIndex}
-                    onPageChange={handlePageChange}
-                    onItemsPerPageChange={handleItemsPerPageChange}
-                  />
-                )}
-
-                <div>
-                  <label className="font-medium">Observações do Gerente</label>
-                  <Textarea
-                    value={observacoes}
-                    onChange={(e) => setObservacoes(e.target.value)}
-                    placeholder="Adicione observações sobre a conferência..."
-                    className="mt-2 border-2"
-                    rows={3}
-                  />
-                </div>
-
-                {hasEdits && (
-                  <Button onClick={handleSaveEdits} disabled={saving} className="w-full bg-blue-600 hover:bg-blue-700">
-                    <Save className="mr-2" size={16} />
-                    {saving ? 'Salvando...' : 'Salvar Alterações'}
+                  {hasEdits && (
+                    <Button onClick={handleSaveEdits} disabled={saving} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
+                      <Save size={16} className="mr-2" />{saving ? 'Salvando...' : 'Salvar Alterações'}
+                    </Button>
+                  )}
+                  <div className="flex-1" />
+                  <Button onClick={() => handleManagerAction('revisao')} disabled={saving} variant="destructive" className="w-full sm:w-auto">
+                    <XCircle size={16} className="mr-2" />Não Aprovar
                   </Button>
-                )}
-
-                <div className="flex gap-3">
-                  <Button onClick={handleAprovar} className="flex-1 bg-green-600 hover:bg-green-700">
-                    <CheckCircle className="mr-2" size={16} />
-                    Aprovar Inventário
-                  </Button>
-                  <Button 
-                    onClick={handleRevisao} 
-                    variant="destructive"
-                    className="flex-1"
-                  >
-                    <XCircle className="mr-2" size={16} />
-                    Não Aprovar
+                  <Button onClick={() => handleManagerAction('aprovar')} disabled={saving} className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
+                    <CheckCircle size={16} className="mr-2" />{saving ? 'Processando...' : 'Aprovar e Ajustar'}
                   </Button>
                 </div>
               </div>
             )}
-          </DialogContent>
-        </Dialog>
-
-        {loading ? (
-          <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-        ) : inventarios.length === 0 ? (
-          <Card className="border-2">
-            <CardContent className="py-12 text-center">
-              <ClipboardList size={48} className="mx-auto mb-4 text-muted-foreground" />
-              <h2 className="text-xl font-bold mb-2">Nenhum inventário pendente</h2>
-              <p className="text-muted-foreground">
-                Não há inventários aguardando conferência.
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <ClipboardList size={20} />
-                Selecione o Inventário para Análise
-              </h2>
-              <Badge variant="outline" className="text-sm">
-                {inventarios.length} inventário(s)
-              </Badge>
-            </div>
-            
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-              {inventarios.map((inventario) => {
-                const isRevisao = inventario.status === 'revisao';
-                const tempoDecorrido = formatDistanceToNow(new Date(inventario.created_at), { 
-                  addSuffix: true, 
-                  locale: ptBR 
-                });
-                
-                return (
-                  <Card 
-                    key={inventario.id} 
-                    className={`border-2 hover:border-primary hover:shadow-lg transition-all cursor-pointer group ${
-                      isRevisao 
-                        ? 'border-yellow-400 bg-yellow-50/50 dark:bg-yellow-950/20' 
-                        : 'hover:bg-accent/30'
-                    }`}
-                    onClick={() => openConferencia(inventario)}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <div className={`p-2 rounded-full ${isRevisao ? 'bg-yellow-200' : 'bg-primary/10'}`}>
-                            <User size={18} className={isRevisao ? 'text-yellow-700' : 'text-primary'} />
-                          </div>
-                          <div>
-                            <CardTitle className="text-base">
-                              {inventario.profiles?.nome || 'Vendedor'}
-                            </CardTitle>
-                            <Badge variant="outline" className="font-mono text-xs mt-1">
-                              {inventario.codigo_vendedor}
-                            </Badge>
-                          </div>
-                        </div>
-                        {isRevisao ? (
-                          <Badge className="bg-yellow-500 text-yellow-950 border-0 shrink-0">
-                            <AlertTriangle size={12} className="mr-1" />
-                            Revisão
-                          </Badge>
-                        ) : (
-                          <Badge className="bg-blue-500 text-white border-0 shrink-0">
-                            <Clock size={12} className="mr-1" />
-                            Pendente
-                          </Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    
-                    <CardContent className="space-y-3">
-                      <div className="grid grid-cols-2 gap-2 text-sm">
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Package size={14} />
-                          <span className="font-medium text-foreground">{inventario.itens_inventario.length}</span>
-                          <span>itens</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-muted-foreground">
-                          <Calendar size={14} />
-                          <span>{format(new Date(inventario.data_inventario), "dd/MM/yy", { locale: ptBR })}</span>
-                        </div>
-                      </div>
-                      
-                      <div className="text-xs text-muted-foreground">
-                        Enviado {tempoDecorrido}
-                      </div>
-                      
-                      {inventario.observacoes && (
-                        <div className="text-xs text-muted-foreground bg-secondary/50 p-2 rounded truncate">
-                          "{inventario.observacoes}"
-                        </div>
-                      )}
-                      
-                      {isRevisao && inventario.observacoes_gerente && (
-                        <div className="text-xs text-yellow-700 bg-yellow-100 p-2 rounded">
-                          <span className="font-medium">Obs. Gerente:</span> {inventario.observacoes_gerente}
-                        </div>
-                      )}
-                      
-                      <Button 
-                        className="w-full group-hover:bg-primary group-hover:text-primary-foreground transition-colors"
-                        variant="outline"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openConferencia(inventario);
-                        }}
-                      >
-                        <Eye className="mr-2" size={16} />
-                        Analisar Inventário
-                      </Button>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
           </div>
-        )}
+        </div>
       </div>
     </AppLayout>
   );

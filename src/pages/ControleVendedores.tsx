@@ -64,8 +64,8 @@ export default function ControleVendedores() {
     endIndex,
     paginatedData,
     totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
+    onPageChange,
+    onItemsPerPageChange,
   } = usePagination({
     data: filteredMovimentacoes,
     searchTerm,
@@ -395,8 +395,8 @@ export default function ControleVendedores() {
                   totalItems={totalItems}
                   startIndex={startIndex}
                   endIndex={endIndex}
-                  onPageChange={handlePageChange}
-                  onItemsPerPageChange={handleItemsPerPageChange}
+                  onPageChange={onPageChange}
+                  onItemsPerPageChange={onItemsPerPageChange}
                 />
               </>
             )}

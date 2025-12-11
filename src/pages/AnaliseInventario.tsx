@@ -17,6 +17,15 @@ import { AlertTriangle, PackageSearch, CheckCircle, Loader2 } from 'lucide-react
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
 
 interface InventarioInfo {
   id: string;
@@ -41,10 +50,29 @@ export default function AnaliseInventario() {
   const [error, setError] = useState<string | null>(null);
   const [comparativo, setComparativo] = useState<ComparativoItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [divergenceFilter, setDivergenceFilter] = useState('todos');
+  const [vendedores, setVendedores] = useState<{codigo_vendedor: string, nome: string}[]>([]);
+  const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
 
   const isGerente = profile?.role === 'gerente';
   const queryClient = useQueryClient();
 
+  const filteredComparativo = useMemo(() => {
+    let filteredData = comparativo;
+
+    if (divergenceFilter === 'com_divergencia') {
+      filteredData = filteredData.filter(item => item.divergencia !== 0);
+    } else if (divergenceFilter === 'sem_divergencia') {
+      filteredData = filteredData.filter(item => item.divergencia === 0);
+    } else if (divergenceFilter === 'positiva') {
+      filteredData = filteredData.filter(item => item.divergencia > 0);
+    } else if (divergenceFilter === 'negativa') {
+      filteredData = filteredData.filter(item => item.divergencia < 0);
+    }
+
+    return filteredData;
+  }, [comparativo, divergenceFilter]);
+  
   const {
     currentPage,
     totalPages,
@@ -53,10 +81,10 @@ export default function AnaliseInventario() {
     endIndex,
     paginatedData: paginatedComparativo,
     totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
+    onPageChange,
+    onItemsPerPageChange,
   } = usePagination({
-    data: comparativo,
+    data: filteredComparativo,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
@@ -73,6 +101,8 @@ export default function AnaliseInventario() {
       // Gerentes podem ver todos, vendedores apenas os seus
       if (!isGerente) {
         query = query.eq('codigo_vendedor', profile.codigo_vendedor);
+      } else if (selectedVendedor !== 'todos') {
+        query = query.eq('codigo_vendedor', selectedVendedor);
       }
 
       const { data, error } = await query;
@@ -89,7 +119,32 @@ export default function AnaliseInventario() {
     };
 
     fetchInventarios();
-  }, [profile, isGerente, selectedInventario]);
+  }, [profile, isGerente, selectedInventario, selectedVendedor]);
+
+  useEffect(() => {
+    const fetchVendedores = async () => {
+      if (!isGerente) return; // Only managers can filter by seller
+
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('codigo_vendedor, nome')
+        .eq('role', 'vendedor')
+        .order('nome');
+
+      if (error) {
+        console.error("Erro ao buscar vendedores:", error);
+      } else {
+        setVendedores(data || []);
+      }
+    };
+
+    fetchVendedores();
+  }, [isGerente]);
+
+  useEffect(() => {
+    // Reset selected inventory when seller filter changes
+    setSelectedInventario(null);
+  }, [selectedVendedor]);
 
   useEffect(() => {
     const fetchComparativo = async () => {
@@ -191,6 +246,24 @@ export default function AnaliseInventario() {
                   ))}
                 </SelectContent>
               </Select>
+              {isGerente && (
+                <Select
+                  value={selectedVendedor}
+                  onValueChange={setSelectedVendedor}
+                >
+                  <SelectTrigger className="w-full sm:w-72">
+                    <SelectValue placeholder="Filtrar por vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os vendedores</SelectItem>
+                    {vendedores.map((vendedor) => (
+                      <SelectItem key={vendedor.codigo_vendedor} value={vendedor.codigo_vendedor}>
+                        {vendedor.nome} ({vendedor.codigo_vendedor})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -242,44 +315,62 @@ export default function AnaliseInventario() {
                   )}
                 </div>
                 
-                <div className="border-2 rounded-lg">
-                    <div className="p-4 border-b-2">
+                <div className="border-2 rounded-lg overflow-hidden">
+                    <div className="p-4 border-b-2 flex flex-col md:flex-row gap-4">
                         <SearchFilter
                             value={searchTerm}
                             onChange={setSearchTerm}
                             placeholder="Buscar por código ou produto..."
                         />
+                        <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
+                          <SelectTrigger className="w-full md:w-52">
+                            <SelectValue placeholder="Filtrar por divergência" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="todos">Todas as divergências</SelectItem>
+                            <SelectItem value="com_divergencia">Com divergência</SelectItem>
+                            <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
+                            <SelectItem value="positiva">Divergência positiva</SelectItem>
+                            <SelectItem value="negativa">Divergência negativa</SelectItem>
+                          </SelectContent>
+                        </Select>
                     </div>
-                    <div className="p-4 bg-muted/50 text-sm font-medium grid grid-cols-4 gap-4">
-                        <div>Produto</div>
-                        <div className="text-center">Est. Teórico</div>
-                        <div className="text-center">Est. Físico</div>
-                        <div className="text-center">Divergência</div>
-                    </div>
-                    {totalItems === 0 ? (
-                        <div className="text-center p-8 text-muted-foreground">
-                            {searchTerm ? `Nenhum item encontrado para "${searchTerm}"` : 'Nenhum item para comparar neste inventário.'}
-                        </div>
-                    ) : (
-                        <div className="space-y-2 p-4">
-                            {paginatedComparativo.map(item => (
-                                <div key={item.codigo_auxiliar} className={`grid grid-cols-4 gap-4 items-center p-2 rounded-md ${item.divergencia !== 0 ? 'bg-amber-500/10' : ''}`}>
-                                    <div>
-                                        <p className="font-semibold truncate">{item.nome_produto}</p>
-                                        <p className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</p>
-                                    </div>
-                                    <div className="text-center font-medium">{item.estoque_teorico}</div>
-                                    <div className="text-center font-medium">{item.quantidade_fisica}</div>
-                                    <div className={`text-center font-bold text-lg ${
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead className="w-[40%]">Produto</TableHead>
+                          <TableHead className="text-center">Est. Teórico</TableHead>
+                          <TableHead className="text-center">Est. Físico</TableHead>
+                          <TableHead className="text-center">Divergência</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {totalItems === 0 ? (
+                            <TableRow>
+                                <TableCell colSpan={4} className="text-center p-8 text-muted-foreground">
+                                    {searchTerm ? `Nenhum item encontrado para "${searchTerm}"` : 'Nenhum item para comparar neste inventário.'}
+                                </TableCell>
+                            </TableRow>
+                        ) : (
+                            paginatedComparativo.map(item => (
+                                <TableRow key={item.codigo_auxiliar} className={item.divergencia !== 0 ? 'bg-amber-500/5' : ''}>
+                                    <TableCell>
+                                        <div className="font-semibold truncate">{item.nome_produto}</div>
+                                        <div className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</div>
+                                    </TableCell>
+                                    <TableCell className="text-center font-medium">{item.estoque_teorico}</TableCell>
+                                    <TableCell className="text-center font-medium">{item.quantidade_fisica}</TableCell>
+                                    <TableCell className={`text-center font-bold text-lg ${
                                         item.divergencia > 0 ? 'text-green-600' :
                                         item.divergencia < 0 ? 'text-destructive' : ''
                                     }`}>
                                         {item.divergencia > 0 ? `+${item.divergencia}` : item.divergencia}
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+                                    </TableCell>
+                                </TableRow>
+                            ))
+                        )}
+                      </TableBody>
+                    </Table>
                      {totalPages > 1 && (
                         <div className="p-4 border-t-2">
                             <Pagination
@@ -289,8 +380,8 @@ export default function AnaliseInventario() {
                                 totalItems={totalItems}
                                 startIndex={startIndex}
                                 endIndex={endIndex}
-                                onPageChange={handlePageChange}
-                                onItemsPerPageChange={handleItemsPerPageChange}
+                                onPageChange={onPageChange}
+                                onItemsPerPageChange={onItemsPerPageChange}
                             />
                         </div>
                     )}

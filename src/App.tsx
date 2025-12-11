@@ -3,7 +3,7 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
 import { ImportProgress } from "@/components/ImportProgress";
 import { ImportBlocker } from "@/components/ImportBlocker";
@@ -25,6 +25,12 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+const HomeRedirect = () => {
+  const { profile } = useAuth();
+  const redirectPath = profile?.role === 'vendedor' ? '/inventario' : '/dashboard';
+  return <Navigate to={redirectPath} replace />;
+};
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
@@ -36,22 +42,22 @@ const App = () => (
           <BrowserRouter>
             <ImportBlocker />
           <Routes>
-            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+            <Route path="/" element={<HomeRedirect />} />
             <Route path="/auth" element={<Auth />} />
             
             {/* Rotas protegidas para todos */}
             <Route path="/dashboard" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['gerente']}>
                 <Dashboard />
               </ProtectedRoute>
             } />
             <Route path="/estoque-teorico" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['gerente']}>
                 <EstoqueTeorico />
               </ProtectedRoute>
             } />
              <Route path="/analise-inventario" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['gerente']}>
                 <AnaliseInventario />
               </ProtectedRoute>
             } />
@@ -95,12 +101,12 @@ const App = () => (
               </ProtectedRoute>
             } />
             <Route path="/pedidos" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['gerente']}>
                 <Pedidos />
               </ProtectedRoute>
             } />
             <Route path="/movimentacoes" element={
-              <ProtectedRoute>
+              <ProtectedRoute allowedRoles={['gerente']}>
                 <Movimentacoes />
               </ProtectedRoute>
             } />

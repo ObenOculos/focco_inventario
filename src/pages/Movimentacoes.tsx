@@ -54,8 +54,8 @@ export default function Movimentacoes() {
     endIndex,
     paginatedData: paginatedMovimentacoes,
     totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
+    onPageChange,
+    onItemsPerPageChange,
   } = usePagination({
     data: movimentacoes.filter(mov => {
       // Filtro por origem
@@ -337,8 +337,8 @@ export default function Movimentacoes() {
               totalItems={totalItems}
               startIndex={startIndex}
               endIndex={endIndex}
-              onPageChange={handlePageChange}
-              onItemsPerPageChange={handleItemsPerPageChange}
+              onPageChange={onPageChange}
+              onItemsPerPageChange={onItemsPerPageChange}
             />
           </>
         )}

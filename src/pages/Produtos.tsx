@@ -37,8 +37,8 @@ export default function Produtos() {
     endIndex,
     paginatedData: paginatedProdutos,
     totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
+    onPageChange,
+    onItemsPerPageChange,
   } = usePagination({
     data: produtos,
     itemsPerPage: 24,
@@ -269,8 +269,8 @@ export default function Produtos() {
               totalItems={totalItems}
               startIndex={startIndex}
               endIndex={endIndex}
-              onPageChange={handlePageChange}
-              onItemsPerPageChange={handleItemsPerPageChange}
+              onPageChange={onPageChange}
+              onItemsPerPageChange={onItemsPerPageChange}
             />
           </>
         )}

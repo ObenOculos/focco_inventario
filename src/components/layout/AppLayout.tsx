@@ -36,18 +36,13 @@ export function AppLayout({ children }: AppLayoutProps) {
   const isGerente = profile?.role === 'gerente';
 
   const vendedorLinks = [
-    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
-    { to: '/pedidos', icon: FileText, label: 'Meus Pedidos' },
-    { to: '/movimentacoes', icon: RefreshCw, label: 'Movimentações' },
     { to: '/inventario', icon: ClipboardList, label: 'Inventário' },
-    { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
     { to: '/historico', icon: History, label: 'Histórico' },
   ];
 
   const gerenteLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
+    { to: '/estoque-teorico', icon: Package, label: 'Estoque' },
     { to: '/controle-vendedores', icon: ClipboardList, label: 'Controle de Vendedores' },
     { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
     { to: '/pedidos', icon: FileText, label: 'Gestão de Pedidos' },

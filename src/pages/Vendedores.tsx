@@ -36,8 +36,8 @@ export default function Vendedores() {
     endIndex,
     paginatedData: paginatedVendedores,
     totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
+    onPageChange,
+    onItemsPerPageChange,
   } = usePagination({
     data: vendedores,
     searchTerm,
@@ -361,8 +361,8 @@ export default function Vendedores() {
               totalItems={totalItems}
               startIndex={startIndex}
               endIndex={endIndex}
-              onPageChange={handlePageChange}
-              onItemsPerPageChange={handleItemsPerPageChange}
+              onPageChange={onPageChange}
+              onItemsPerPageChange={onItemsPerPageChange}
             />
           </>
         )}

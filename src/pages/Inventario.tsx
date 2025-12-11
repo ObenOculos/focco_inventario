@@ -8,9 +8,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
-import { Camera, Plus, Trash2, Send, QrCode, Check, X, Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Check, X, Search } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import { useEstoqueTeoricoPorVendedor } from '@/hooks/useEstoqueTeoricoPorVendedor';
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { usePagination } from '@/hooks/usePagination';
+import { Pagination } from '@/components/Pagination';
 
 interface InventarioItem {
   codigo_auxiliar: string;
@@ -33,17 +42,9 @@ export default function Inventario() {
   const [manualCode, setManualCode] = useState('');
   const [observacoes, setObservacoes] = useState('');
   const [loading, setLoading] = useState(false); // Loading para envio
-  const [initialLoading, setInitialLoading] = useState(true); // Loading para carga inicial
   const scannerRef = useRef<Html5Qrcode | null>(null);
-  
-  // Busca o estoque teórico inicial
-  const { data: estoqueTeorico, isLoading: isEstoqueLoading } = useEstoqueTeoricoPorVendedor(profile?.codigo_vendedor);
+  const [searchTerm, setSearchTerm] = useState('');
 
-  // Estados para filtro e paginação
-  const [filterText, setFilterText] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
-  
   // Estados para modal de confirmação
   const [pendingProduct, setPendingProduct] = useState<{
     code: string; 
@@ -53,39 +54,16 @@ export default function Inventario() {
   } | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
-  // Popula a lista de itens com o estoque teórico quando carregado
-  useEffect(() => {
-    if (!isEstoqueLoading && estoqueTeorico) {
-      const initialItems = estoqueTeorico.map(item => ({
-        codigo_auxiliar: item.codigo_auxiliar,
-        nome_produto: item.nome_produto,
-        quantidade_fisica: 0, // Inicia com 0, aguardando contagem
-      }));
-      setItems(initialItems);
-      setInitialLoading(false);
-    }
-  }, [estoqueTeorico, isEstoqueLoading]);
-
   // Filtrar e paginar itens
-  const filteredItems = useMemo(() => {
-    if (!filterText.trim()) return items;
-    const search = filterText.toLowerCase();
-    return items.filter(item => 
-      item.codigo_auxiliar.toLowerCase().includes(search) ||
-      item.nome_produto.toLowerCase().includes(search)
-    );
-  }, [items, filterText]);
-
-  const totalPages = Math.ceil(filteredItems.length / itemsPerPage);
-  const paginatedItems = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredItems.slice(start, start + itemsPerPage);
-  }, [filteredItems, currentPage, itemsPerPage]);
-
-  // Reset para página 1 quando filtrar
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [filterText]);
+  const {
+    paginatedData: paginatedItems,
+    ...paginationProps
+  } = usePagination({
+    data: items,
+    searchTerm,
+    searchFields: ['codigo_auxiliar', 'nome_produto'],
+    itemsPerPage: 10,
+  });
 
   const startScanner = async () => {
     try {
@@ -277,8 +255,6 @@ export default function Inventario() {
       toast.success('Inventário enviado para conferência!');
       setItems([]);
       setObservacoes('');
-      // Recarregar a lista inicial
-      setInitialLoading(true);
     } catch (error: any) {
       console.error('Erro ao salvar inventário:', error);
       toast.error('Erro ao salvar inventário');
@@ -314,11 +290,11 @@ export default function Inventario() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-2xl mx-auto">
+      <div className="space-y-6 max-w-4xl mx-auto">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Novo Inventário</h1>
           <p className="text-muted-foreground">
-            A lista de produtos do seu estoque foi pré-carregada. Conte os itens e preencha as quantidades.
+            Use o scanner ou a adição manual para começar a montar seu inventário.
           </p>
         </div>
 
@@ -374,108 +350,86 @@ export default function Inventario() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
               <Input
                 placeholder="Filtrar por código ou nome..."
-                value={filterText}
-                onChange={(e) => setFilterText(e.target.value)}
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9 border-2"
               />
             </div>
           </CardHeader>
           <CardContent>
-            {initialLoading ? (
-              <div className="flex flex-col items-center gap-4 py-10">
-                <Loader2 className="w-8 h-8 animate-spin text-muted-foreground" />
-                <p className="text-muted-foreground">Carregando seu estoque teórico...</p>
+            <div className="border-2 rounded-lg overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Produto</TableHead>
+                    <TableHead className="w-24 text-center">Qtd</TableHead>
+                    <TableHead className="w-12 text-center">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedItems.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
+                        {searchTerm ? `Nenhum item encontrado para "${searchTerm}"` : 'Nenhum item adicionado ainda.'}
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    paginatedItems.map((item) => (
+                      <TableRow key={item.codigo_auxiliar}>
+                        <TableCell>
+                          <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
+                          <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Input
+                            type="number"
+                            min="0"
+                            value={item.quantidade_fisica}
+                            onChange={(e) => updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)}
+                            className="w-20 border-2 text-center mx-auto"
+                          />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeItem(item.codigo_auxiliar)}
+                            className="text-destructive hover:bg-destructive/10"
+                          >
+                            <Trash2 size={16} />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+
+            {paginationProps.totalPages > 1 && (
+              <div className="mt-4">
+                <Pagination {...paginationProps} />
               </div>
-            ) : (
-              <>
-                <div className="space-y-3">
-                  {paginatedItems.map((item) => (
-                    <div key={item.codigo_auxiliar} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 p-3 border-2 border-border">
-                      <div className="flex-1 min-w-0">
-                        <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
-                        <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
-                      </div>
-                      <div className="flex items-center gap-2 justify-between sm:justify-end">
-                        <Input
-                          type="number"
-                          min="0"
-                          value={item.quantidade_fisica}
-                          onChange={(e) => updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)}
-                          className="w-20 border-2 text-center"
-                        />
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => removeItem(item.codigo_auxiliar)}
-                          className="border-2 text-destructive hover:bg-destructive hover:text-destructive-foreground shrink-0"
-                        >
-                          <Trash2 size={16} />
-                        </Button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {totalPages > 1 && (
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t-2 border-border">
-                    <span className="text-sm text-muted-foreground">
-                      Página {currentPage} de {totalPages}
-                    </span>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                        disabled={currentPage === 1}
-                        className="border-2"
-                      >
-                        <ChevronLeft size={16} />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                        disabled={currentPage === totalPages}
-                        className="border-2"
-                      >
-                        <ChevronRight size={16} />
-                      </Button>
-                    </div>
-                  </div>
-                )}
-
-                {filteredItems.length === 0 && filterText && (
-                  <p className="text-center text-muted-foreground py-4">
-                    Nenhum item encontrado para "{filterText}"
-                  </p>
-                )}
-                
-                {items.length === 0 && !initialLoading && (
-                   <p className="text-center text-muted-foreground py-4">
-                    Seu estoque teórico está vazio. Comece escaneando itens.
-                  </p>
-                )}
-
-                <div className="mt-4 pt-4 border-t-2">
-                  <Label className="font-medium">Observações</Label>
-                  <Textarea
-                    placeholder="Observações sobre o inventário..."
-                    value={observacoes}
-                    onChange={(e) => setObservacoes(e.target.value)}
-                    className="mt-2 border-2"
-                  />
-                </div>
-
-                <Button 
-                  className="w-full mt-4" 
-                  onClick={handleSubmit}
-                  disabled={loading || initialLoading}
-                >
-                  <Send className="mr-2" size={16} />
-                  {loading ? 'Enviando...' : 'Enviar para Conferência'}
-                </Button>
-              </>
             )}
+
+            <div className="mt-6 pt-6 border-t-2">
+              <Label className="font-medium">Observações</Label>
+              <Textarea
+                placeholder="Observações sobre o inventário..."
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                className="mt-2 border-2"
+              />
+            </div>
+
+            <Button 
+              className="w-full mt-4" 
+              onClick={handleSubmit}
+              disabled={loading}
+            >
+              <Send className="mr-2" size={16} />
+              {loading ? 'Enviando...' : 'Enviar para Conferência'}
+            </Button>
           </CardContent>
         </Card>
       </div>

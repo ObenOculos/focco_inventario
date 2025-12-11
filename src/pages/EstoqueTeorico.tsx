@@ -13,6 +13,14 @@ import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { calcularEstoqueTeorico, buscarEstoqueReal } from '@/lib/estoque';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 interface VendedorProfile {
   id: string;
@@ -67,8 +75,8 @@ export default function EstoqueTeorico() {
     endIndex,
     paginatedData: paginatedEstoque,
     totalItems,
-    handlePageChange,
-    handleItemsPerPageChange,
+    onPageChange,
+    onItemsPerPageChange,
   } = usePagination({
     data: estoque,
     searchTerm,
@@ -362,95 +370,95 @@ export default function EstoqueTeorico() {
               </div>
             ) : (
               <>
-                <div className="space-y-2">
-                  {paginatedEstoque.map((item) => (
-                  <div 
-                    key={item.codigo_auxiliar}
-                    className={`p-4 border-2 rounded-lg ${
-                      item.estoque_teorico < 0 
-                        ? 'border-destructive bg-destructive/5' 
-                        : 'border-border'
-                    }`}
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="font-mono font-bold text-sm">
-                            {item.codigo_auxiliar}
-                          </span>
-                          {item.estoque_teorico < 0 && (
-                            <AlertTriangle className="text-destructive shrink-0" size={16} />
-                          )}
-                        </div>
-                        <p className="text-sm text-muted-foreground truncate">
-                          {item.nome_produto}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-6 text-sm">
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Remessas</p>
-                          <p className="font-bold text-blue-600">{item.quantidade_remessa}</p>
-                        </div>
-                        <div className="text-center">
-                          <p className="text-xs text-muted-foreground">Vendas</p>
-                          <p className="font-bold text-green-600">{item.quantidade_venda}</p>
-                        </div>
-                        <div className="text-center border-l-2 border-border pl-4">
-                          <p className="text-xs text-muted-foreground font-medium">Estoque Real</p>
-                          <p className={`font-bold text-xl ${estoqueReal.has(item.codigo_auxiliar) ? 'text-purple-600' : 'text-muted-foreground'}`}>
-                            {estoqueReal.get(item.codigo_auxiliar)?.quantidade_real ?? '-'}
-                          </p>
-                          {estoqueReal.has(item.codigo_auxiliar) && (
-                            <p className="text-xs text-muted-foreground mt-1">
-                              Atualizado
-                            </p>
-                          )}
-                        </div>
-                        <div className="text-center border-l-2 border-border pl-4">
-                          <p className="text-xs text-muted-foreground font-medium">Saldo Teórico</p>
-                          <p className={`font-bold text-xl ${
-                            item.estoque_teorico < 0 
-                              ? 'text-destructive' 
-                              : 'text-foreground'
-                          }`}>
-                            {item.estoque_teorico}
-                          </p>
-                        </div>
-                        {estoqueReal.has(item.codigo_auxiliar) && (() => {
-                          const real = estoqueReal.get(item.codigo_auxiliar)!.quantidade_real;
-                          const diff = item.estoque_teorico - real;
-                          
-                          // Mostrar "OK" se houve ajustes realizados para este produto
-                          if (ajustesRealizados.has(item.codigo_auxiliar)) return (
-                            <div className="text-center border-l-2 border-border pl-4">
-                              <p className="text-xs text-muted-foreground font-medium">Status</p>
-                              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 text-sm px-2 py-1">
-                                ✓ Ajustado
-                              </Badge>
-                            </div>
-                          );
-                          
-                          // Se não houve ajustes, mostrar a diferença
-                          return (
-                            <div className="text-center border-l-2 border-border pl-4">
-                              <p className="text-xs text-muted-foreground font-medium">Diferença</p>
-                              <Badge 
-                                variant="outline" 
-                                className={`text-sm px-2 py-1 font-bold ${
-                                  diff > 0 
-                                    ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
-                                    : 'bg-destructive/10 text-destructive border-destructive/30'
-                                }`}
-                              >
-                                {diff > 0 ? '+' : ''}{diff}
-                              </Badge>
-                            </div>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  </div>
-                  ))}
+                <div className="border-2 rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[40%]">Produto</TableHead>
+                        <TableHead className="text-center">Remessas</TableHead>
+                        <TableHead className="text-center">Vendas</TableHead>
+                        <TableHead className="text-center">Est. Real</TableHead>
+                        <TableHead className="text-center">Saldo Teórico</TableHead>
+                        <TableHead className="text-center">Status/Diferença</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedEstoque.map((item) => {
+                        const realInfo = estoqueReal.get(item.codigo_auxiliar);
+                        const temEstoqueReal = !!realInfo;
+                        const quantidadeReal = realInfo?.quantidade_real ?? '-';
+                        const isAjustado = ajustesRealizados.has(item.codigo_auxiliar);
+                        const diff = temEstoqueReal && typeof quantidadeReal === 'number'
+                          ? item.estoque_teorico - quantidadeReal
+                          : null;
+
+                        return (
+                          <TableRow 
+                            key={item.codigo_auxiliar}
+                            className={item.estoque_teorico < 0 ? 'bg-destructive/5' : ''}
+                          >
+                            <TableCell>
+                              <div className="flex items-center gap-2">
+                                {item.estoque_teorico < 0 && (
+                                  <AlertTriangle className="text-destructive shrink-0" size={16} />
+                                )}
+                                <div>
+                                  <span className="font-mono font-bold text-sm">
+                                    {item.codigo_auxiliar}
+                                  </span>
+                                  <p className="text-xs text-muted-foreground truncate">
+                                    {item.nome_produto}
+                                  </p>
+                                </div>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <p className="font-bold text-blue-600">{item.quantidade_remessa}</p>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <p className="font-bold text-green-600">{item.quantidade_venda}</p>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <p className={`font-bold text-lg ${temEstoqueReal ? 'text-purple-600' : 'text-muted-foreground'}`}>
+                                {quantidadeReal}
+                              </p>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <p className={`font-bold text-lg ${item.estoque_teorico < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                                {item.estoque_teorico}
+                              </p>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {temEstoqueReal ? (
+                                isAjustado ? (
+                                  <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs px-2">
+                                    ✓ Ajustado
+                                  </Badge>
+                                ) : (
+                                  diff !== null && (
+                                    <Badge 
+                                      variant="outline" 
+                                      className={`text-xs px-2 font-bold ${
+                                        diff > 0 
+                                          ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
+                                          : diff < 0 
+                                            ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                            : 'border-transparent'
+                                      }`}
+                                    >
+                                      {diff > 0 ? `+${diff}` : diff === 0 ? 'OK' : diff}
+                                    </Badge>
+                                  )
+                                )
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
                 </div>
 
                 <Pagination
@@ -460,8 +468,8 @@ export default function EstoqueTeorico() {
                   totalItems={totalItems}
                   startIndex={startIndex}
                   endIndex={endIndex}
-                  onPageChange={handlePageChange}
-                  onItemsPerPageChange={handleItemsPerPageChange}
+                  onPageChange={onPageChange}
+                  onItemsPerPageChange={onItemsPerPageChange}
                 />
               </>
             )}

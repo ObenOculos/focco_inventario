@@ -63,7 +63,7 @@ export function usePagination<T>({
     paginatedData,
     filteredData,
     totalItems: filteredData.length,
-    handlePageChange,
-    handleItemsPerPageChange,
+    onPageChange: handlePageChange,
+    onItemsPerPageChange: handleItemsPerPageChange,
   };
 }
