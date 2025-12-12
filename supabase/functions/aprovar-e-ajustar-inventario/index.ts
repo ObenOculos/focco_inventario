@@ -115,33 +115,6 @@ serve(async (req: Request) => {
     const divergencias = (comparativo || []).filter((item: DivergenciaItem) => item.divergencia !== 0)
     console.log(`[INFO] Divergências encontradas: ${divergencias.length}`)
 
-    // Cria ajustes para divergências
-    if (divergencias.length > 0) {
-      const ajustes = divergencias.map((item: DivergenciaItem) => ({
-        user_id: user.id,
-        codigo_vendedor: inventario.codigo_vendedor,
-        codigo_auxiliar: item.codigo_auxiliar,
-        nome_produto: item.nome_produto,
-        tipo_movimentacao: item.divergencia > 0 ? 'ajuste_entrada' : 'ajuste_saida',
-        quantidade: Math.abs(item.divergencia),
-        motivo: 'Ajuste automático via aprovação de inventário',
-        origem_id: inventario_id,
-        origem_tipo: 'inventario_ajuste',
-        data_movimentacao: inventario.data_inventario
-      }))
-
-      const { error: insertError } = await supabaseAdmin
-        .from('movimentacoes_estoque')
-        .insert(ajustes)
-
-      if (insertError) {
-        console.error("[ERROR] Erro ao inserir ajustes:", insertError)
-        throw new Error("Falha ao salvar ajustes de estoque.")
-      }
-
-      console.log(`[INFO] ${ajustes.length} ajustes criados com sucesso`)
-    }
-
     // Atualiza status do inventário
     const { error: updateError } = await supabaseAdmin
       .from('inventarios')
@@ -201,12 +174,12 @@ serve(async (req: Request) => {
     console.log(`[INFO] Estoque real atualizado: ${estoqueRealData.length} itens`)
 
     const mensagem = divergencias.length > 0
-      ? `Inventário aprovado! ${divergencias.length} ajuste(s) criados.`
+      ? `Inventário aprovado! ${divergencias.length} divergência(s) registradas.`
       : 'Inventário aprovado! Sem divergências.'
 
     return new Response(JSON.stringify({
       message: mensagem,
-      ajustes_criados: divergencias.length,
+      divergencias_encontradas: divergencias.length,
       itens_estoque_real: estoqueRealData.length
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
