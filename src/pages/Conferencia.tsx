@@ -193,8 +193,15 @@ export default function Conferencia() {
   };
   
   const handleEditValue = (codigoAuxiliar: string, value: string) => {
+    // Permitir string vazia temporariamente durante digitação, mas tratar como 0
+    if (value === '' || value === '-') {
+      setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: 0 }));
+      return;
+    }
     const numValue = parseInt(value, 10);
-    setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: isNaN(numValue) ? 0 : numValue }));
+    if (!isNaN(numValue)) {
+      setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: numValue }));
+    }
   };
 
   const handleSaveEdits = async () => {
