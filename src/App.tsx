@@ -68,6 +68,11 @@ const App = () => (
                 <Inventario />
               </ProtectedRoute>
             } />
+            <Route path="/inventario/:inventarioId" element={
+              <ProtectedRoute allowedRoles={['vendedor']}>
+                <Inventario />
+              </ProtectedRoute>
+            } />
             <Route path="/historico" element={
               <ProtectedRoute allowedRoles={['vendedor']}>
                 <Historico />

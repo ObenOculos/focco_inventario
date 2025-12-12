@@ -1,11 +1,43 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.2'
 
+// Tipos para melhor type safety
+interface DivergenciaItem {
+  codigo_auxiliar: string;
+  nome_produto: string;
+  divergencia: number;
+}
+
+interface EstoqueItem {
+  codigo_auxiliar: string;
+  quantidade_remessa: number;
+}
+
+interface ItemInventario {
+  codigo_auxiliar: string;
+  quantidade_fisica: number;
+}
+
 // Funções do Deno para lidar com CORS
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
+
+/**
+ * Edge Function para aprovar e ajustar inventário
+ *
+ * Esta função:
+ * 1. Valida permissões do usuário (apenas gerentes)
+ * 2. Verifica se o inventário existe e está pendente/revisão
+ * 3. Calcula divergências entre estoque físico e teórico
+ * 4. Cria ajustes automáticos de estoque se necessário
+ * 5. Atualiza o status do inventário para 'aprovado'
+ * 6. Atualiza a tabela estoque_real com os novos valores
+ *
+ * @param inventario_id - ID do inventário a ser aprovado
+ * @returns Status da operação e número de ajustes criados
+ */
 
 serve(async (req: Request) => {
   // Trata a requisição OPTIONS (pre-flight) para CORS
@@ -14,9 +46,12 @@ serve(async (req: Request) => {
   }
 
   try {
-    const { inventario_id } = await req.json()
-    if (!inventario_id) {
-      throw new Error("É necessário fornecer o ID do inventário.");
+    // Validação da entrada
+    const body = await req.json()
+    const { inventario_id } = body
+
+    if (!inventario_id || typeof inventario_id !== 'string') {
+      throw new Error("ID do inventário é obrigatório e deve ser uma string válida.");
     }
 
     // Cria um cliente Supabase com privilégios de serviço para poder
@@ -54,14 +89,24 @@ serve(async (req: Request) => {
     // Busca o inventário para garantir que ele existe e está com status 'pendente' ou 'revisao'
     const { data: inventario, error: inventarioError } = await supabaseAdmin
       .from('inventarios')
-      .select('status, codigo_vendedor')
+      .select('status, codigo_vendedor, user_id')
       .eq('id', inventario_id)
       .single();
 
-    if (inventarioError) throw new Error("Inventário não encontrado.");
-    if (!['pendente', 'revisao'].includes(inventario.status)) {
-        throw new Error(`Este inventário já foi processado (status: ${inventario.status}).`);
+    if (inventarioError) {
+      throw new Error(`Inventário não encontrado: ${inventarioError.message}`);
     }
+
+    if (!inventario) {
+      throw new Error("Inventário não encontrado.");
+    }
+
+    if (!['pendente', 'revisao'].includes(inventario.status)) {
+      throw new Error(`Este inventário já foi processado (status atual: ${inventario.status}).`);
+    }
+
+    // Verifica se o inventário pertence ao usuário que está tentando aprovar (se necessário)
+    // Nota: Gerentes podem aprovar inventários de qualquer vendedor
 
     // Chama a função RPC para obter as divergências
     const { data: comparativo, error: rpcError } = await supabaseAdmin.rpc('comparar_estoque_inventario', {
@@ -73,11 +118,11 @@ serve(async (req: Request) => {
         throw new Error("Não foi possível calcular a comparação do inventário.");
     }
 
-    const divergencias = comparativo.filter((item: any) => item.divergencia !== 0);
+    const divergencias = comparativo.filter((item: DivergenciaItem) => item.divergencia !== 0);
 
     // Se houver divergências, criar ajustes
     if (divergencias.length > 0) {
-      const ajustes = divergencias.map((item: any) => ({
+      const ajustes = divergencias.map((item: DivergenciaItem) => ({
         user_id: user.id,
         codigo_vendedor: inventario.codigo_vendedor,
         codigo_auxiliar: item.codigo_auxiliar,
@@ -110,52 +155,85 @@ serve(async (req: Request) => {
       console.error("Erro ao atualizar inventário:", updateError);
       throw new Error("Falha ao aprovar o inventário após criar os ajustes.");
     }
+    
+    // Nova lógica para atualizar o estoque_real
+    // 1. Pega todo o estoque teórico (que inclui as remessas)
+    const { data: todoEstoqueVendedor, error: estoqueError } = await supabaseAdmin
+        .rpc('calcular_estoque_vendedor', { p_codigo_vendedor: inventario.codigo_vendedor });
 
-    // Atualizar o estoque_real com a contagem física do inventário aprovado
-    const { data: itensInventario, error: itensError } = await supabaseAdmin
-      .from('itens_inventario')
-      .select('codigo_auxiliar, quantidade_fisica')
-      .eq('inventario_id', inventario_id);
-
-    if (itensError) {
-      console.error("Erro ao buscar itens do inventário:", itensError);
-      throw new Error("Falha ao atualizar estoque real.");
+    if (estoqueError) {
+        console.error("Erro ao calcular estoque do vendedor:", estoqueError);
+        throw new Error("Falha ao buscar o estoque completo do vendedor.");
     }
 
-    if (itensInventario && itensInventario.length > 0) {
-      // Preparar dados para upsert no estoque_real
-      const estoqueRealData = itensInventario.map(item => ({
-        codigo_vendedor: inventario.codigo_vendedor,
-        codigo_auxiliar: item.codigo_auxiliar,
-        quantidade_real: item.quantidade_fisica,
-        inventario_id: inventario_id,
-        data_atualizacao: new Date().toISOString()
-      }));
-
-      // Primeiro, deletar registros existentes para este vendedor e inventário
-      const { error: deleteError } = await supabaseAdmin
-        .from('estoque_real')
-        .delete()
-        .eq('codigo_vendedor', inventario.codigo_vendedor)
+    // 2. Pega os itens contados no inventário
+    const { data: itensInventario, error: itensError } = await supabaseAdmin
+        .from('itens_inventario')
+        .select('codigo_auxiliar, quantidade_fisica')
         .eq('inventario_id', inventario_id);
 
-      if (deleteError) {
-        console.error("Erro ao limpar estoque real antigo:", deleteError);
-        // Não lançar erro aqui, continuar tentando inserir
-      }
-
-      // Inserir os novos dados
-      const { error: insertError } = await supabaseAdmin
-        .from('estoque_real')
-        .insert(estoqueRealData);
-
-      if (insertError) {
-        console.error("Erro ao inserir estoque real:", insertError);
-        throw new Error("Falha ao salvar o estoque real.");
-      }
+    if (itensError) {
+        console.error("Erro ao buscar itens do inventário:", itensError);
+        throw new Error("Falha ao buscar itens contados.");
     }
 
-    return new Response(JSON.stringify({ message: 'Inventário aprovado, estoque ajustado e estoque real atualizado com sucesso!' }), {
+    if (!itensInventario || itensInventario.length === 0) {
+        throw new Error("O inventário não possui itens contados.");
+    }
+
+    // 3. Mapeia os itens contados para fácil acesso
+    const mapaItensContados = new Map(
+        itensInventario.map(item => [item.codigo_auxiliar, item.quantidade_fisica])
+    );
+
+    // 4. Prepara os dados para o upsert
+    const estoqueRealFinal = todoEstoqueVendedor.map((produto: EstoqueItem) => {
+        const quantidadeFisica = mapaItensContados.get(produto.codigo_auxiliar);
+        
+        // Se foi contado, usa a quantidade física. Se não, usa a quantidade de remessa.
+        const quantidadeFinal = quantidadeFisica !== undefined 
+            ? quantidadeFisica 
+            : produto.quantidade_remessa;
+
+        return {
+            codigo_vendedor: inventario.codigo_vendedor,
+            codigo_auxiliar: produto.codigo_auxiliar,
+            quantidade_real: quantidadeFinal,
+            inventario_id: inventario_id,
+            data_atualizacao: new Date().toISOString()
+        };
+    });
+
+    // 5. Deleta o estoque antigo para este vendedor
+    const { error: deleteError } = await supabaseAdmin
+        .from('estoque_real')
+        .delete()
+        .eq('codigo_vendedor', inventario.codigo_vendedor);
+
+    if (deleteError) {
+        console.error("Erro ao limpar estoque real antigo:", deleteError);
+        throw new Error("Falha ao limpar o estoque antigo antes de atualizar.");
+    }
+
+    // 6. Insere o novo estado do estoque real
+    const { error: upsertError } = await supabaseAdmin
+        .from('estoque_real')
+        .insert(estoqueRealFinal);
+
+    if (upsertError) {
+        console.error("Erro ao dar upsert no estoque real:", upsertError);
+        throw new Error("Falha ao salvar o novo estado do estoque real.");
+    }
+
+
+    const mensagemSucesso = divergencias.length > 0
+      ? `Inventário aprovado com sucesso! ${divergencias.length} ajuste(s) de estoque foram criados e o estoque real foi atualizado.`
+      : 'Inventário aprovado com sucesso! Não foram necessários ajustes de estoque.';
+
+    return new Response(JSON.stringify({
+      message: mensagemSucesso,
+      ajustes_criados: divergencias.length
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })

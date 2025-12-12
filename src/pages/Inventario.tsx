@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -8,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { Camera, Plus, Trash2, Send, QrCode, Check, X, Search } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import {
@@ -37,6 +40,8 @@ interface InventarioItem {
 
 export default function Inventario() {
   const { profile, user } = useAuth();
+  const { inventarioId } = useParams<{ inventarioId: string }>();
+  const navigate = useNavigate();
   const [items, setItems] = useState<InventarioItem[]>([]);
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
@@ -53,6 +58,16 @@ export default function Inventario() {
     isIncrement: boolean;
   } | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  // Estado para informações do inventário sendo editado
+  const [inventarioInfo, setInventarioInfo] = useState<{
+    data_inventario: string;
+    status: string;
+  } | null>(null);
+
+  // Estado para edição de inventário existente
+  const [editingInventarioId, setEditingInventarioId] = useState<string | null>(null);
+  const [observacoesGerente, setObservacoesGerente] = useState<string>('');
 
   // Filtrar e paginar itens
   const {
@@ -227,34 +242,79 @@ export default function Inventario() {
     setLoading(true);
 
     try {
-      const { data: inventario, error: invError } = await supabase
-        .from('inventarios')
-        .insert({
-          codigo_vendedor: profile.codigo_vendedor,
-          user_id: user.id,
-          observacoes,
-        })
-        .select()
-        .single();
+      if (editingInventarioId) {
+        // Atualizar inventário existente
+        const { error: invError } = await supabase
+          .from('inventarios')
+          .update({
+            observacoes,
+            status: 'pendente'
+          })
+          .eq('id', editingInventarioId);
 
-      if (invError) throw invError;
+        if (invError) throw invError;
 
-      const itensData = itemsContados.map(item => ({
-        inventario_id: inventario.id,
-        codigo_auxiliar: item.codigo_auxiliar,
-        nome_produto: item.nome_produto,
-        quantidade_fisica: item.quantidade_fisica,
-      }));
+        // Remover itens antigos
+        const { error: deleteError } = await supabase
+          .from('itens_inventario')
+          .delete()
+          .eq('inventario_id', editingInventarioId);
 
-      const { error: itensError } = await supabase
-        .from('itens_inventario')
-        .insert(itensData);
+        if (deleteError) throw deleteError;
 
-      if (itensError) throw itensError;
+        // Inserir itens atualizados
+        const itensData = itemsContados.map(item => ({
+          inventario_id: editingInventarioId,
+          codigo_auxiliar: item.codigo_auxiliar,
+          nome_produto: item.nome_produto,
+          quantidade_fisica: item.quantidade_fisica,
+        }));
 
-      toast.success('Inventário enviado para conferência!');
-      setItems([]);
-      setObservacoes('');
+        const { error: itensError } = await supabase
+          .from('itens_inventario')
+          .insert(itensData);
+
+        if (itensError) throw itensError;
+
+        toast.success('Inventário atualizado e reenviado para conferência!');
+      } else {
+        // Criar novo inventário
+        const { data: inventario, error: invError } = await supabase
+          .from('inventarios')
+          .insert({
+            codigo_vendedor: profile.codigo_vendedor,
+            user_id: user.id,
+            observacoes,
+          })
+          .select()
+          .single();
+
+        if (invError) throw invError;
+
+        const itensData = itemsContados.map(item => ({
+          inventario_id: inventario.id,
+          codigo_auxiliar: item.codigo_auxiliar,
+          nome_produto: item.nome_produto,
+          quantidade_fisica: item.quantidade_fisica,
+        }));
+
+        const { error: itensError } = await supabase
+          .from('itens_inventario')
+          .insert(itensData);
+
+        if (itensError) throw itensError;
+
+        toast.success('Inventário enviado para conferência!');
+      }
+
+      // Limpar estado apenas se não estiver editando
+      if (!editingInventarioId) {
+        setItems([]);
+        setObservacoes('');
+      }
+      setEditingInventarioId(null);
+      setObservacoesGerente('');
+      setInventarioInfo(null);
     } catch (error: any) {
       console.error('Erro ao salvar inventário:', error);
       toast.error('Erro ao salvar inventário');
@@ -264,10 +324,53 @@ export default function Inventario() {
   };
 
   useEffect(() => {
-    return () => {
-      stopScanner();
-    };
-  }, []);
+    if (profile?.codigo_vendedor && inventarioId) {
+      loadExistingInventario();
+    }
+  }, [profile?.codigo_vendedor, inventarioId]);
+
+  const loadExistingInventario = async () => {
+    if (!profile?.codigo_vendedor || !inventarioId) return;
+
+    try {
+      // Carregar inventário específico pelo ID
+      const { data, error } = await supabase
+        .from('inventarios')
+        .select('*, itens_inventario(*)')
+        .eq('id', inventarioId)
+        .eq('codigo_vendedor', profile.codigo_vendedor) // Garantir que pertence ao vendedor
+        .maybeSingle();
+
+      if (error && error.code !== 'PGRST116') throw error; // PGRST116 is "no rows returned"
+
+      if (data) {
+        setEditingInventarioId(data.id);
+        setObservacoes(data.observacoes || '');
+        setObservacoesGerente(data.observacoes_gerente || '');
+        setInventarioInfo({
+          data_inventario: data.data_inventario,
+          status: data.status,
+        });
+        
+        const loadedItems: InventarioItem[] = data.itens_inventario.map(item => ({
+          codigo_auxiliar: item.codigo_auxiliar,
+          nome_produto: item.nome_produto || '',
+          quantidade_fisica: item.quantidade_fisica,
+        }));
+        
+        setItems(loadedItems);
+        toast.info('Inventário carregado para edição.');
+      } else {
+        // Inventário não encontrado ou não pertence ao usuário
+        toast.error('Inventário não encontrado ou você não tem permissão para editá-lo.');
+        navigate('/historico');
+      }
+    } catch (error: any) {
+      console.error('Erro ao carregar inventário existente:', error);
+      toast.error('Erro ao carregar inventário existente');
+      navigate('/historico');
+    }
+  };
 
   if (!profile?.codigo_vendedor) {
     return (
@@ -292,10 +395,21 @@ export default function Inventario() {
     <AppLayout>
       <div className="space-y-6 max-w-4xl mx-auto">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Novo Inventário</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            {editingInventarioId ? 'Editar Inventário' : 'Novo Inventário'}
+          </h1>
           <p className="text-muted-foreground">
-            Use o scanner ou a adição manual para começar a montar seu inventário.
+            {editingInventarioId 
+              ? 'Edite os itens do seu inventário e reenvie para conferência.'
+              : 'Use o scanner ou a adição manual para começar a montar seu inventário.'
+            }
           </p>
+          {inventarioInfo && (
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+              <h3 className="font-medium text-blue-800">Editando Inventário de {format(new Date(inventarioInfo.data_inventario), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</h3>
+              <p className="text-sm text-blue-700 mt-1">Status atual: {inventarioInfo.status === 'revisao' ? 'Não aprovado' : inventarioInfo.status}</p>
+            </div>
+          )}
         </div>
 
         {/* Scanner */}
@@ -413,6 +527,12 @@ export default function Inventario() {
             )}
 
             <div className="mt-6 pt-6 border-t-2">
+              {observacoesGerente && (
+                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <Label className="font-medium text-yellow-800">Observações do Gerente</Label>
+                  <p className="text-yellow-700 mt-1">{observacoesGerente}</p>
+                </div>
+              )}
               <Label className="font-medium">Observações</Label>
               <Textarea
                 placeholder="Observações sobre o inventário..."
@@ -428,7 +548,7 @@ export default function Inventario() {
               disabled={loading}
             >
               <Send className="mr-2" size={16} />
-              {loading ? 'Enviando...' : 'Enviar para Conferência'}
+              {loading ? 'Enviando...' : editingInventarioId ? 'Reenviar para Conferência' : 'Enviar para Conferência'}
             </Button>
           </CardContent>
         </Card>

@@ -1,8 +1,10 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { useAuth } from "@/contexts/AuthContext";
 import { useInventariosQuery } from "@/hooks/useInventariosQuery";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -16,6 +18,7 @@ type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
 
 export default function Historico() {
   const { profile } = useAuth();
+  const navigate = useNavigate();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const { data: inventarios = [], isLoading: loading } = useInventariosQuery(profile?.codigo_vendedor);
@@ -74,6 +77,17 @@ export default function Historico() {
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(inventario.status)}
+                      {inventario.status === 'revisao' && (
+                        <Button
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/inventario/${inventario.id}`);
+                          }}
+                        >
+                          Editar
+                        </Button>
+                      )}
                       {expandedId === inventario.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                     </div>
                   </div>
