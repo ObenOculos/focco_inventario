@@ -55,6 +55,7 @@ export default function Inventario() {
     code: string; 
     name: string; 
     isRegistered: boolean;
+    hasRemessa: boolean;
     isIncrement: boolean;
   } | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -143,17 +144,23 @@ export default function Inventario() {
       return;
     }
 
-    // Se for um item novo, buscar informações
-    const [produtoResult] = await Promise.all([
+    // Se for um item novo, buscar informações do produto e verificar se está no estoque teórico
+    const [produtoResult, estoqueResult] = await Promise.all([
       supabase.from('produtos').select('nome_produto').eq('codigo_auxiliar', code).maybeSingle(),
+      profile?.codigo_vendedor 
+        ? supabase.rpc('calcular_estoque_vendedor', { p_codigo_vendedor: profile.codigo_vendedor })
+        : Promise.resolve({ data: [], error: null })
     ]);
 
     const isRegistered = !!produtoResult.data;
+    const estoqueItem = estoqueResult.data?.find((item: any) => item.codigo_auxiliar === code);
+    const hasRemessa = !!estoqueItem && estoqueItem.quantidade_remessa > 0;
 
     setPendingProduct({ 
       code, 
       name: produtoResult.data?.nome_produto || `Produto não cadastrado (${code})`,
       isRegistered,
+      hasRemessa,
       isIncrement: false
     });
     setShowConfirmDialog(true);
@@ -558,9 +565,14 @@ export default function Inventario() {
       <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
         <DialogContent className="max-w-md shadow-none w-[calc(100%-2rem)]">
           <DialogHeader>
-            <DialogTitle>Adicionar Novo Produto?</DialogTitle>
+            <DialogTitle>
+              {pendingProduct?.hasRemessa ? 'Adicionar Produto?' : 'Adicionar Novo Produto?'}
+            </DialogTitle>
             <DialogDescription>
-              Este produto não estava no seu estoque teórico. Deseja adicioná-lo?
+              {pendingProduct?.hasRemessa 
+                ? 'Confirme a adição deste produto ao inventário.'
+                : 'Este produto não foi enviado para você (sem remessa). Deseja adicioná-lo mesmo assim?'
+              }
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -573,6 +585,13 @@ export default function Inventario() {
               <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
                 <p className="font-medium text-sm">⚠️ Produto não cadastrado</p>
                 <p className="text-xs">Este código não existe no sistema.</p>
+              </div>
+            )}
+
+            {pendingProduct && pendingProduct.isRegistered && !pendingProduct.hasRemessa && (
+              <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
+                <p className="font-medium text-sm">⚠️ Produto sem remessa</p>
+                <p className="text-xs">Este produto não foi enviado para você em nenhuma remessa.</p>
               </div>
             )}
           </div>
