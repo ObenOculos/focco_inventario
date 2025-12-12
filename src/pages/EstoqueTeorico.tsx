@@ -2,7 +2,6 @@ import { useEffect, useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { EstoqueItem } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Package, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
@@ -11,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
-import { calcularEstoqueTeorico, buscarEstoqueReal } from '@/lib/estoque';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   Table,
@@ -28,44 +26,44 @@ interface VendedorProfile {
   nome: string;
 }
 
+interface ComparacaoItem {
+  codigo_auxiliar: string;
+  nome_produto: string;
+  estoque_teorico: number;
+  estoque_real: number;
+  diferenca: number;
+  data_atualizacao_real: string | null;
+}
+
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
-  const [estoqueBase, setEstoqueBase] = useState<EstoqueItem[]>([]);
-  const [estoqueReal, setEstoqueReal] = useState<Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>>(new Map());
-  const [ajustesRealizados, setAjustesRealizados] = useState<Set<string>>(new Set()); // códigos que tiveram ajustes
+  const [dados, setDados] = useState<ComparacaoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [tipoFilter, setTipoFilter] = useState<string>('todos');
   const [saldoFilter, setSaldoFilter] = useState<string>('todos');
-  const [selectedVendor, setSelectedVendor] = useState<string>('todos'); // 'todos' para todos os vendedores, ou codigo_vendedor
+  const [selectedVendor, setSelectedVendor] = useState<string>('todos');
   const [vendedores, setVendedores] = useState<VendedorProfile[]>([]);
 
   const isGerente = profile?.role === 'gerente';
 
   const produtosNegativos = useMemo(
-    () => estoqueBase.filter(e => e.estoque_teorico < 0),
-    [estoqueBase]
+    () => dados.filter(e => e.estoque_teorico < 0),
+    [dados]
   );
-  // Aplicar filtros de tipo e saldo
-  const estoque = useMemo(() => {
-    let filtered = estoqueBase;
 
-    // Filtro por tipo de movimento
-    if (tipoFilter === 'remessa') {
-      filtered = filtered.filter(e => e.quantidade_remessa > 0);
-    } else if (tipoFilter === 'venda') {
-      filtered = filtered.filter(e => e.quantidade_venda > 0);
-    }
+  const dadosFiltrados = useMemo(() => {
+    let filtered = dados;
 
-    // Filtro por saldo
     if (saldoFilter === 'positivo') {
       filtered = filtered.filter(e => e.estoque_teorico > 0);
     } else if (saldoFilter === 'negativo') {
       filtered = filtered.filter(e => e.estoque_teorico < 0);
+    } else if (saldoFilter === 'divergente') {
+      filtered = filtered.filter(e => e.diferenca !== 0);
     }
 
     return filtered;
-  }, [estoqueBase, tipoFilter, saldoFilter]);
+  }, [dados, saldoFilter]);
 
   const {
     currentPage,
@@ -73,12 +71,12 @@ export default function EstoqueTeorico() {
     itemsPerPage,
     startIndex,
     endIndex,
-    paginatedData: paginatedEstoque,
+    paginatedData,
     totalItems,
     onPageChange,
     onItemsPerPageChange,
   } = usePagination({
-    data: estoque,
+    data: dadosFiltrados,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
@@ -94,7 +92,7 @@ export default function EstoqueTeorico() {
       if (error) {
         console.error("Erro ao buscar vendedores:", error);
       } else if (profilesData) {
-        setVendedores(profilesData);
+        setVendedores(profilesData as VendedorProfile[]);
       }
     };
 
@@ -104,38 +102,20 @@ export default function EstoqueTeorico() {
   }, [isGerente, vendedores.length]);
 
   useEffect(() => {
-    const fetchAjustesRealizados = async (vendorCode?: string) => {
-      let query = supabase
-        .from('movimentacoes_estoque')
-        .select('codigo_auxiliar')
-        .in('tipo_movimentacao', ['ajuste_entrada', 'ajuste_saida']);
+    const fetchComparacao = async (vendorCode: string) => {
+      const { data, error } = await supabase.rpc('comparar_estoque_teorico_vs_real', {
+        p_codigo_vendedor: vendorCode
+      });
 
-      if (vendorCode && vendorCode !== 'todos') {
-        query = query.eq('codigo_vendedor', vendorCode);
-      }
-
-      const { data, error } = await query;
       if (error) {
-        console.error("Erro ao buscar ajustes:", error);
-        return new Set<string>();
+        console.error("Erro ao buscar comparação:", error);
+        return [];
       }
 
-      return new Set(data.map(item => item.codigo_auxiliar));
+      return (data || []) as ComparacaoItem[];
     };
 
-    const fetchEstoqueForSingleVendor = async (vendorCode: string) => {
-      const [estoqueMap, estoqueRealMap, ajustesSet] = await Promise.all([
-        calcularEstoqueTeorico(vendorCode),
-        buscarEstoqueReal(vendorCode),
-        fetchAjustesRealizados(vendorCode)
-      ]);
-      const estoqueArray = Array.from(estoqueMap.values());
-      setEstoqueBase(estoqueArray);
-      setEstoqueReal(estoqueRealMap);
-      setAjustesRealizados(ajustesSet);
-    };
-
-    const fetchAndConsolidateAllEstoque = async () => {
+    const fetchAllComparacao = async () => {
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('codigo_vendedor')
@@ -143,82 +123,56 @@ export default function EstoqueTeorico() {
         .not('codigo_vendedor', 'is', null);
 
       if (error || !profiles) {
-        console.error("Erro ao buscar códigos de vendedores:", error);
-        setEstoqueBase([]);
-        setEstoqueReal(new Map());
-        setAjustesRealizados(new Set());
+        console.error("Erro ao buscar vendedores:", error);
         return;
       }
 
-      const allEstoque = new Map<string, EstoqueItem>();
-      const allEstoqueReal = new Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>();
-      const allAjustes = new Set<string>();
-      
+      const consolidated = new Map<string, ComparacaoItem>();
+
       for (const p of profiles) {
         if (p.codigo_vendedor) {
-          const [vendedorEstoque, vendedorEstoqueReal, ajustesSet] = await Promise.all([
-            calcularEstoqueTeorico(p.codigo_vendedor),
-            buscarEstoqueReal(p.codigo_vendedor),
-            fetchAjustesRealizados(p.codigo_vendedor)
-          ]);
-          
-          for (const [key, item] of vendedorEstoque.entries()) {
-            const existing = allEstoque.get(key);
+          const vendorData = await fetchComparacao(p.codigo_vendedor);
+          for (const item of vendorData) {
+            const existing = consolidated.get(item.codigo_auxiliar);
             if (existing) {
-              existing.quantidade_remessa += item.quantidade_remessa;
-              existing.quantidade_venda += item.quantidade_venda;
               existing.estoque_teorico += item.estoque_teorico;
+              existing.estoque_real += item.estoque_real;
+              existing.diferenca += item.diferenca;
             } else {
-              allEstoque.set(key, { ...item });
+              consolidated.set(item.codigo_auxiliar, { ...item });
             }
           }
-          
-          // Consolidar estoque real
-          for (const [key, item] of vendedorEstoqueReal.entries()) {
-            const existing = allEstoqueReal.get(key);
-            if (existing) {
-              existing.quantidade_real += item.quantidade_real;
-            } else {
-              allEstoqueReal.set(key, { ...item });
-            }
-          }
-
-          // Consolidar ajustes
-          ajustesSet.forEach(codigo => allAjustes.add(codigo));
         }
       }
-      const estoqueArray = Array.from(allEstoque.values());
-      setEstoqueBase(estoqueArray);
-      setEstoqueReal(allEstoqueReal);
-      setAjustesRealizados(allAjustes);
+
+      setDados(Array.from(consolidated.values()));
     };
 
     const loadData = async () => {
       if (!profile) return;
       setLoading(true);
+      
       const vendorCode = isGerente ? selectedVendor : profile.codigo_vendedor;
 
       if (isGerente && vendorCode === 'todos') {
-        await fetchAndConsolidateAllEstoque();
+        await fetchAllComparacao();
       } else if (vendorCode) {
-        await fetchEstoqueForSingleVendor(vendorCode);
+        const data = await fetchComparacao(vendorCode);
+        setDados(data);
       } else {
-        setEstoqueBase([]);
+        setDados([]);
       }
+      
       setLoading(false);
     };
 
     loadData();
   }, [profile, isGerente, selectedVendor]);
 
-  const totalItens = estoque.reduce((acc, item) => acc + item.estoque_teorico, 0);
-  const totalModelos = new Set(estoque.map(e => e.modelo)).size;
-  const totalPositivo = estoque
-    .filter((item) => item.estoque_teorico > 0)
-    .reduce((acc, item) => acc + item.estoque_teorico, 0);
-  const totalNegativo = estoque
-    .filter((item) => item.estoque_teorico < 0)
-    .reduce((acc, item) => acc + item.estoque_teorico, 0);
+  const totalEstoqueTeorico = dados.reduce((acc, item) => acc + item.estoque_teorico, 0);
+  const totalEstoqueReal = dados.reduce((acc, item) => acc + item.estoque_real, 0);
+  const totalDivergencia = dados.reduce((acc, item) => acc + item.diferenca, 0);
+  const totalModelos = new Set(dados.map(e => e.codigo_auxiliar.split(' ')[0])).size;
 
   return (
     <AppLayout>
@@ -232,13 +186,12 @@ export default function EstoqueTeorico() {
           </p>
         </div>
 
-        {/* Alerta de produtos negativos */}
         {produtosNegativos.length > 0 && (
           <div className="flex items-center gap-3 p-4 bg-destructive/10 border-2 border-destructive rounded-lg">
             <AlertTriangle className="text-destructive shrink-0" />
             <div className="flex-1">
               <p className="font-semibold text-destructive">
-                {produtosNegativos.length} produto(s) com estoque negativo
+                {produtosNegativos.length} produto(s) com estoque teórico negativo
               </p>
               <p className="text-sm text-muted-foreground">
                 Verifique divergências de inventário
@@ -250,17 +203,16 @@ export default function EstoqueTeorico() {
           </div>
         )}
 
-        {/* Cards de resumo */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card className="border-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Package size={16} />
-                Total em Estoque
+                Estoque Teórico
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{totalItens}</p>
+              <p className="text-3xl font-bold">{totalEstoqueTeorico}</p>
             </CardContent>
           </Card>
 
@@ -268,11 +220,11 @@ export default function EstoqueTeorico() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Package size={16} />
-                Modelos Diferentes
+                Estoque Real
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{totalModelos}</p>
+              <p className="text-3xl font-bold text-purple-600">{totalEstoqueReal}</p>
             </CardContent>
           </Card>
           
@@ -280,28 +232,29 @@ export default function EstoqueTeorico() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <ArrowUpCircle size={16} className="text-green-600" />
-                Total Positivo
+                Modelos Diferentes
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-green-600">{totalPositivo}</p>
+              <p className="text-3xl font-bold">{totalModelos}</p>
             </CardContent>
           </Card>
 
           <Card className="border-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ArrowDownCircle size={16} className="text-destructive" />
-                Total Negativo
+                <ArrowDownCircle size={16} className={totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'} />
+                Divergência Total
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-destructive">{totalNegativo}</p>
+              <p className={`text-3xl font-bold ${totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}>
+                {totalDivergencia > 0 ? `+${totalDivergencia}` : totalDivergencia}
+              </p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Lista de estoque */}
         <Card className="border-2">
           <CardHeader>
             <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -310,12 +263,11 @@ export default function EstoqueTeorico() {
                 Comparação: Teórico x Real
               </span>
               <Badge variant="secondary" className="text-lg px-3 py-1">
-                {totalItems}
+                {totalItems} produtos
               </Badge>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Filtros */}
             <div className="flex flex-col md:flex-row gap-4">
               <SearchFilter
                 value={searchTerm}
@@ -337,24 +289,15 @@ export default function EstoqueTeorico() {
                   </SelectContent>
                 </Select>
               )}
-              <Select value={tipoFilter} onValueChange={setTipoFilter}>
-                <SelectTrigger className="w-full md:w-44">
-                  <SelectValue placeholder="Tipo" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os tipos</SelectItem>
-                  <SelectItem value="remessa">Com Remessa</SelectItem>
-                  <SelectItem value="venda">Com Venda</SelectItem>
-                </SelectContent>
-              </Select>
               <Select value={saldoFilter} onValueChange={setSaldoFilter}>
                 <SelectTrigger className="w-full md:w-44">
-                  <SelectValue placeholder="Saldo" />
+                  <SelectValue placeholder="Filtrar por" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos os saldos</SelectItem>
-                  <SelectItem value="positivo">Saldo Positivo</SelectItem>
-                  <SelectItem value="negativo">Saldo Negativo</SelectItem>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="positivo">Teórico Positivo</SelectItem>
+                  <SelectItem value="negativo">Teórico Negativo</SelectItem>
+                  <SelectItem value="divergente">Com Divergência</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -365,7 +308,7 @@ export default function EstoqueTeorico() {
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  {searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto em estoque'}
+                  {searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto com estoque real registrado'}
                 </p>
               </div>
             ) : (
@@ -375,95 +318,62 @@ export default function EstoqueTeorico() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[40%]">Produto</TableHead>
-                        <TableHead className="text-center">Remessas</TableHead>
-                        <TableHead className="text-center">Vendas</TableHead>
+                        <TableHead className="text-center">Est. Teórico</TableHead>
                         <TableHead className="text-center">Est. Real</TableHead>
-                        <TableHead className="text-center">Saldo Teórico</TableHead>
-                        <TableHead className="text-center">Status/Diferença</TableHead>
+                        <TableHead className="text-center">Divergência</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedEstoque.map((item) => {
-                        const realInfo = estoqueReal.get(item.codigo_auxiliar);
-                        const temEstoqueReal = !!realInfo;
-                        const quantidadeReal = realInfo?.quantidade_real ?? '-';
-                        const foiParaInventario = realInfo?.inventario_id !== null && realInfo?.inventario_id !== undefined;
-                        const isAjustado = ajustesRealizados.has(item.codigo_auxiliar);
-                        const diff = temEstoqueReal && typeof quantidadeReal === 'number'
-                          ? item.estoque_teorico - quantidadeReal
-                          : null;
-
-                        return (
-                          <TableRow 
-                            key={item.codigo_auxiliar}
-                            className={item.estoque_teorico < 0 ? 'bg-destructive/5' : ''}
-                          >
-                            <TableCell>
-                              <div className="flex items-center gap-2">
-                                {item.estoque_teorico < 0 && (
-                                  <AlertTriangle className="text-destructive shrink-0" size={16} />
-                                )}
-                                <div>
-                                  <span className="font-mono font-bold text-sm">
-                                    {item.codigo_auxiliar}
-                                  </span>
-                                  <p className="text-xs text-muted-foreground truncate">
-                                    {item.nome_produto}
-                                  </p>
-                                </div>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <p className="font-bold text-blue-600">{item.quantidade_remessa}</p>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <p className="font-bold text-green-600">{item.quantidade_venda}</p>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <p className={`font-bold text-lg ${temEstoqueReal ? 'text-purple-600' : 'text-muted-foreground'}`}>
-                                {quantidadeReal}
-                              </p>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              <p className={`font-bold text-lg ${item.estoque_teorico < 0 ? 'text-destructive' : 'text-foreground'}`}>
-                                {item.estoque_teorico}
-                              </p>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {temEstoqueReal ? (
-                                foiParaInventario ? (
-                                  isAjustado ? (
-                                    <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs px-2">
-                                      ✓ Ajustado
-                                    </Badge>
-                                  ) : (
-                                    diff !== null && (
-                                      <Badge 
-                                        variant="outline" 
-                                        className={`text-xs px-2 font-bold ${
-                                          diff > 0 
-                                            ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
-                                            : diff < 0 
-                                              ? 'bg-destructive/10 text-destructive border-destructive/30'
-                                              : 'border-transparent'
-                                        }`}
-                                      >
-                                        {diff > 0 ? `+${diff}` : diff === 0 ? 'OK' : diff}
-                                      </Badge>
-                                    )
-                                  )
-                                ) : (
-                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 text-xs px-2">
-                                    Teórico Mantido
-                                  </Badge>
-                                )
-                              ) : (
-                                <span className="text-muted-foreground">-</span>
+                      {paginatedData.map((item) => (
+                        <TableRow 
+                          key={item.codigo_auxiliar}
+                          className={item.diferenca !== 0 ? 'bg-destructive/5' : ''}
+                        >
+                          <TableCell>
+                            <div className="flex items-center gap-2">
+                              {item.diferenca !== 0 && (
+                                <AlertTriangle className="text-destructive shrink-0" size={16} />
                               )}
-                            </TableCell>
-                          </TableRow>
-                        );
-                      })}
+                              <div>
+                                <span className="font-mono font-bold text-sm">
+                                  {item.codigo_auxiliar}
+                                </span>
+                                <p className="text-xs text-muted-foreground truncate">
+                                  {item.nome_produto}
+                                </p>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <p className={`font-bold text-lg ${item.estoque_teorico < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                              {item.estoque_teorico}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <p className="font-bold text-lg text-purple-600">
+                              {item.estoque_real}
+                            </p>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            {item.diferenca === 0 ? (
+                              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                                OK
+                              </Badge>
+                            ) : (
+                              <Badge 
+                                variant="outline" 
+                                className={`font-bold ${
+                                  item.diferenca > 0 
+                                    ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
+                                    : 'bg-destructive/10 text-destructive border-destructive/30'
+                                }`}
+                              >
+                                {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                              </Badge>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      ))}
                     </TableBody>
                   </Table>
                 </div>
