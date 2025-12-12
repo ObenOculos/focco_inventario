@@ -387,6 +387,7 @@ export default function EstoqueTeorico() {
                         const realInfo = estoqueReal.get(item.codigo_auxiliar);
                         const temEstoqueReal = !!realInfo;
                         const quantidadeReal = realInfo?.quantidade_real ?? '-';
+                        const foiParaInventario = realInfo?.inventario_id !== null && realInfo?.inventario_id !== undefined;
                         const isAjustado = ajustesRealizados.has(item.codigo_auxiliar);
                         const diff = temEstoqueReal && typeof quantidadeReal === 'number'
                           ? item.estoque_teorico - quantidadeReal
@@ -430,25 +431,31 @@ export default function EstoqueTeorico() {
                             </TableCell>
                             <TableCell className="text-center">
                               {temEstoqueReal ? (
-                                isAjustado ? (
-                                  <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs px-2">
-                                    ✓ Ajustado
-                                  </Badge>
-                                ) : (
-                                  diff !== null && (
-                                    <Badge 
-                                      variant="outline" 
-                                      className={`text-xs px-2 font-bold ${
-                                        diff > 0 
-                                          ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
-                                          : diff < 0 
-                                            ? 'bg-destructive/10 text-destructive border-destructive/30'
-                                            : 'border-transparent'
-                                      }`}
-                                    >
-                                      {diff > 0 ? `+${diff}` : diff === 0 ? 'OK' : diff}
+                                foiParaInventario ? (
+                                  isAjustado ? (
+                                    <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 text-xs px-2">
+                                      ✓ Ajustado
                                     </Badge>
+                                  ) : (
+                                    diff !== null && (
+                                      <Badge 
+                                        variant="outline" 
+                                        className={`text-xs px-2 font-bold ${
+                                          diff > 0 
+                                            ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
+                                            : diff < 0 
+                                              ? 'bg-destructive/10 text-destructive border-destructive/30'
+                                              : 'border-transparent'
+                                        }`}
+                                      >
+                                        {diff > 0 ? `+${diff}` : diff === 0 ? 'OK' : diff}
+                                      </Badge>
+                                    )
                                   )
+                                ) : (
+                                  <Badge variant="outline" className="bg-blue-500/10 text-blue-600 border-blue-500/30 text-xs px-2">
+                                    Teórico Mantido
+                                  </Badge>
                                 )
                               ) : (
                                 <span className="text-muted-foreground">-</span>

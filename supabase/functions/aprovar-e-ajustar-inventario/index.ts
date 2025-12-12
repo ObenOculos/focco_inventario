@@ -13,9 +13,11 @@ interface EstoqueItem {
   quantidade_remessa: number;
 }
 
-interface ItemInventario {
+interface ProdutoEstoque {
   codigo_auxiliar: string;
-  quantidade_fisica: number;
+  quantidade_remessa: number;
+  quantidade_venda: number;
+  estoque_teorico: number;
 }
 
 // Funções do Deno para lidar com CORS
@@ -61,12 +63,22 @@ serve(async (req: Request) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
     );
 
-    // Pega o token de autorização do header da requisição
-    const authHeader = req.headers.get('Authorization')!
-    const { data: { user } } = await supabaseAdmin.auth.getUser(authHeader.replace('Bearer ', ''))
+    // Pega o token JWT do header da requisição
+    const authHeader = req.headers.get('Authorization')
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token de autenticação não fornecido.' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 401,
+      })
+    }
 
-    if (!user) {
-      return new Response(JSON.stringify({ error: 'Usuário não autenticado.' }), {
+    const token = authHeader.replace('Bearer ', '')
+    
+    // Verifica o token JWT e obtém o usuário
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
+
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: 'Token de autenticação inválido.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       })
@@ -115,10 +127,22 @@ serve(async (req: Request) => {
 
     if (rpcError) {
         console.error("Erro RPC:", rpcError);
-        throw new Error("Não foi possível calcular a comparação do inventário.");
+        console.error("Detalhes do erro:", JSON.stringify(rpcError, null, 2));
+        throw new Error(`Não foi possível calcular a comparação do inventário: ${rpcError.message || 'Erro desconhecido'}`);
+    }
+
+    console.log("Comparativo obtido:", comparativo);
+    console.log("Número de itens no comparativo:", comparativo?.length || 0);
+
+    if (!comparativo || !Array.isArray(comparativo)) {
+        console.error("Comparativo não é um array válido:", comparativo);
+        throw new Error("Resultado da comparação de inventário é inválido.");
     }
 
     const divergencias = comparativo.filter((item: DivergenciaItem) => item.divergencia !== 0);
+
+    console.log("Divergências encontradas:", divergencias.length);
+    console.log("Divergências:", divergencias);
 
     // Se houver divergências, criar ajustes
     if (divergencias.length > 0) {
@@ -187,19 +211,20 @@ serve(async (req: Request) => {
     );
 
     // 4. Prepara os dados para o upsert
-    const estoqueRealFinal = todoEstoqueVendedor.map((produto: EstoqueItem) => {
+    const estoqueRealFinal = todoEstoqueVendedor.map((produto: ProdutoEstoque) => {
         const quantidadeFisica = mapaItensContados.get(produto.codigo_auxiliar);
         
-        // Se foi contado, usa a quantidade física. Se não, usa a quantidade de remessa.
+        // Se foi contado no inventário, usa a quantidade física
+        // Se NÃO foi contado, mantém o estoque teórico atual como estoque real
         const quantidadeFinal = quantidadeFisica !== undefined 
             ? quantidadeFisica 
-            : produto.quantidade_remessa;
+            : produto.estoque_teorico;
 
         return {
             codigo_vendedor: inventario.codigo_vendedor,
             codigo_auxiliar: produto.codigo_auxiliar,
             quantidade_real: quantidadeFinal,
-            inventario_id: inventario_id,
+            inventario_id: quantidadeFisica !== undefined ? inventario_id : null, // Só associa inventario_id se foi contado
             data_atualizacao: new Date().toISOString()
         };
     });

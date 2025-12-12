@@ -148,7 +148,8 @@ BEGIN
       ef.qtd_remessa,
       ef.qtd_venda,
       ef.qtd_movimentacao,
-      COALESCE(era.quantidade_real, 0) as base_estoque_real
+      era.quantidade_real as base_estoque_real,
+      CASE WHEN era.quantidade_real IS NOT NULL THEN true ELSE false END as foi_inventariado
     FROM estoque_final ef
     FULL OUTER JOIN estoque_real_atual era ON ef.codigo_auxiliar = era.codigo_auxiliar
   )
@@ -159,9 +160,15 @@ BEGIN
     SPLIT_PART(ecb.codigo_auxiliar, ' ', 2) as cor,
     ecb.qtd_remessa as quantidade_remessa,
     ecb.qtd_venda as quantidade_venda,
-    (ecb.base_estoque_real + ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao) as estoque_teorico
+    CASE
+      WHEN ecb.foi_inventariado THEN ecb.base_estoque_real
+      ELSE (ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao)
+    END as estoque_teorico
   FROM estoque_com_base ecb
-  WHERE (ecb.base_estoque_real + ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao) != 0
+  WHERE CASE
+    WHEN ecb.foi_inventariado THEN ecb.base_estoque_real != 0
+    ELSE (ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao) != 0
+  END
   ORDER BY ecb.codigo_auxiliar;
 END;
 $$;

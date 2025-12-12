@@ -26,18 +26,10 @@ BEGIN
 
     -- Retornar a comparação
     RETURN QUERY
-    WITH 
-    teorico AS (
-        -- Calcula o estoque teórico até a data do inventário
-        SELECT 
-            t.codigo_auxiliar,
-            t.nome_produto,
-            t.estoque_teorico
-        FROM public.calcular_estoque_vendedor_ate_data(v_codigo_vendedor, v_data_inventario) t
-    ),
+    WITH
     fisico AS (
-        -- Busca a contagem física do inventário
-        SELECT 
+        -- Busca a contagem física do inventário (só produtos que foram contados)
+        SELECT
             ii.codigo_auxiliar,
             MAX(ii.nome_produto) as nome_produto,
             SUM(ii.quantidade_fisica) as quantidade_fisica
@@ -45,22 +37,24 @@ BEGIN
         WHERE ii.inventario_id = p_inventario_id
         GROUP BY ii.codigo_auxiliar
     ),
-    produtos_unificados AS (
-        -- Garante que todos os produtos (teóricos e físicos) apareçam no resultado
-        SELECT t.codigo_auxiliar as cod_aux FROM teorico t
-        UNION
-        SELECT f.codigo_auxiliar as cod_aux FROM fisico f
+    teorico AS (
+        -- Calcula o estoque teórico até a data do inventário APENAS para produtos contados
+        SELECT
+            t.codigo_auxiliar,
+            t.nome_produto,
+            t.estoque_teorico
+        FROM public.calcular_estoque_vendedor_ate_data(v_codigo_vendedor, v_data_inventario) t
+        WHERE t.codigo_auxiliar IN (SELECT codigo_auxiliar FROM fisico)
     )
     SELECT
-        pu.cod_aux as codigo_auxiliar,
-        COALESCE(t.nome_produto, f.nome_produto, pu.cod_aux) as nome_produto,
+        f.codigo_auxiliar,
+        COALESCE(f.nome_produto, t.nome_produto, f.codigo_auxiliar) as nome_produto,
         COALESCE(t.estoque_teorico, 0) as estoque_teorico,
         COALESCE(f.quantidade_fisica, 0) as quantidade_fisica,
         (COALESCE(f.quantidade_fisica, 0) - COALESCE(t.estoque_teorico, 0)) as divergencia
-    FROM produtos_unificados pu
-    LEFT JOIN teorico t ON pu.cod_aux = t.codigo_auxiliar
-    LEFT JOIN fisico f ON pu.cod_aux = f.codigo_auxiliar
-    ORDER BY pu.cod_aux;
+    FROM fisico f
+    LEFT JOIN teorico t ON f.codigo_auxiliar = t.codigo_auxiliar
+    ORDER BY f.codigo_auxiliar;
 
 END;
 $$;

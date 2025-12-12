@@ -19,6 +19,7 @@ import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { calcularEstoqueTeorico } from '@/lib/estoque';
 import { useQueryClient } from '@tanstack/react-query';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   Table,
   TableBody,
@@ -40,6 +41,9 @@ type ItemNaoContado = {
 };
 
 export default function Conferencia() {
+  const { profile } = useAuth();
+  const isGerente = profile?.role === 'gerente';
+  
   const [inventarios, setInventarios] = useState<InventarioComItens[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedInventario, setSelectedInventario] = useState<InventarioComItens | null>(null);
@@ -149,6 +153,11 @@ export default function Conferencia() {
   
   const handleManagerAction = async (action: 'aprovar' | 'revisao') => {
     if (!selectedInventario) return;
+    
+    if (!isGerente) {
+      toast.error('Acesso negado. Apenas gerentes podem aprovar ou revisar inventários.');
+      return;
+    }
   
     if (action === 'revisao' && !observacoes.trim()) {
       toast.error('Informe o motivo da não aprovação para enviar para revisão.');
