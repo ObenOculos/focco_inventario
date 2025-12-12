@@ -397,6 +397,18 @@ export type Database = {
           nome_produto: string
         }[]
       }
+      get_entradas_pedidos: {
+        Args: {
+          p_codigo_vendedor: string
+          p_data_fim?: string
+          p_data_inicio?: string
+        }
+        Returns: {
+          codigo_auxiliar: string
+          nome_produto: string
+          quantidade: number
+        }[]
+      }
       get_estoque_real_vendedor: {
         Args: { p_codigo_vendedor: string }
         Returns: {
@@ -404,6 +416,30 @@ export type Database = {
           data_atualizacao: string
           inventario_id: string
           quantidade_real: number
+        }[]
+      }
+      get_saidas_pedidos: {
+        Args: {
+          p_codigo_vendedor: string
+          p_data_fim?: string
+          p_data_inicio?: string
+        }
+        Returns: {
+          codigo_auxiliar: string
+          nome_produto: string
+          quantidade: number
+        }[]
+      }
+      get_saldo_movimentacoes: {
+        Args: {
+          p_codigo_vendedor: string
+          p_data_fim?: string
+          p_data_inicio?: string
+        }
+        Returns: {
+          codigo_auxiliar: string
+          nome_produto: string
+          saldo: number
         }[]
       }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }

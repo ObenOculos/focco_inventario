@@ -1,150 +1,121 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.44.2'
 
-// Tipos para melhor type safety
-interface DivergenciaItem {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  divergencia: number;
-}
-
-interface EstoqueItem {
-  codigo_auxiliar: string;
-  quantidade_remessa: number;
-}
-
-interface ProdutoEstoque {
-  codigo_auxiliar: string;
-  quantidade_remessa: number;
-  quantidade_venda: number;
-  estoque_teorico: number;
-}
-
-// Funções do Deno para lidar com CORS
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-/**
- * Edge Function para aprovar e ajustar inventário
- *
- * Esta função:
- * 1. Valida permissões do usuário (apenas gerentes)
- * 2. Verifica se o inventário existe e está pendente/revisão
- * 3. Calcula divergências entre estoque físico e teórico
- * 4. Cria ajustes automáticos de estoque se necessário
- * 5. Atualiza o status do inventário para 'aprovado'
- * 6. Atualiza a tabela estoque_real com os novos valores
- *
- * @param inventario_id - ID do inventário a ser aprovado
- * @returns Status da operação e número de ajustes criados
- */
+interface DivergenciaItem {
+  codigo_auxiliar: string;
+  nome_produto: string;
+  estoque_teorico: number;
+  quantidade_fisica: number;
+  divergencia: number;
+}
 
+interface EstoqueItem {
+  codigo_auxiliar: string;
+  nome_produto: string;
+  estoque_teorico: number;
+}
+
+/**
+ * Edge Function: Aprovar e Ajustar Inventário
+ * 
+ * Fluxo:
+ * 1. Valida permissões (apenas gerentes)
+ * 2. Verifica status do inventário (pendente ou revisao)
+ * 3. Calcula divergências usando comparar_estoque_inventario
+ * 4. Cria ajustes automáticos de estoque para divergências
+ * 5. Atualiza status para 'aprovado'
+ * 6. Atualiza tabela estoque_real com contagem física
+ */
 serve(async (req: Request) => {
-  // Trata a requisição OPTIONS (pre-flight) para CORS
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    // Validação da entrada
     const body = await req.json()
     const { inventario_id } = body
 
     if (!inventario_id || typeof inventario_id !== 'string') {
-      throw new Error("ID do inventário é obrigatório e deve ser uma string válida.");
+      throw new Error("ID do inventário é obrigatório.")
     }
 
-    // Cria um cliente Supabase com privilégios de serviço para poder
-    // verificar o perfil do usuário e realizar as operações necessárias.
+    // Cliente admin com service role
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
-    );
+    )
 
-    // Pega o token JWT do header da requisição
+    // Valida autenticação
     const authHeader = req.headers.get('Authorization')
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return new Response(JSON.stringify({ error: 'Token de autenticação não fornecido.' }), {
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Token não fornecido.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       })
     }
 
     const token = authHeader.replace('Bearer ', '')
-    
-    // Verifica o token JWT e obtém o usuário
     const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token)
 
     if (authError || !user) {
-      return new Response(JSON.stringify({ error: 'Token de autenticação inválido.' }), {
+      return new Response(JSON.stringify({ error: 'Token inválido.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       })
     }
 
-    // Verifica se o usuário tem a permissão de 'gerente'
+    // Valida permissão de gerente
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role')
       .eq('id', user.id)
-      .single();
+      .single()
 
     if (profileError || profile?.role !== 'gerente') {
-      return new Response(JSON.stringify({ error: 'Acesso negado. Apenas gerentes podem aprovar inventários.' }), {
+      return new Response(JSON.stringify({ error: 'Acesso negado. Apenas gerentes.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
       })
     }
-    
-    // Busca o inventário para garantir que ele existe e está com status 'pendente' ou 'revisao'
+
+    // Busca inventário
     const { data: inventario, error: inventarioError } = await supabaseAdmin
       .from('inventarios')
-      .select('status, codigo_vendedor, user_id')
+      .select('status, codigo_vendedor, user_id, data_inventario')
       .eq('id', inventario_id)
-      .single();
+      .single()
 
-    if (inventarioError) {
-      throw new Error(`Inventário não encontrado: ${inventarioError.message}`);
-    }
-
-    if (!inventario) {
-      throw new Error("Inventário não encontrado.");
+    if (inventarioError || !inventario) {
+      throw new Error("Inventário não encontrado.")
     }
 
     if (!['pendente', 'revisao'].includes(inventario.status)) {
-      throw new Error(`Este inventário já foi processado (status atual: ${inventario.status}).`);
+      throw new Error(`Inventário já processado (status: ${inventario.status}).`)
     }
 
-    // Verifica se o inventário pertence ao usuário que está tentando aprovar (se necessário)
-    // Nota: Gerentes podem aprovar inventários de qualquer vendedor
+    console.log(`[INFO] Processando inventário ${inventario_id} do vendedor ${inventario.codigo_vendedor}`)
 
-    // Chama a função RPC para obter as divergências
+    // Calcula divergências usando a função SQL
     const { data: comparativo, error: rpcError } = await supabaseAdmin.rpc('comparar_estoque_inventario', {
-        p_inventario_id: inventario_id
-    });
+      p_inventario_id: inventario_id
+    })
 
     if (rpcError) {
-        console.error("Erro RPC:", rpcError);
-        console.error("Detalhes do erro:", JSON.stringify(rpcError, null, 2));
-        throw new Error(`Não foi possível calcular a comparação do inventário: ${rpcError.message || 'Erro desconhecido'}`);
+      console.error("[ERROR] Erro ao comparar inventário:", rpcError)
+      throw new Error(`Erro ao calcular divergências: ${rpcError.message}`)
     }
 
-    console.log("Comparativo obtido:", comparativo);
-    console.log("Número de itens no comparativo:", comparativo?.length || 0);
+    console.log(`[INFO] Itens comparados: ${comparativo?.length || 0}`)
 
-    if (!comparativo || !Array.isArray(comparativo)) {
-        console.error("Comparativo não é um array válido:", comparativo);
-        throw new Error("Resultado da comparação de inventário é inválido.");
-    }
+    const divergencias = (comparativo || []).filter((item: DivergenciaItem) => item.divergencia !== 0)
+    console.log(`[INFO] Divergências encontradas: ${divergencias.length}`)
 
-    const divergencias = comparativo.filter((item: DivergenciaItem) => item.divergencia !== 0);
-
-    console.log("Divergências encontradas:", divergencias.length);
-    console.log("Divergências:", divergencias);
-
-    // Se houver divergências, criar ajustes
+    // Cria ajustes para divergências
     if (divergencias.length > 0) {
       const ajustes = divergencias.map((item: DivergenciaItem) => ({
         user_id: user.id,
@@ -155,115 +126,96 @@ serve(async (req: Request) => {
         quantidade: Math.abs(item.divergencia),
         motivo: 'Ajuste automático via aprovação de inventário',
         origem_id: inventario_id,
-        origem_tipo: 'inventario_ajuste' // Novo campo para rastreabilidade
-      }));
+        origem_tipo: 'inventario_ajuste',
+        data_movimentacao: inventario.data_inventario
+      }))
 
-      // Insere todos os ajustes de uma vez
       const { error: insertError } = await supabaseAdmin
         .from('movimentacoes_estoque')
-        .insert(ajustes);
+        .insert(ajustes)
 
       if (insertError) {
-        console.error("Erro ao inserir ajustes:", insertError);
-        throw new Error("Falha ao salvar os ajustes de estoque.");
+        console.error("[ERROR] Erro ao inserir ajustes:", insertError)
+        throw new Error("Falha ao salvar ajustes de estoque.")
       }
+
+      console.log(`[INFO] ${ajustes.length} ajustes criados com sucesso`)
     }
 
-    // Finalmente, atualiza o status do inventário para 'aprovado'
+    // Atualiza status do inventário
     const { error: updateError } = await supabaseAdmin
       .from('inventarios')
       .update({ status: 'aprovado', updated_at: new Date().toISOString() })
-      .eq('id', inventario_id);
+      .eq('id', inventario_id)
 
     if (updateError) {
-      console.error("Erro ao atualizar inventário:", updateError);
-      throw new Error("Falha ao aprovar o inventário após criar os ajustes.");
-    }
-    
-    // Nova lógica para atualizar o estoque_real
-    // 1. Pega todo o estoque teórico (que inclui as remessas)
-    const { data: todoEstoqueVendedor, error: estoqueError } = await supabaseAdmin
-        .rpc('calcular_estoque_vendedor', { p_codigo_vendedor: inventario.codigo_vendedor });
-
-    if (estoqueError) {
-        console.error("Erro ao calcular estoque do vendedor:", estoqueError);
-        throw new Error("Falha ao buscar o estoque completo do vendedor.");
+      console.error("[ERROR] Erro ao atualizar inventário:", updateError)
+      throw new Error("Falha ao aprovar inventário.")
     }
 
-    // 2. Pega os itens contados no inventário
+    // Busca itens contados no inventário
     const { data: itensInventario, error: itensError } = await supabaseAdmin
-        .from('itens_inventario')
-        .select('codigo_auxiliar, quantidade_fisica')
-        .eq('inventario_id', inventario_id);
+      .from('itens_inventario')
+      .select('codigo_auxiliar, quantidade_fisica, nome_produto')
+      .eq('inventario_id', inventario_id)
 
     if (itensError) {
-        console.error("Erro ao buscar itens do inventário:", itensError);
-        throw new Error("Falha ao buscar itens contados.");
+      console.error("[ERROR] Erro ao buscar itens:", itensError)
+      throw new Error("Falha ao buscar itens contados.")
     }
 
     if (!itensInventario || itensInventario.length === 0) {
-        throw new Error("O inventário não possui itens contados.");
+      throw new Error("Inventário sem itens contados.")
     }
 
-    // 3. Mapeia os itens contados para fácil acesso
-    const mapaItensContados = new Map(
-        itensInventario.map(item => [item.codigo_auxiliar, item.quantidade_fisica])
-    );
+    // Prepara dados para estoque_real
+    const estoqueRealData = itensInventario.map(item => ({
+      codigo_vendedor: inventario.codigo_vendedor,
+      codigo_auxiliar: item.codigo_auxiliar,
+      quantidade_real: item.quantidade_fisica,
+      inventario_id: inventario_id,
+      data_atualizacao: inventario.data_inventario
+    }))
 
-    // 4. Prepara os dados para o upsert
-    const estoqueRealFinal = todoEstoqueVendedor.map((produto: ProdutoEstoque) => {
-        const quantidadeFisica = mapaItensContados.get(produto.codigo_auxiliar);
-        
-        // Se foi contado no inventário, usa a quantidade física
-        // Se NÃO foi contado, mantém o estoque teórico atual como estoque real
-        const quantidadeFinal = quantidadeFisica !== undefined 
-            ? quantidadeFisica 
-            : produto.estoque_teorico;
-
-        return {
-            codigo_vendedor: inventario.codigo_vendedor,
-            codigo_auxiliar: produto.codigo_auxiliar,
-            quantidade_real: quantidadeFinal,
-            inventario_id: quantidadeFisica !== undefined ? inventario_id : null, // Só associa inventario_id se foi contado
-            data_atualizacao: new Date().toISOString()
-        };
-    });
-
-    // 5. Deleta o estoque antigo para este vendedor
+    // Deleta estoque anterior do vendedor
     const { error: deleteError } = await supabaseAdmin
-        .from('estoque_real')
-        .delete()
-        .eq('codigo_vendedor', inventario.codigo_vendedor);
+      .from('estoque_real')
+      .delete()
+      .eq('codigo_vendedor', inventario.codigo_vendedor)
 
     if (deleteError) {
-        console.error("Erro ao limpar estoque real antigo:", deleteError);
-        throw new Error("Falha ao limpar o estoque antigo antes de atualizar.");
+      console.error("[ERROR] Erro ao limpar estoque real:", deleteError)
+      throw new Error("Falha ao limpar estoque antigo.")
     }
 
-    // 6. Insere o novo estado do estoque real
+    // Insere novo estoque real
     const { error: upsertError } = await supabaseAdmin
-        .from('estoque_real')
-        .insert(estoqueRealFinal);
+      .from('estoque_real')
+      .insert(estoqueRealData)
 
     if (upsertError) {
-        console.error("Erro ao dar upsert no estoque real:", upsertError);
-        throw new Error("Falha ao salvar o novo estado do estoque real.");
+      console.error("[ERROR] Erro ao inserir estoque real:", upsertError)
+      throw new Error("Falha ao salvar estoque real.")
     }
 
+    console.log(`[INFO] Estoque real atualizado: ${estoqueRealData.length} itens`)
 
-    const mensagemSucesso = divergencias.length > 0
-      ? `Inventário aprovado com sucesso! ${divergencias.length} ajuste(s) de estoque foram criados e o estoque real foi atualizado.`
-      : 'Inventário aprovado com sucesso! Não foram necessários ajustes de estoque.';
+    const mensagem = divergencias.length > 0
+      ? `Inventário aprovado! ${divergencias.length} ajuste(s) criados.`
+      : 'Inventário aprovado! Sem divergências.'
 
     return new Response(JSON.stringify({
-      message: mensagemSucesso,
-      ajustes_criados: divergencias.length
+      message: mensagem,
+      ajustes_criados: divergencias.length,
+      itens_estoque_real: estoqueRealData.length
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
     })
+
   } catch (err) {
-    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
+    const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido'
+    console.error("[ERROR] Exceção:", errorMessage)
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
