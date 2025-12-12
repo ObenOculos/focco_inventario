@@ -79,8 +79,26 @@ SET search_path = public
 AS $$
 BEGIN
   RETURN QUERY
-  WITH itens_agregados AS (
+  WITH ultimo_inventario AS (
+    -- Busca a data do último inventário aprovado para este vendedor
+    SELECT MAX(i.data_inventario) as data_ultimo_inventario
+    FROM inventarios i
+    WHERE i.codigo_vendedor = p_codigo_vendedor
+    AND i.status = 'aprovado'
+  ),
+  estoque_real_atual AS (
+    -- Busca o estoque real mais recente
+    SELECT DISTINCT ON (er.codigo_auxiliar)
+      er.codigo_auxiliar,
+      er.quantidade_real,
+      er.data_atualizacao
+    FROM estoque_real er
+    WHERE er.codigo_vendedor = p_codigo_vendedor
+    ORDER BY er.codigo_auxiliar, er.data_atualizacao DESC
+  ),
+  itens_agregados AS (
     -- Agrega itens de pedidos por codigo_auxiliar
+    -- Só considera pedidos APÓS o último inventário (se existir)
     SELECT
       ip.codigo_auxiliar,
       ip.nome_produto,
@@ -89,10 +107,13 @@ BEGIN
     FROM itens_pedido ip
     INNER JOIN pedidos p ON p.id = ip.pedido_id
     WHERE p.codigo_vendedor = p_codigo_vendedor
+    AND (SELECT data_ultimo_inventario FROM ultimo_inventario) IS NULL
+       OR p.data_emissao > (SELECT data_ultimo_inventario FROM ultimo_inventario)
     GROUP BY ip.codigo_auxiliar, ip.nome_produto
   ),
   movimentacoes_agregadas AS (
     -- Agrega movimentações avulsas
+    -- Só considera movimentações APÓS o último inventário (se existir)
     SELECT
       me.codigo_auxiliar,
       me.nome_produto,
@@ -103,6 +124,8 @@ BEGIN
           END) as qtd_movimentacao
     FROM movimentacoes_estoque me
     WHERE me.codigo_vendedor = p_codigo_vendedor
+    AND (SELECT data_ultimo_inventario FROM ultimo_inventario) IS NULL
+       OR me.created_at > (SELECT data_ultimo_inventario FROM ultimo_inventario)
     GROUP BY me.codigo_auxiliar, me.nome_produto
   ),
   estoque_final AS (
@@ -116,17 +139,29 @@ BEGIN
     FROM itens_agregados ia
     FULL OUTER JOIN movimentacoes_agregadas ma
       ON ia.codigo_auxiliar = ma.codigo_auxiliar
+  ),
+  estoque_com_base AS (
+    -- Adiciona o estoque real como base quando disponível
+    SELECT
+      ef.codigo_auxiliar,
+      ef.nome_produto,
+      ef.qtd_remessa,
+      ef.qtd_venda,
+      ef.qtd_movimentacao,
+      COALESCE(era.quantidade_real, 0) as base_estoque_real
+    FROM estoque_final ef
+    FULL OUTER JOIN estoque_real_atual era ON ef.codigo_auxiliar = era.codigo_auxiliar
   )
   SELECT
-    ef.codigo_auxiliar,
-    ef.nome_produto,
-    SPLIT_PART(ef.codigo_auxiliar, ' ', 1) as modelo,
-    SPLIT_PART(ef.codigo_auxiliar, ' ', 2) as cor,
-    ef.qtd_remessa as quantidade_remessa,
-    ef.qtd_venda as quantidade_venda,
-    (ef.qtd_remessa - ef.qtd_venda + ef.qtd_movimentacao) as estoque_teorico
-  FROM estoque_final ef
-  WHERE (ef.qtd_remessa - ef.qtd_venda + ef.qtd_movimentacao) != 0
-  ORDER BY ef.codigo_auxiliar;
+    ecb.codigo_auxiliar,
+    ecb.nome_produto,
+    SPLIT_PART(ecb.codigo_auxiliar, ' ', 1) as modelo,
+    SPLIT_PART(ecb.codigo_auxiliar, ' ', 2) as cor,
+    ecb.qtd_remessa as quantidade_remessa,
+    ecb.qtd_venda as quantidade_venda,
+    (ecb.base_estoque_real + ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao) as estoque_teorico
+  FROM estoque_com_base ecb
+  WHERE (ecb.base_estoque_real + ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao) != 0
+  ORDER BY ecb.codigo_auxiliar;
 END;
 $$;
