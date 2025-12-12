@@ -153,29 +153,29 @@ serve(async (req: Request) => {
       throw new Error("Falha ao aprovar inventário.")
     }
 
-    // Busca itens contados no inventário
-    const { data: itensInventario, error: itensError } = await supabaseAdmin
-      .from('itens_inventario')
-      .select('codigo_auxiliar, quantidade_fisica, nome_produto')
-      .eq('inventario_id', inventario_id)
+    // Prepara dados para estoque_real usando o comparativo
+    // - Itens contados: usa quantidade_fisica
+    // - Itens não contados com estoque teórico: mantém estoque_teorico
+    const estoqueRealData = (comparativo || [])
+      .filter((item: DivergenciaItem) => 
+        item.quantidade_fisica > 0 || item.estoque_teorico !== 0
+      )
+      .map((item: DivergenciaItem) => ({
+        codigo_vendedor: inventario.codigo_vendedor,
+        codigo_auxiliar: item.codigo_auxiliar,
+        // Se foi contado (física > 0), usa a contagem física; senão, mantém o teórico
+        quantidade_real: item.quantidade_fisica > 0 
+          ? item.quantidade_fisica 
+          : item.estoque_teorico,
+        inventario_id: inventario_id,
+        data_atualizacao: inventario.data_inventario
+      }))
 
-    if (itensError) {
-      console.error("[ERROR] Erro ao buscar itens:", itensError)
-      throw new Error("Falha ao buscar itens contados.")
+    if (estoqueRealData.length === 0) {
+      throw new Error("Nenhum item para registrar no estoque real.")
     }
 
-    if (!itensInventario || itensInventario.length === 0) {
-      throw new Error("Inventário sem itens contados.")
-    }
-
-    // Prepara dados para estoque_real
-    const estoqueRealData = itensInventario.map(item => ({
-      codigo_vendedor: inventario.codigo_vendedor,
-      codigo_auxiliar: item.codigo_auxiliar,
-      quantidade_real: item.quantidade_fisica,
-      inventario_id: inventario_id,
-      data_atualizacao: inventario.data_inventario
-    }))
+    console.log(`[INFO] Itens para estoque real: ${estoqueRealData.length} (contados + mantidos do teórico)`)
 
     // Deleta estoque anterior do vendedor
     const { error: deleteError } = await supabaseAdmin
