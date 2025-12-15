@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Profile } from '@/types/app';
@@ -13,20 +13,22 @@ import { Users, Plus, Pencil, UserCheck, UserX } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
+import { useVendedoresListQuery, useCodigosDisponiveisQuery, useInvalidateVendedores } from '@/hooks/useVendedoresGerenciamentoQuery';
 
 export default function Vendedores() {
-  const [vendedores, setVendedores] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingVendedor, setEditingVendedor] = useState<Profile | null>(null);
-  const [codigosDisponiveis, setCodigosDisponiveis] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     email: '',
     nome: '',
     codigo_vendedor: '',
     telefone: '',
   });
+
+  const { data: vendedores = [], isLoading: loading } = useVendedoresListQuery();
+  const { data: codigosDisponiveis = [] } = useCodigosDisponiveisQuery();
+  const invalidateVendedores = useInvalidateVendedores();
 
   const {
     currentPage,
@@ -43,62 +45,6 @@ export default function Vendedores() {
     searchTerm,
     searchFields: ['nome', 'email', 'codigo_vendedor'],
   });
-
-  useEffect(() => {
-    fetchVendedores();
-    fetchCodigosDisponiveis();
-  }, []);
-
-  const fetchVendedores = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('role', 'vendedor')
-      .order('nome');
-
-    if (error) {
-      console.error('Erro ao buscar vendedores:', error);
-    } else {
-      setVendedores(data as Profile[]);
-    }
-    setLoading(false);
-  };
-
-  const fetchCodigosDisponiveis = async () => {
-    // Buscar todos os códigos de vendedor únicos dos pedidos
-    const { data: pedidosData, error: pedidosError } = await supabase
-      .from('pedidos')
-      .select('codigo_vendedor')
-      .not('codigo_vendedor', 'is', null);
-
-    if (pedidosError) {
-      console.error('Erro ao buscar códigos:', pedidosError);
-      return;
-    }
-
-    // Buscar códigos já associados a vendedores
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('codigo_vendedor')
-      .eq('role', 'vendedor')
-      .not('codigo_vendedor', 'is', null);
-
-    if (profilesError) {
-      console.error('Erro ao buscar perfis:', profilesError);
-      return;
-    }
-
-    // Extrair códigos únicos dos pedidos
-    const codigosPedidos = [...new Set(pedidosData.map(p => p.codigo_vendedor).filter(Boolean))];
-    
-    // Extrair códigos já associados
-    const codigosAssociados = new Set(profilesData.map(p => p.codigo_vendedor).filter(Boolean));
-    
-    // Filtrar apenas os códigos não associados
-    const disponiveis = codigosPedidos.filter(codigo => !codigosAssociados.has(codigo));
-    
-    setCodigosDisponiveis(disponiveis.sort());
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,8 +65,7 @@ export default function Vendedores() {
         console.error(error);
       } else {
         toast.success('Vendedor atualizado!');
-        fetchVendedores();
-        fetchCodigosDisponiveis();
+        invalidateVendedores();
         setDialogOpen(false);
         resetForm();
       }
@@ -152,8 +97,7 @@ export default function Vendedores() {
         console.error(result.error);
       } else {
         toast.success('Vendedor criado! Um email foi enviado para definir a senha.');
-        fetchVendedores();
-        fetchCodigosDisponiveis();
+        invalidateVendedores();
         setDialogOpen(false);
         resetForm();
       }
@@ -170,7 +114,7 @@ export default function Vendedores() {
       toast.error('Erro ao atualizar status');
     } else {
       toast.success(vendedor.ativo ? 'Vendedor desativado' : 'Vendedor ativado');
-      fetchVendedores();
+      invalidateVendedores();
     }
   };
 

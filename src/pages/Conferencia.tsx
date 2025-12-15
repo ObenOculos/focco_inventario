@@ -1,8 +1,7 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
-import { Database } from '@/integrations/supabase/types';
-import { DivergenciaItem, InventoryStatus } from '@/types/app';
+import { DivergenciaItem } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -11,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, CheckCircle, XCircle, AlertTriangle, TrendingUp, TrendingDown, Save, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, Clock, ChevronsRight, Loader2, Download } from 'lucide-react';
+import { ClipboardList, CheckCircle, XCircle, AlertTriangle, Save, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, ChevronsRight, Loader2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { ConferenciaSkeleton } from '@/components/skeletons/PageSkeleton';
@@ -19,7 +18,6 @@ import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-// Removido: calcularEstoqueTeorico - agora usa RPC comparar_estoque_inventario
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -30,11 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
-  itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
-  profiles?: { nome: string };
-};
+import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
 
 type ItemNaoContado = {
   codigo_auxiliar: string;
@@ -46,8 +40,6 @@ export default function Conferencia() {
   const { profile } = useAuth();
   const isGerente = profile?.role === 'gerente';
   
-  const [inventarios, setInventarios] = useState<InventarioComItens[]>([]);
-  const [loading, setLoading] = useState(true);
   const [selectedInventario, setSelectedInventario] = useState<InventarioComItens | null>(null);
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
   const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
@@ -60,6 +52,8 @@ export default function Conferencia() {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   const queryClient = useQueryClient();
+  
+  const { data: inventarios = [], isLoading: loading, refetch: refetchInventarios } = useInventariosPendentesQuery();
 
   const filteredDivergencias = useMemo(() => {
     let filtered = divergencias;
@@ -78,32 +72,8 @@ export default function Conferencia() {
     searchFields: ['codigo_auxiliar', 'nome_produto'],
     itemsPerPage: 20,
   });
-
-  useEffect(() => {
-    fetchInventarios();
-  }, []);
   
-  const fetchInventarios = async () => {
-    setLoading(true);
-    const { data, error } = await supabase
-      .from('inventarios')
-      .select(`*, itens_inventario (*), profiles!inventarios_user_id_fkey (nome)`)
-      .in('status', ['pendente', 'revisao'])
-      .order('created_at', { ascending: false });
-
-    if (error) {
-      console.error('Erro ao buscar inventários:', error);
-      toast.error("Falha ao carregar inventários.");
-    } else {
-      setInventarios(data as unknown as InventarioComItens[]);
-      if (data.length > 0 && !selectedInventario) {
-        handleSelectInventario(data[0]);
-      }
-    }
-    setLoading(false);
-  };
-  
-  const handleSelectInventario = async (inventario: InventarioComItens) => {
+  const handleSelectInventario = useCallback(async (inventario: InventarioComItens) => {
     if (selectedInventario?.id === inventario.id) return;
     
     setIsDetailLoading(true);
@@ -114,7 +84,6 @@ export default function Conferencia() {
     setEditedValues({});
     setShowItensNaoContados(false);
   
-    // Correção 2: Usar o RPC comparar_estoque_inventario para unificar cálculo
     const { data: comparativo, error } = await supabase.rpc('comparar_estoque_inventario', {
       p_inventario_id: inventario.id
     });
@@ -148,7 +117,6 @@ export default function Conferencia() {
           diferenca, percentual, tipo,
         });
       } else {
-        // Correção 3: Mostrar itens não contados com estoque != 0 (positivo OU negativo)
         if (item.estoque_teorico !== 0) {
           itensNaoContadosList.push({
             codigo_auxiliar: item.codigo_auxiliar,
@@ -162,7 +130,7 @@ export default function Conferencia() {
     setItensNaoContados(itensNaoContadosList.sort((a, b) => Math.abs(b.estoque_teorico) - Math.abs(a.estoque_teorico)));
     setDivergencias(divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca)));
     setIsDetailLoading(false);
-  };
+  }, [selectedInventario]);
   
   const handleManagerAction = async (action: 'aprovar' | 'revisao') => {
     if (!selectedInventario) return;
@@ -194,9 +162,11 @@ export default function Conferencia() {
         toast.info('Inventário enviado para revisão.');
       }
   
-      queryClient.invalidateQueries({ queryKey: ['movimentacoes', 'inventarios', 'dashboard'] });
-      setSelectedInventario(null); // Clear selection
-      fetchInventarios(); // Refresh list
+      queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      setSelectedInventario(null);
+      refetchInventarios();
     } catch (error: any) {
       console.error(`Erro ao ${action} inventário:`, error);
       toast.error(`Erro ao ${action} inventário`, { description: error.message || 'Ocorreu um erro.' });
@@ -206,7 +176,6 @@ export default function Conferencia() {
   };
   
   const handleEditValue = (codigoAuxiliar: string, value: string) => {
-    // Permitir string vazia temporariamente durante digitação, mas tratar como 0
     if (value === '' || value === '-') {
       setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: 0 }));
       return;
@@ -271,7 +240,6 @@ export default function Conferencia() {
       'Status': item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta'
     }));
 
-    // Adicionar itens não contados
     itensNaoContados.forEach(item => {
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
