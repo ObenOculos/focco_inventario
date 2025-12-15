@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Package, AlertTriangle, ArrowUpCircle, ArrowDownCircle } from 'lucide-react';
+import { Package, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Download } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks/usePagination';
@@ -19,6 +19,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useToast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 interface VendedorProfile {
   id: string;
@@ -37,6 +39,7 @@ interface ComparacaoItem {
 
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
+  const { toast } = useToast();
   const [dados, setDados] = useState<ComparacaoItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -146,20 +149,26 @@ export default function EstoqueTeorico() {
         return;
       }
 
+      // Otimização: buscar dados de todos os vendedores em paralelo
+      const vendorCodes = profiles
+        .map(p => p.codigo_vendedor)
+        .filter((code): code is string => !!code);
+
+      const results = await Promise.all(
+        vendorCodes.map(code => fetchComparacao(code))
+      );
+
       const consolidated = new Map<string, ComparacaoItem>();
 
-      for (const p of profiles) {
-        if (p.codigo_vendedor) {
-          const vendorData = await fetchComparacao(p.codigo_vendedor);
-          for (const item of vendorData) {
-            const existing = consolidated.get(item.codigo_auxiliar);
-            if (existing) {
-              existing.estoque_teorico += item.estoque_teorico;
-              existing.estoque_real += item.estoque_real;
-              existing.diferenca += item.diferenca;
-            } else {
-              consolidated.set(item.codigo_auxiliar, { ...item });
-            }
+      for (const vendorData of results) {
+        for (const item of vendorData) {
+          const existing = consolidated.get(item.codigo_auxiliar);
+          if (existing) {
+            existing.estoque_teorico += item.estoque_teorico;
+            existing.estoque_real += item.estoque_real;
+            existing.diferenca += item.diferenca;
+          } else {
+            consolidated.set(item.codigo_auxiliar, { ...item });
           }
         }
       }
@@ -192,6 +201,45 @@ export default function EstoqueTeorico() {
   const totalEstoqueReal = dados.reduce((acc, item) => acc + item.estoque_real, 0);
   const totalDivergencia = dados.reduce((acc, item) => acc + item.diferenca, 0);
   const totalModelos = new Set(dados.map(e => e.codigo_auxiliar.split(' ')[0])).size;
+
+  const handleExportExcel = () => {
+    if (dadosFiltrados.length === 0) {
+      toast({
+        title: "Sem dados",
+        description: "Não há dados para exportar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const exportData = dadosFiltrados.map(item => ({
+      'Código Auxiliar': item.codigo_auxiliar,
+      'Nome Produto': item.nome_produto,
+      'Estoque Teórico': item.estoque_teorico,
+      'Estoque Real': item.estoque_real,
+      'Divergência': item.diferenca,
+      'Data Atualização Real': item.data_atualizacao_real 
+        ? new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')
+        : '-'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Estoque Teórico x Real');
+
+    const vendorName = selectedVendor !== 'todos' 
+      ? vendedores.find(v => v.codigo_vendedor === selectedVendor)?.nome || selectedVendor
+      : 'consolidado';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `estoque_teorico_real_${vendorName}_${dateStr}.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+
+    toast({
+      title: "Exportação concluída",
+      description: `Arquivo ${fileName} baixado com sucesso.`
+    });
+  };
 
   return (
     <AppLayout>
@@ -281,9 +329,20 @@ export default function EstoqueTeorico() {
                 <Package size={20} />
                 Comparação: Teórico x Real
               </span>
-              <Badge variant="secondary" className="text-lg px-3 py-1">
-                {totalItems} produtos
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-lg px-3 py-1">
+                  {totalItems} produtos
+                </Badge>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleExportExcel}
+                  disabled={dadosFiltrados.length === 0}
+                >
+                  <Download size={16} className="mr-2" />
+                  Exportar Excel
+                </Button>
+              </div>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">

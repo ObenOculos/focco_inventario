@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, CheckCircle, XCircle, AlertTriangle, TrendingUp, TrendingDown, Save, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, Clock, ChevronsRight, Loader2 } from 'lucide-react';
+import { ClipboardList, CheckCircle, XCircle, AlertTriangle, TrendingUp, TrendingDown, Save, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, Clock, ChevronsRight, Loader2, Download } from 'lucide-react';
+import * as XLSX from 'xlsx';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -254,6 +255,45 @@ export default function Conferencia() {
     valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
   }), [divergencias]);
 
+  const handleExportExcel = () => {
+    if (!selectedInventario || divergencias.length === 0) {
+      toast.error('Não há dados para exportar.');
+      return;
+    }
+
+    const exportData = divergencias.map(item => ({
+      'Código Auxiliar': item.codigo_auxiliar,
+      'Nome Produto': item.nome_produto,
+      'Estoque Teórico': item.estoque_teorico,
+      'Quantidade Física': item.quantidade_fisica,
+      'Divergência': item.diferenca,
+      'Status': item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta'
+    }));
+
+    // Adicionar itens não contados
+    itensNaoContados.forEach(item => {
+      exportData.push({
+        'Código Auxiliar': item.codigo_auxiliar,
+        'Nome Produto': item.nome_produto,
+        'Estoque Teórico': item.estoque_teorico,
+        'Quantidade Física': 0,
+        'Divergência': -item.estoque_teorico,
+        'Status': 'Não Contado'
+      });
+    });
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Conferência');
+
+    const vendorName = selectedInventario.profiles?.nome || selectedInventario.codigo_vendedor;
+    const dateStr = format(new Date(selectedInventario.data_inventario), 'dd-MM-yyyy');
+    const fileName = `conferencia_${vendorName}_${dateStr}.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+    toast.success(`Arquivo ${fileName} baixado com sucesso.`);
+  };
+
   if (loading) {
     return <AppLayout><div className="text-center py-8 text-muted-foreground">Carregando inventários...</div></AppLayout>;
   }
@@ -375,6 +415,16 @@ export default function Conferencia() {
                           <SelectItem value="falta">Apenas Faltas</SelectItem>
                         </SelectContent>
                       </Select>
+                      <Button 
+                        variant="outline" 
+                        size="sm" 
+                        onClick={handleExportExcel}
+                        disabled={divergencias.length === 0}
+                        className="ml-auto"
+                      >
+                        <Download size={16} className="mr-2" />
+                        Exportar
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent>

@@ -58,6 +58,8 @@ export default function HistoricoEstoqueReal() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVendor, setSelectedVendor] = useState<string>('todos');
   const [vendedores, setVendedores] = useState<VendedorProfile[]>([]);
+  const [startDate, setStartDate] = useState<string>('');
+  const [endDate, setEndDate] = useState<string>('');
 
   const isGerente = profile?.role === 'gerente';
 
@@ -138,16 +140,31 @@ export default function HistoricoEstoqueReal() {
   }, [profile, isGerente, selectedVendor, vendedores]);
 
   const historicoFiltrado = useMemo(() => {
-    if (!searchTerm) return historico;
+    let filtered = historico;
+    
+    // Filtro por período
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      filtered = filtered.filter(group => new Date(group.data_atualizacao) >= start);
+    }
+    if (endDate) {
+      const end = new Date(endDate);
+      end.setHours(23, 59, 59, 999);
+      filtered = filtered.filter(group => new Date(group.data_atualizacao) <= end);
+    }
+    
+    // Filtro por texto
+    if (!searchTerm) return filtered;
     
     const term = searchTerm.toLowerCase();
-    return historico.map(group => ({
+    return filtered.map(group => ({
       ...group,
       itens: group.itens.filter(item => 
         item.codigo_auxiliar.toLowerCase().includes(term)
       )
     })).filter(group => group.itens.length > 0);
-  }, [historico, searchTerm]);
+  }, [historico, searchTerm, startDate, endDate]);
 
   const totalRegistros = historico.reduce((acc, g) => acc + g.total_itens, 0);
   const totalAtualizacoes = historico.length;
@@ -251,7 +268,7 @@ export default function HistoricoEstoqueReal() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col md:flex-row gap-4 flex-wrap">
               <SearchFilter
                 value={searchTerm}
                 onChange={setSearchTerm}
@@ -272,6 +289,32 @@ export default function HistoricoEstoqueReal() {
                   </SelectContent>
                 </Select>
               )}
+              <div className="flex gap-2 items-center">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Data inicial"
+                />
+                <span className="text-muted-foreground">até</span>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Data final"
+                />
+                {(startDate || endDate) && (
+                  <Button 
+                    variant="ghost" 
+                    size="sm"
+                    onClick={() => { setStartDate(''); setEndDate(''); }}
+                  >
+                    Limpar
+                  </Button>
+                )}
+              </div>
             </div>
 
             {loading ? (
