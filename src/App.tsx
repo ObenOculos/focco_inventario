@@ -36,7 +36,7 @@ const App = () => (
       <TooltipProvider>
         <Sonner />
         <ImportProgress />
-        <BrowserRouter>
+        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
           <ImportBlocker />
           <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Carregando...</div>}>
             <Routes>
