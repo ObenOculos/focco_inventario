@@ -1,48 +1,22 @@
-import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { useEstoqueQuery, useMovimentacaoResumoQuery, useEstoqueRealStatsQuery } from '@/hooks/useDashboardQuery';
+import { useEstoqueQuery, useMovimentacaoResumoQuery, useEstoqueRealStatsQuery, useStatusInventariosQuery, useDivergenciasQuery } from '@/hooks/useDashboardQuery';
 import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
-import { EstoqueItem } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Package, TrendingUp, TrendingDown, ClipboardList, AlertTriangle, Users, ArrowRight, Clock, CheckCircle2, XCircle, FileCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-interface MovimentacaoResumo {
-  totalRemessas: number;
-  unidadesRemessa: number;
-  valorRemessa: number;
-  totalVendas: number;
-  unidadesVenda: number;
-  valorVenda: number;
-}
-interface StatusInventario {
-  codigo_vendedor: string;
-  nome_vendedor: string;
-  inventarios_pendentes: number;
-  inventarios_aprovados: number;
-  inventarios_revisao: number;
-  ultimo_inventario: string | null;
-}
-interface Divergencia {
-  codigo_vendedor: string;
-  nome_vendedor: string;
-  inventario_id: string;
-  data: string;
-}
+
 export default function Dashboard() {
-  const {
-    profile
-  } = useAuth();
+  const { profile } = useAuth();
   const isGerente = profile?.role === 'gerente';
-  const [statusInventarios, setStatusInventarios] = useState<StatusInventario[]>([]);
-  const [divergencias, setDivergencias] = useState<Divergencia[]>([]);
+
   const {
     data: estoqueArray = [],
     isLoading: loadingEstoque
   } = useEstoqueQuery(profile?.codigo_vendedor, isGerente);
+
   const {
     data: movimentacao = {
       totalRemessas: 0,
@@ -53,104 +27,21 @@ export default function Dashboard() {
       valorVenda: 0
     }
   } = useMovimentacaoResumoQuery(profile?.codigo_vendedor, isGerente);
-  const {
-    data: estoqueRealStats
-  } = useEstoqueRealStatsQuery(isGerente);
-  const {
-    data: inventariosPendentes = 0
-  } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'pendente');
-  const {
-    data: inventariosAprovados = 0
-  } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'aprovado');
-  const {
-    data: inventariosRevisao = 0
-  } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'revisao');
+
+  const { data: estoqueRealStats } = useEstoqueRealStatsQuery(isGerente);
+  
+  const { data: inventariosPendentes = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'pendente');
+  const { data: inventariosAprovados = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'aprovado');
+  const { data: inventariosRevisao = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'revisao');
+
+  // Novos hooks React Query para substituir useEffect
+  const { data: statusInventarios = [] } = useStatusInventariosQuery(isGerente);
+  const { data: divergencias = [] } = useDivergenciasQuery(isGerente);
+
   const produtosNegativos = estoqueArray.filter(e => e.estoque_teorico < 0);
   const produtosCriticos = estoqueArray.filter(e => e.estoque_teorico > 0 && e.estoque_teorico <= 5).length;
   const totalItens = estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalModelos = new Set(estoqueArray.map(e => e.modelo)).size;
-  useEffect(() => {
-    if (profile && isGerente) {
-      fetchStatusInventarios();
-      fetchDivergencias();
-    }
-  }, [profile, isGerente]);
-  const fetchStatusInventarios = async () => {
-    // Buscar todos os inventários
-    const {
-      data: inventarios,
-      error: invError
-    } = await supabase.from('inventarios').select('codigo_vendedor, status, data_inventario');
-    if (invError) {
-      console.error('Erro ao buscar inventários:', invError);
-      return;
-    }
-
-    // Buscar vendedores únicos
-    const vendedorCodigos = [...new Set(inventarios?.map(i => i.codigo_vendedor) || [])];
-    const {
-      data: profiles
-    } = await supabase.from('profiles').select('codigo_vendedor, nome').in('codigo_vendedor', vendedorCodigos);
-    const nomeMap = new Map(profiles?.map(p => [p.codigo_vendedor, p.nome]) || []);
-
-    // Agrupar por vendedor
-    const statusMap = new Map<string, StatusInventario>();
-    inventarios?.forEach(inv => {
-      const current = statusMap.get(inv.codigo_vendedor) || {
-        codigo_vendedor: inv.codigo_vendedor,
-        nome_vendedor: nomeMap.get(inv.codigo_vendedor) || inv.codigo_vendedor,
-        inventarios_pendentes: 0,
-        inventarios_aprovados: 0,
-        inventarios_revisao: 0,
-        ultimo_inventario: null
-      };
-      if (inv.status === 'pendente') current.inventarios_pendentes++;
-      if (inv.status === 'aprovado') current.inventarios_aprovados++;
-      if (inv.status === 'revisao') current.inventarios_revisao++;
-
-      // Atualizar último inventário
-      if (!current.ultimo_inventario || new Date(inv.data_inventario) > new Date(current.ultimo_inventario)) {
-        current.ultimo_inventario = inv.data_inventario;
-      }
-      statusMap.set(inv.codigo_vendedor, current);
-    });
-
-    // Ordenar por pendentes + revisão (prioridade) e depois por último inventário
-    const statusArray = Array.from(statusMap.values()).sort((a, b) => {
-      const prioridadeA = a.inventarios_pendentes + a.inventarios_revisao;
-      const prioridadeB = b.inventarios_pendentes + b.inventarios_revisao;
-      if (prioridadeB !== prioridadeA) return prioridadeB - prioridadeA;
-      if (!a.ultimo_inventario) return 1;
-      if (!b.ultimo_inventario) return -1;
-      return new Date(b.ultimo_inventario).getTime() - new Date(a.ultimo_inventario).getTime();
-    }).slice(0, 5);
-    setStatusInventarios(statusArray);
-  };
-  const fetchDivergencias = async () => {
-    const {
-      data,
-      error
-    } = await supabase.from('inventarios').select('id, codigo_vendedor, data_inventario').eq('status', 'revisao').order('data_inventario', {
-      ascending: false
-    }).limit(5);
-    if (error) {
-      console.error('Erro ao buscar divergências:', error);
-      return;
-    }
-
-    // Get vendedor names
-    const vendedorCodigos = [...new Set(data?.map(d => d.codigo_vendedor) || [])];
-    const {
-      data: profiles
-    } = await supabase.from('profiles').select('codigo_vendedor, nome').in('codigo_vendedor', vendedorCodigos);
-    const nomeMap = new Map(profiles?.map(p => [p.codigo_vendedor, p.nome]) || []);
-    setDivergencias(data?.map(d => ({
-      codigo_vendedor: d.codigo_vendedor,
-      nome_vendedor: nomeMap.get(d.codigo_vendedor) || d.codigo_vendedor,
-      inventario_id: d.id,
-      data: d.data_inventario
-    })) || []);
-  };
   return <AppLayout>
       <div className="space-y-8">
         <div className="space-y-2">

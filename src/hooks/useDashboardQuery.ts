@@ -167,3 +167,113 @@ export const useEstoqueRealStatsQuery = (isGerente?: boolean) => {
     enabled: isGerente === true,
   });
 };
+
+interface StatusInventario {
+  codigo_vendedor: string;
+  nome_vendedor: string;
+  inventarios_pendentes: number;
+  inventarios_aprovados: number;
+  inventarios_revisao: number;
+  ultimo_inventario: string | null;
+}
+
+export const useStatusInventariosQuery = (isGerente?: boolean) => {
+  return useQuery({
+    queryKey: ['status-inventarios', isGerente],
+    queryFn: async (): Promise<StatusInventario[]> => {
+      // Buscar todos os inventários
+      const { data: inventarios, error: invError } = await supabase
+        .from('inventarios')
+        .select('codigo_vendedor, status, data_inventario');
+
+      if (invError) throw invError;
+
+      // Buscar vendedores únicos
+      const vendedorCodigos = [...new Set(inventarios?.map(i => i.codigo_vendedor) || [])];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('codigo_vendedor, nome')
+        .in('codigo_vendedor', vendedorCodigos);
+
+      const nomeMap = new Map(profiles?.map(p => [p.codigo_vendedor, p.nome]) || []);
+
+      // Agrupar por vendedor
+      const statusMap = new Map<string, StatusInventario>();
+      inventarios?.forEach(inv => {
+        const current = statusMap.get(inv.codigo_vendedor) || {
+          codigo_vendedor: inv.codigo_vendedor,
+          nome_vendedor: nomeMap.get(inv.codigo_vendedor) || inv.codigo_vendedor,
+          inventarios_pendentes: 0,
+          inventarios_aprovados: 0,
+          inventarios_revisao: 0,
+          ultimo_inventario: null
+        };
+
+        if (inv.status === 'pendente') current.inventarios_pendentes++;
+        if (inv.status === 'aprovado') current.inventarios_aprovados++;
+        if (inv.status === 'revisao') current.inventarios_revisao++;
+
+        // Atualizar último inventário
+        if (!current.ultimo_inventario || new Date(inv.data_inventario) > new Date(current.ultimo_inventario)) {
+          current.ultimo_inventario = inv.data_inventario;
+        }
+        statusMap.set(inv.codigo_vendedor, current);
+      });
+
+      // Ordenar por pendentes + revisão (prioridade) e depois por último inventário
+      return Array.from(statusMap.values())
+        .sort((a, b) => {
+          const prioridadeA = a.inventarios_pendentes + a.inventarios_revisao;
+          const prioridadeB = b.inventarios_pendentes + b.inventarios_revisao;
+          if (prioridadeB !== prioridadeA) return prioridadeB - prioridadeA;
+          if (!a.ultimo_inventario) return 1;
+          if (!b.ultimo_inventario) return -1;
+          return new Date(b.ultimo_inventario).getTime() - new Date(a.ultimo_inventario).getTime();
+        })
+        .slice(0, 5);
+    },
+    enabled: isGerente === true,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+};
+
+interface Divergencia {
+  codigo_vendedor: string;
+  nome_vendedor: string;
+  inventario_id: string;
+  data: string;
+}
+
+export const useDivergenciasQuery = (isGerente?: boolean) => {
+  return useQuery({
+    queryKey: ['divergencias-revisao', isGerente],
+    queryFn: async (): Promise<Divergencia[]> => {
+      const { data, error } = await supabase
+        .from('inventarios')
+        .select('id, codigo_vendedor, data_inventario')
+        .eq('status', 'revisao')
+        .order('data_inventario', { ascending: false })
+        .limit(5);
+
+      if (error) throw error;
+
+      // Get vendedor names
+      const vendedorCodigos = [...new Set(data?.map(d => d.codigo_vendedor) || [])];
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('codigo_vendedor, nome')
+        .in('codigo_vendedor', vendedorCodigos);
+
+      const nomeMap = new Map(profiles?.map(p => [p.codigo_vendedor, p.nome]) || []);
+
+      return data?.map(d => ({
+        codigo_vendedor: d.codigo_vendedor,
+        nome_vendedor: nomeMap.get(d.codigo_vendedor) || d.codigo_vendedor,
+        inventario_id: d.id,
+        data: d.data_inventario
+      })) || [];
+    },
+    enabled: isGerente === true,
+    staleTime: 5 * 60 * 1000, // 5 minutos
+  });
+};
