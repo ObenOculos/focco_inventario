@@ -17,7 +17,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { calcularEstoqueTeorico } from '@/lib/estoque';
+// Removido: calcularEstoqueTeorico - agora usa RPC comparar_estoque_inventario
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -112,41 +112,52 @@ export default function Conferencia() {
     setEditedValues({});
     setShowItensNaoContados(false);
   
-    const estoque = await calcularEstoqueTeorico(inventario.codigo_vendedor);
-    
+    // Correção 2: Usar o RPC comparar_estoque_inventario para unificar cálculo
+    const { data: comparativo, error } = await supabase.rpc('comparar_estoque_inventario', {
+      p_inventario_id: inventario.id
+    });
+
+    if (error) {
+      console.error('Erro ao comparar inventário:', error);
+      toast.error('Erro ao carregar divergências');
+      setIsDetailLoading(false);
+      return;
+    }
+
     const divergenciasList: DivergenciaItem[] = [];
-    const itensContadosCodigos = new Set(inventario.itens_inventario.map(i => i.codigo_auxiliar));
     const itensNaoContadosList: ItemNaoContado[] = [];
 
-    for (const item of inventario.itens_inventario) {
-      const estoqueItem = estoque.get(item.codigo_auxiliar);
-      const estoqueTeoricoValue = estoqueItem?.estoque_teorico || 0;
-      const diferenca = item.quantidade_fisica - estoqueTeoricoValue;
-      const percentual = estoqueTeoricoValue !== 0 ? ((diferenca / estoqueTeoricoValue) * 100) : (item.quantidade_fisica > 0 ? 100 : 0);
+    for (const item of (comparativo || [])) {
+      const diferenca = item.quantidade_fisica - item.estoque_teorico;
+      const percentual = item.estoque_teorico !== 0 
+        ? ((diferenca / item.estoque_teorico) * 100) 
+        : (item.quantidade_fisica > 0 ? 100 : 0);
+      
       let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
       if (diferenca > 0) tipo = 'sobra';
       else if (diferenca < 0) tipo = 'falta';
 
-      divergenciasList.push({
-        codigo_auxiliar: item.codigo_auxiliar,
-        nome_produto: item.nome_produto || '',
-        estoque_teorico: estoqueTeoricoValue,
-        quantidade_fisica: item.quantidade_fisica,
-        diferenca, percentual, tipo,
-      });
+      if (item.foi_contado) {
+        divergenciasList.push({
+          codigo_auxiliar: item.codigo_auxiliar,
+          nome_produto: item.nome_produto || '',
+          estoque_teorico: item.estoque_teorico,
+          quantidade_fisica: item.quantidade_fisica,
+          diferenca, percentual, tipo,
+        });
+      } else {
+        // Correção 3: Mostrar itens não contados com estoque != 0 (positivo OU negativo)
+        if (item.estoque_teorico !== 0) {
+          itensNaoContadosList.push({
+            codigo_auxiliar: item.codigo_auxiliar,
+            nome_produto: item.nome_produto || '',
+            estoque_teorico: item.estoque_teorico,
+          });
+        }
+      }
     }
 
-    estoque.forEach((item, codigo) => {
-      if (!itensContadosCodigos.has(codigo) && item.estoque_teorico > 0) {
-        itensNaoContadosList.push({
-          codigo_auxiliar: codigo,
-          nome_produto: item.nome_produto,
-          estoque_teorico: item.estoque_teorico,
-        });
-      }
-    });
-
-    setItensNaoContados(itensNaoContadosList.sort((a, b) => b.estoque_teorico - a.estoque_teorico));
+    setItensNaoContados(itensNaoContadosList.sort((a, b) => Math.abs(b.estoque_teorico) - Math.abs(a.estoque_teorico)));
     setDivergencias(divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca)));
     setIsDetailLoading(false);
   };
