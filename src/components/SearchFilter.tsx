@@ -12,6 +12,8 @@ export function SearchFilter({ value, onChange, placeholder = 'Buscar...' }: Sea
     <div className="relative flex-1 max-w-sm">
       <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
       <Input
+        id="search-filter"
+        name="search"
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}

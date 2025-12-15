@@ -163,29 +163,37 @@ export default function Vendedores() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label>Email</Label>
+                  <Label htmlFor="vendedor-email">Email</Label>
                   <Input
+                    id="vendedor-email"
+                    name="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                     className="border-2"
                     disabled={!!editingVendedor}
+                    autoComplete="email"
                     required
                   />
                 </div>
                 <div>
-                  <Label>Nome</Label>
+                  <Label htmlFor="vendedor-nome">Nome</Label>
                   <Input
+                    id="vendedor-nome"
+                    name="nome"
                     value={formData.nome}
                     onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
                     className="border-2"
+                    autoComplete="name"
                     required
                   />
                 </div>
                 <div>
-                  <Label>Código do Vendedor</Label>
+                  <Label htmlFor="vendedor-codigo">Código do Vendedor</Label>
                   {editingVendedor ? (
                     <Input
+                      id="vendedor-codigo"
+                      name="codigo_vendedor"
                       value={formData.codigo_vendedor}
                       onChange={(e) => setFormData({ ...formData, codigo_vendedor: e.target.value })}
                       className="border-2"
@@ -193,6 +201,7 @@ export default function Vendedores() {
                     />
                   ) : (
                     <Select
+                      name="codigo_vendedor"
                       value={formData.codigo_vendedor}
                       onValueChange={(value) => setFormData({ ...formData, codigo_vendedor: value })}
                     >
@@ -216,12 +225,15 @@ export default function Vendedores() {
                   )}
                 </div>
                 <div>
-                  <Label>Telefone</Label>
+                  <Label htmlFor="vendedor-telefone">Telefone</Label>
                   <Input
+                    id="vendedor-telefone"
+                    name="telefone"
                     value={formData.telefone}
                     onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
                     className="border-2"
                     placeholder="(00) 00000-0000"
+                    autoComplete="tel"
                   />
                 </div>
                 <Button type="submit" className="w-full">

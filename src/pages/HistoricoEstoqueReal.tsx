@@ -192,6 +192,8 @@ export default function HistoricoEstoqueReal() {
               )}
               <div className="flex gap-2 items-center">
                 <input
+                  id="startDate"
+                  name="startDate"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
@@ -200,6 +202,8 @@ export default function HistoricoEstoqueReal() {
                 />
                 <span className="text-muted-foreground">até</span>
                 <input
+                  id="endDate"
+                  name="endDate"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}

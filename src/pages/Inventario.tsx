@@ -471,6 +471,8 @@ export default function Inventario() {
             <div className="border-t-2 border-border pt-4">
               <div className="flex gap-2">
                 <Input
+                  id="manual-code"
+                  name="manual_code"
                   placeholder="Ou digite o código aqui..."
                   value={manualCode}
                   onChange={(e) => setManualCode(e.target.value)}
@@ -492,6 +494,8 @@ export default function Inventario() {
             <div className="relative mt-2">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
               <Input
+                id="inventario-search"
+                name="search"
                 placeholder="Filtrar por código ou nome..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
@@ -525,6 +529,8 @@ export default function Inventario() {
                         </TableCell>
                         <TableCell className="text-center">
                           <Input
+                            id={`qty-${item.codigo_auxiliar}`}
+                            name={`quantidade_${item.codigo_auxiliar}`}
                             type="number"
                             min="0"
                             value={item.quantidade_fisica}
@@ -562,8 +568,10 @@ export default function Inventario() {
                   <p className="text-yellow-700 mt-1">{observacoesGerente}</p>
                 </div>
               )}
-              <Label className="font-medium">Observações</Label>
+              <Label htmlFor="inventario-observacoes" className="font-medium">Observações</Label>
               <Textarea
+                id="inventario-observacoes"
+                name="observacoes"
                 placeholder="Observações sobre o inventário..."
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}

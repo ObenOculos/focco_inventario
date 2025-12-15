@@ -331,6 +331,8 @@ export default function Importar() {
                 Formato: .xlsx, .xls ou .csv
               </p>
               <input
+                id="file-upload"
+                name="file"
                 ref={fileInputRef}
                 type="file"
                 accept=".xlsx,.xls,.csv"
