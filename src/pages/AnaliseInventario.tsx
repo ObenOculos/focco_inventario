@@ -38,7 +38,7 @@ export default function AnaliseInventario() {
   const [selectedInventario, setSelectedInventario] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [divergenceFilter, setDivergenceFilter] = useState('todos');
+  const [divergenceFilter, setDivergenceFilter] = useState('com_divergencia');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
 
   const isGerente = profile?.role === 'gerente';
