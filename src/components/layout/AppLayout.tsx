@@ -40,16 +40,21 @@ export function AppLayout({ children }: AppLayoutProps) {
   ];
 
   const gerenteLinks = [
+    // Visão geral
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/estoque-teorico', icon: Package, label: 'Estoque' },
-    { to: '/historico-estoque-real', icon: History, label: 'Histórico Est. Real' },
-    { to: '/controle-vendedores', icon: ClipboardList, label: 'Controle de Vendedores' },
+    // Ações de inventário
+    { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
     { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
-    { to: '/pedidos', icon: FileText, label: 'Gestão de Pedidos' },
+    // Estoque
+    { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
+    { to: '/historico-estoque-real', icon: History, label: 'Histórico Est. Real' },
+    // Vendedores
+    { to: '/controle-vendedores', icon: ClipboardList, label: 'Painel de Vendedores' },
     { to: '/vendedores', icon: UserCog, label: 'Cadastro de Vendedores' },
+    // Dados
+    { to: '/pedidos', icon: FileText, label: 'Pedidos' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos' },
     { to: '/importar', icon: Upload, label: 'Importar' },
-    { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
   ];
 
   const links = isGerente ? gerenteLinks : vendedorLinks;
