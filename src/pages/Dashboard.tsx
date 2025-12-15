@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Package, TrendingUp, TrendingDown, ClipboardList, AlertTriangle, Users, ArrowRight, Clock, CheckCircle2, XCircle, FileCheck } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import { DashboardSkeleton } from '@/components/skeletons/PageSkeleton';
 
 export default function Dashboard() {
   const { profile } = useAuth();
@@ -25,7 +26,8 @@ export default function Dashboard() {
       totalVendas: 0,
       unidadesVenda: 0,
       valorVenda: 0
-    }
+    },
+    isLoading: loadingMovimentacao
   } = useMovimentacaoResumoQuery(profile?.codigo_vendedor, isGerente);
 
   const { data: estoqueRealStats } = useEstoqueRealStatsQuery(isGerente);
@@ -35,13 +37,20 @@ export default function Dashboard() {
   const { data: inventariosRevisao = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'revisao');
 
   // Novos hooks React Query para substituir useEffect
-  const { data: statusInventarios = [] } = useStatusInventariosQuery(isGerente);
+  const { data: statusInventarios = [], isLoading: loadingStatus } = useStatusInventariosQuery(isGerente);
   const { data: divergencias = [] } = useDivergenciasQuery(isGerente);
 
   const produtosNegativos = estoqueArray.filter(e => e.estoque_teorico < 0);
   const produtosCriticos = estoqueArray.filter(e => e.estoque_teorico > 0 && e.estoque_teorico <= 5).length;
   const totalItens = estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalModelos = new Set(estoqueArray.map(e => e.modelo)).size;
+
+  const isLoading = loadingEstoque || loadingMovimentacao;
+
+  if (isLoading) {
+    return <AppLayout><DashboardSkeleton /></AppLayout>;
+  }
+
   return <AppLayout>
       <div className="space-y-8">
         <div className="space-y-2">
