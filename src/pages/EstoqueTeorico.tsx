@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { EstoqueTeoricSkeleton } from '@/components/skeletons/PageSkeleton';
 import { useEstoqueTeoricoQuery, useVendedoresQuery } from '@/hooks/useEstoqueTeoricoQuery';
@@ -26,7 +26,6 @@ import { RefetchIndicator } from '@/components/RefetchIndicator';
 
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
-  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [saldoFilter, setSaldoFilter] = useState<string>('todos');
   const [estoqueRealFilter, setEstoqueRealFilter] = useState<string>('todos');
@@ -102,11 +101,7 @@ export default function EstoqueTeorico() {
 
   const handleExportExcel = () => {
     if (dadosFiltrados.length === 0) {
-      toast({
-        title: "Sem dados",
-        description: "Não há dados para exportar.",
-        variant: "destructive"
-      });
+      toast.warning("Sem dados para exportar");
       return;
     }
 
@@ -132,11 +127,7 @@ export default function EstoqueTeorico() {
     const fileName = `estoque_teorico_real_${vendorName}_${dateStr}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
-
-    toast({
-      title: "Exportação concluída",
-      description: `Arquivo ${fileName} baixado com sucesso.`
-    });
+    toast.success(`Arquivo exportado: ${fileName}`);
   };
 
   return (

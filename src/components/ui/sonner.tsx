@@ -6,6 +6,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
       theme="light"
+      position="bottom-right"
+      expand={false}
+      richColors
+      closeButton
+      duration={4000}
+      gap={8}
+      visibleToasts={3}
       className="toaster group"
       style={{ maxWidth: "calc(100vw)" }}
       toastOptions={{
