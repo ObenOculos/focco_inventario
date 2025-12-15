@@ -35,11 +35,9 @@ export type Pedido = Database['public']['Tables']['pedidos']['Row'];
 export type ItemPedido = Database['public']['Tables']['itens_pedido']['Row'];
 export type Inventario = Database['public']['Tables']['inventarios']['Row'];
 export type ItemInventario = Database['public']['Tables']['itens_inventario']['Row'];
-export type MovimentacaoEstoque = Database['public']['Tables']['movimentacoes_estoque']['Row'];
 
 export type UserRole = Database['public']['Enums']['user_role'];
 export type InventoryStatus = Database['public']['Enums']['inventory_status'];
-export type MovimentacaoTipo = Database['public']['Enums']['movimentacao_tipo'];
 
 // Tipos para funções do banco
 export type EstoqueItem = {

@@ -17,7 +17,6 @@ import {
   ClipboardCheck,
   History,
   FileText,
-  RefreshCw,
   UserCog,
   PackageSearch
 } from 'lucide-react';
@@ -46,7 +45,6 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/controle-vendedores', icon: ClipboardList, label: 'Controle de Vendedores' },
     { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
     { to: '/pedidos', icon: FileText, label: 'Gestão de Pedidos' },
-    { to: '/movimentacoes', icon: RefreshCw, label: 'Movimentações' },
     { to: '/vendedores', icon: UserCog, label: 'Cadastro de Vendedores' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos' },
     { to: '/importar', icon: Upload, label: 'Importar' },

@@ -18,7 +18,7 @@ import Produtos from "./pages/Produtos";
 import Importar from "./pages/Importar";
 import Conferencia from "./pages/Conferencia";
 import Pedidos from "./pages/Pedidos";
-import Movimentacoes from "./pages/Movimentacoes";
+
 import ControleVendedores from "./pages/ControleVendedores";
 import AnaliseInventario from "./pages/AnaliseInventario";
 import NotFound from "./pages/NotFound";
@@ -108,11 +108,6 @@ const App = () => (
             <Route path="/pedidos" element={
               <ProtectedRoute allowedRoles={['gerente']}>
                 <Pedidos />
-              </ProtectedRoute>
-            } />
-            <Route path="/movimentacoes" element={
-              <ProtectedRoute allowedRoles={['gerente']}>
-                <Movimentacoes />
               </ProtectedRoute>
             } />
             
