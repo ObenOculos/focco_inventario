@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Produto } from '@/types/app';
@@ -13,10 +13,9 @@ import QRCode from 'qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
+import { useProdutosQuery, useInvalidateProdutos } from '@/hooks/useProdutosQuery';
 
 export default function Produtos() {
-  const [produtos, setProdutos] = useState<Produto[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [dialogOpen, setDialogOpen] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
@@ -28,6 +27,9 @@ export default function Produtos() {
     nome_produto: '',
     valor_produto: '',
   });
+
+  const { data: produtos = [], isLoading: loading } = useProdutosQuery();
+  const invalidateProdutos = useInvalidateProdutos();
 
   const {
     currentPage,
@@ -45,24 +47,6 @@ export default function Produtos() {
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
-
-  useEffect(() => {
-    fetchProdutos();
-  }, []);
-
-  const fetchProdutos = async () => {
-    const { data, error } = await supabase
-      .from('produtos')
-      .select('*')
-      .order('codigo_auxiliar');
-
-    if (error) {
-      console.error('Erro ao buscar produtos:', error);
-    } else {
-      setProdutos(data as Produto[]);
-    }
-    setLoading(false);
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,7 +73,7 @@ export default function Produtos() {
       }
     } else {
       toast.success('Produto cadastrado!');
-      fetchProdutos();
+      invalidateProdutos();
       setDialogOpen(false);
       setFormData({ codigo_produto: '', codigo_auxiliar: '', nome_produto: '', valor_produto: '' });
     }

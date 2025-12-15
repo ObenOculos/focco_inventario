@@ -1,7 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -25,120 +24,26 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 import { HistoricoSkeleton } from '@/components/skeletons/PageSkeleton';
-
-interface VendedorProfile {
-  id: string;
-  codigo_vendedor: string;
-  nome: string;
-}
-
-interface EstoqueRealItem {
-  id: string;
-  codigo_auxiliar: string;
-  quantidade_real: number;
-  data_atualizacao: string;
-  inventario_id: string | null;
-  codigo_vendedor: string;
-}
-
-interface HistoricoGroup {
-  data_atualizacao: string;
-  codigo_vendedor: string;
-  nome_vendedor: string;
-  inventario_id: string | null;
-  itens: EstoqueRealItem[];
-  total_itens: number;
-  total_quantidade: number;
-}
+import { useHistoricoEstoqueRealQuery } from '@/hooks/useHistoricoEstoqueRealQuery';
+import { useVendedoresQuery } from '@/hooks/useEstoqueTeoricoQuery';
 
 export default function HistoricoEstoqueReal() {
   const { profile } = useAuth();
   const { toast } = useToast();
-  const [historico, setHistorico] = useState<HistoricoGroup[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVendor, setSelectedVendor] = useState<string>('todos');
-  const [vendedores, setVendedores] = useState<VendedorProfile[]>([]);
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
   const isGerente = profile?.role === 'gerente';
 
-  useEffect(() => {
-    const fetchVendedores = async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, nome, codigo_vendedor')
-        .eq('role', 'vendedor')
-        .not('codigo_vendedor', 'is', null);
-
-      if (!error && data) {
-        setVendedores(data as VendedorProfile[]);
-      }
-    };
-
-    if (isGerente) {
-      fetchVendedores();
-    }
-  }, [isGerente]);
-
-  useEffect(() => {
-    const fetchHistorico = async () => {
-      if (!profile) return;
-      setLoading(true);
-
-      let query = supabase
-        .from('estoque_real')
-        .select('*')
-        .order('data_atualizacao', { ascending: false })
-        .order('codigo_auxiliar', { ascending: true });
-
-      if (!isGerente && profile.codigo_vendedor) {
-        query = query.eq('codigo_vendedor', profile.codigo_vendedor);
-      } else if (isGerente && selectedVendor !== 'todos') {
-        query = query.eq('codigo_vendedor', selectedVendor);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error('Erro ao buscar histórico:', error);
-        setHistorico([]);
-        setLoading(false);
-        return;
-      }
-
-      // Group by data_atualizacao + codigo_vendedor
-      const grouped = new Map<string, HistoricoGroup>();
-      
-      for (const item of (data || []) as EstoqueRealItem[]) {
-        const key = `${item.data_atualizacao}_${item.codigo_vendedor}`;
-        
-        if (!grouped.has(key)) {
-          const vendedor = vendedores.find(v => v.codigo_vendedor === item.codigo_vendedor);
-          grouped.set(key, {
-            data_atualizacao: item.data_atualizacao,
-            codigo_vendedor: item.codigo_vendedor,
-            nome_vendedor: vendedor?.nome || item.codigo_vendedor,
-            inventario_id: item.inventario_id,
-            itens: [],
-            total_itens: 0,
-            total_quantidade: 0,
-          });
-        }
-
-        const group = grouped.get(key)!;
-        group.itens.push(item);
-        group.total_itens += 1;
-        group.total_quantidade += item.quantidade_real;
-      }
-
-      setHistorico(Array.from(grouped.values()));
-      setLoading(false);
-    };
-
-    fetchHistorico();
-  }, [profile, isGerente, selectedVendor, vendedores]);
+  const { data: vendedores = [] } = useVendedoresQuery(isGerente);
+  const { data: historico = [], isLoading: loading } = useHistoricoEstoqueRealQuery(
+    isGerente,
+    selectedVendor,
+    profile?.codigo_vendedor,
+    vendedores
+  );
 
   const historicoFiltrado = useMemo(() => {
     let filtered = historico;

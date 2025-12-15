@@ -1,5 +1,5 @@
 import { AppLayout } from '@/components/layout/AppLayout';
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -26,38 +26,43 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import * as XLSX from 'xlsx';
-
-interface InventarioInfo {
-  id: string;
-  data_inventario: string;
-  status: string;
-  codigo_vendedor: string;
-  vendedor_nome?: string;
-}
-
-interface ComparativoItem {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  estoque_teorico: number;
-  quantidade_fisica: number;
-  divergencia: number;
-}
+import { 
+  useInventariosAnaliseQuery, 
+  useComparativoInventarioQuery, 
+  useVendedoresSimpleQuery 
+} from '@/hooks/useAnaliseInventarioQuery';
 
 export default function AnaliseInventario() {
   const { profile } = useAuth();
-  const [inventarios, setInventarios] = useState<InventarioInfo[]>([]);
   const [selectedInventario, setSelectedInventario] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
   const [isApproving, setIsApproving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [comparativo, setComparativo] = useState<ComparativoItem[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [divergenceFilter, setDivergenceFilter] = useState('todos');
-  const [vendedores, setVendedores] = useState<{codigo_vendedor: string, nome: string}[]>([]);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
 
   const isGerente = profile?.role === 'gerente';
   const queryClient = useQueryClient();
+
+  const { data: vendedores = [] } = useVendedoresSimpleQuery(isGerente);
+  const { data: inventarios = [] } = useInventariosAnaliseQuery(
+    isGerente,
+    profile?.codigo_vendedor,
+    selectedVendedor,
+    vendedores
+  );
+  const { data: comparativo = [], isLoading: loading, error } = useComparativoInventarioQuery(selectedInventario);
+
+  // Reset selected inventory when seller filter changes
+  useEffect(() => {
+    setSelectedInventario(null);
+  }, [selectedVendedor]);
+
+  // Auto-select first inventory when list changes
+  useEffect(() => {
+    if (inventarios.length > 0 && !selectedInventario) {
+      setSelectedInventario(inventarios[0].id);
+    }
+  }, [inventarios, selectedInventario]);
 
   const filteredComparativo = useMemo(() => {
     let filteredData = comparativo;
@@ -91,100 +96,6 @@ export default function AnaliseInventario() {
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
 
-  useEffect(() => {
-    const fetchInventarios = async () => {
-      if (!profile) return;
-
-      let query = supabase
-        .from('inventarios')
-        .select('id, data_inventario, status, codigo_vendedor')
-        .order('data_inventario', { ascending: false });
-      
-      // Gerentes podem ver todos, vendedores apenas os seus
-      if (!isGerente) {
-        query = query.eq('codigo_vendedor', profile.codigo_vendedor);
-      } else if (selectedVendedor !== 'todos') {
-        query = query.eq('codigo_vendedor', selectedVendedor);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("Erro ao buscar inventários:", error);
-        setError("Não foi possível carregar os inventários.");
-      } else {
-        // Enrich inventories with seller names
-        const enrichedData = await Promise.all(
-          (data || []).map(async (inv) => {
-            const vendedor = vendedores.find(v => v.codigo_vendedor === inv.codigo_vendedor);
-            return {
-              ...inv,
-              vendedor_nome: vendedor?.nome || inv.codigo_vendedor,
-            };
-          })
-        );
-        setInventarios(enrichedData);
-        if (enrichedData.length > 0 && !selectedInventario) {
-          setSelectedInventario(enrichedData[0].id);
-        }
-      }
-    };
-
-    fetchInventarios();
-  }, [profile, isGerente, selectedInventario, selectedVendedor, vendedores]);
-
-  useEffect(() => {
-    const fetchVendedores = async () => {
-      if (!isGerente) return; // Only managers can filter by seller
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('codigo_vendedor, nome')
-        .eq('role', 'vendedor')
-        .order('nome');
-
-      if (error) {
-        console.error("Erro ao buscar vendedores:", error);
-      } else {
-        setVendedores(data || []);
-      }
-    };
-
-    fetchVendedores();
-  }, [isGerente]);
-
-  useEffect(() => {
-    // Reset selected inventory when seller filter changes
-    setSelectedInventario(null);
-  }, [selectedVendedor]);
-
-  useEffect(() => {
-    const fetchComparativo = async () => {
-      if (!selectedInventario) return;
-
-      setLoading(true);
-      setError(null);
-      setComparativo([]);
-      
-      const { data, error: rpcError } = await supabase.rpc('comparar_estoque_inventario', {
-        p_inventario_id: selectedInventario,
-      });
-
-      if (rpcError) {
-        console.error('Erro ao buscar comparativo:', rpcError);
-        console.error('Detalhes do erro:', JSON.stringify(rpcError, null, 2));
-        setError(`Erro ao gerar a análise: ${rpcError.message || rpcError.details || JSON.stringify(rpcError)}. Verifique as funções SQL no banco de dados.`);
-        setComparativo([]);
-      } else {
-        setComparativo(data || []);
-      }
-      
-      setLoading(false);
-    };
-
-    fetchComparativo();
-  }, [selectedInventario]);
-
   const handleApprove = async () => {
     if (!selectedInventario || !isGerente) return;
 
@@ -198,17 +109,10 @@ export default function AnaliseInventario() {
 
         toast.success(data.message || "Inventário aprovado e estoque ajustado com sucesso!");
 
-        // Invalidate queries to refetch data across the app
-        queryClient.invalidateQueries({ queryKey: ['movimentacoes'] });
+        queryClient.invalidateQueries({ queryKey: ['inventariosAnalise'] });
+        queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
         queryClient.invalidateQueries({ queryKey: ['inventarios'] });
         queryClient.invalidateQueries({ queryKey: ['dashboard'] });
-
-        // Update local state to reflect the change
-        setInventarios(prev => 
-            prev.map(inv => 
-                inv.id === selectedInventario ? { ...inv, status: 'aprovado' } : inv
-            )
-        );
 
     } catch (err: any) {
         console.error("Erro ao aprovar inventário:", err);
@@ -312,7 +216,7 @@ export default function AnaliseInventario() {
                     <AlertTriangle className="text-destructive shrink-0" />
                     <div className="flex-1">
                     <p className="font-semibold text-destructive">
-                        {error}
+                        {error.message}
                     </p>
                     </div>
               </div>
@@ -421,55 +325,50 @@ export default function AnaliseInventario() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[40%]">Produto</TableHead>
+                          <TableHead className="w-[50%]">Produto</TableHead>
                           <TableHead className="text-center">Est. Teórico</TableHead>
                           <TableHead className="text-center">Est. Físico</TableHead>
                           <TableHead className="text-center">Divergência</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {totalItems === 0 ? (
-                            <TableRow>
-                                <TableCell colSpan={4} className="text-center p-8 text-muted-foreground">
-                                    {searchTerm ? `Nenhum item encontrado para "${searchTerm}"` : 'Nenhum item para comparar neste inventário.'}
-                                </TableCell>
-                            </TableRow>
+                        {paginatedComparativo.length === 0 ? (
+                          <TableRow>
+                            <TableCell colSpan={4} className="h-24 text-center">
+                              Nenhum item encontrado.
+                            </TableCell>
+                          </TableRow>
                         ) : (
-                            paginatedComparativo.map(item => (
-                                <TableRow key={item.codigo_auxiliar} className={item.divergencia !== 0 ? 'bg-amber-500/5' : ''}>
-                                    <TableCell>
-                                        <div className="font-semibold truncate">{item.nome_produto}</div>
-                                        <div className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</div>
-                                    </TableCell>
-                                    <TableCell className="text-center font-medium">{item.estoque_teorico}</TableCell>
-                                    <TableCell className="text-center font-medium">{item.quantidade_fisica}</TableCell>
-                                    <TableCell className={`text-center font-bold text-lg ${
-                                        item.divergencia > 0 ? 'text-green-600' :
-                                        item.divergencia < 0 ? 'text-destructive' : ''
-                                    }`}>
-                                        {item.divergencia > 0 ? `+${item.divergencia}` : item.divergencia}
-                                    </TableCell>
-                                </TableRow>
-                            ))
+                          paginatedComparativo.map((item) => (
+                            <TableRow key={item.codigo_auxiliar} className={item.divergencia !== 0 ? 'bg-amber-500/5' : ''}>
+                              <TableCell>
+                                <p className="font-medium truncate">{item.nome_produto}</p>
+                                <p className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</p>
+                              </TableCell>
+                              <TableCell className="text-center font-medium">{item.estoque_teorico}</TableCell>
+                              <TableCell className="text-center font-medium">{item.quantidade_fisica}</TableCell>
+                              <TableCell className={`text-center font-bold ${item.divergencia > 0 ? 'text-yellow-600' : item.divergencia < 0 ? 'text-destructive' : 'text-green-600'}`}>
+                                {item.divergencia > 0 ? `+${item.divergencia}` : item.divergencia}
+                              </TableCell>
+                            </TableRow>
+                          ))
                         )}
                       </TableBody>
                     </Table>
-                     {totalPages > 1 && (
-                        <div className="p-4 border-t-2">
-                            <Pagination
-                                currentPage={currentPage}
-                                totalPages={totalPages}
-                                itemsPerPage={itemsPerPage}
-                                totalItems={totalItems}
-                                startIndex={startIndex}
-                                endIndex={endIndex}
-                                onPageChange={onPageChange}
-                                onItemsPerPageChange={onItemsPerPageChange}
-                            />
-                        </div>
-                    )}
                 </div>
-
+                
+                {totalPages > 1 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={totalItems}
+                    startIndex={startIndex}
+                    endIndex={endIndex}
+                    onPageChange={onPageChange}
+                    onItemsPerPageChange={onItemsPerPageChange}
+                  />
+                )}
               </div>
             )}
           </CardContent>
