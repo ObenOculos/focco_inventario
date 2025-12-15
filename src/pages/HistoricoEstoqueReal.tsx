@@ -21,7 +21,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { HistoricoSkeleton } from '@/components/skeletons/PageSkeleton';
 import { useHistoricoEstoqueRealQuery } from '@/hooks/useHistoricoEstoqueRealQuery';
@@ -30,7 +30,6 @@ import { RefetchIndicator } from '@/components/RefetchIndicator';
 
 export default function HistoricoEstoqueReal() {
   const { profile } = useAuth();
-  const { toast } = useToast();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedVendor, setSelectedVendor] = useState<string>('todos');
   const [startDate, setStartDate] = useState<string>('');
@@ -78,11 +77,7 @@ export default function HistoricoEstoqueReal() {
 
   const handleExportExcel = () => {
     if (historicoFiltrado.length === 0) {
-      toast({
-        title: "Sem dados",
-        description: "Não há dados para exportar.",
-        variant: "destructive"
-      });
+      toast.warning("Sem dados para exportar");
       return;
     }
 
@@ -113,11 +108,7 @@ export default function HistoricoEstoqueReal() {
     const fileName = `historico_estoque_real_${vendorName}_${dateStr}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
-
-    toast({
-      title: "Exportação concluída",
-      description: `Arquivo ${fileName} baixado com sucesso.`
-    });
+    toast.success(`Arquivo exportado: ${fileName}`);
   };
 
   return (

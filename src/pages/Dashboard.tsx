@@ -11,14 +11,13 @@ import { Button } from '@/components/ui/button';
 import { DashboardSkeleton } from '@/components/skeletons/PageSkeleton';
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { useToast } from '@/hooks/use-toast';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const { profile } = useAuth();
   const isGerente = profile?.role === 'gerente';
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { toast } = useToast();
 
   const {
     data: estoqueArray = [],
@@ -55,8 +54,7 @@ export default function Dashboard() {
     setIsRefreshing(true);
     await queryClient.invalidateQueries();
     setIsRefreshing(false);
-    toast({
-      title: "Dados atualizados",
+    toast.success("Dados atualizados", {
       description: "Todas as informações foram recarregadas com sucesso.",
     });
   };
