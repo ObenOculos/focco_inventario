@@ -130,8 +130,10 @@ export default function Produtos() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label>Código do Produto</Label>
+                  <Label htmlFor="produto-codigo">Código do Produto</Label>
                   <Input
+                    id="produto-codigo"
+                    name="codigo_produto"
                     value={formData.codigo_produto}
                     onChange={(e) => setFormData({ ...formData, codigo_produto: e.target.value })}
                     className="border-2 font-mono"
@@ -140,8 +142,10 @@ export default function Produtos() {
                   />
                 </div>
                 <div>
-                  <Label>Código Auxiliar (QR Code)</Label>
+                  <Label htmlFor="produto-codigo-auxiliar">Código Auxiliar (QR Code)</Label>
                   <Input
+                    id="produto-codigo-auxiliar"
+                    name="codigo_auxiliar"
                     value={formData.codigo_auxiliar}
                     onChange={(e) => setFormData({ ...formData, codigo_auxiliar: e.target.value.toUpperCase() })}
                     className="border-2 font-mono"
@@ -153,8 +157,10 @@ export default function Produtos() {
                   </p>
                 </div>
                 <div>
-                  <Label>Nome do Produto</Label>
+                  <Label htmlFor="produto-nome">Nome do Produto</Label>
                   <Input
+                    id="produto-nome"
+                    name="nome_produto"
                     value={formData.nome_produto}
                     onChange={(e) => setFormData({ ...formData, nome_produto: e.target.value })}
                     className="border-2"
@@ -163,8 +169,10 @@ export default function Produtos() {
                   />
                 </div>
                 <div>
-                  <Label>Valor (R$)</Label>
+                  <Label htmlFor="produto-valor">Valor (R$)</Label>
                   <Input
+                    id="produto-valor"
+                    name="valor_produto"
                     type="number"
                     step="0.01"
                     value={formData.valor_produto}
