@@ -172,188 +172,211 @@ export default function EstoqueTeorico() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
-        <div className="flex items-start justify-between">
+      <div className="space-y-4 md:space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Estoque (Teórico x Real)</h1>
-            <p className="text-muted-foreground">
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Estoque (Teórico x Real)</h1>
+            <p className="text-sm text-muted-foreground">
               {isGerente
-                ? 'Compare o estoque teórico com o real de todos os vendedores'
-                : 'Compare seu estoque teórico com o real baseado em inventários'}
+                ? 'Compare o estoque teórico com o real'
+                : 'Compare seu estoque teórico com o real'}
             </p>
           </div>
           <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
 
         {produtosNegativos.length > 0 && (
-          <div className="flex items-center gap-3 p-4 bg-destructive/10 border-2 border-destructive rounded-lg">
-            <AlertTriangle className="text-destructive shrink-0" />
-            <div className="flex-1">
-              <p className="font-semibold text-destructive">
-                {produtosNegativos.length} produto(s) com estoque teórico negativo
-              </p>
-              <p className="text-sm text-muted-foreground">Verifique divergências de inventário</p>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 md:p-4 bg-destructive/10 border-2 border-destructive rounded-lg">
+            <div className="flex items-center gap-3 flex-1">
+              <AlertTriangle className="text-destructive shrink-0" size={20} />
+              <div>
+                <p className="font-semibold text-destructive text-sm md:text-base">
+                  {produtosNegativos.length} produto(s) com estoque negativo
+                </p>
+                <p className="text-xs text-muted-foreground hidden sm:block">Verifique divergências</p>
+              </div>
             </div>
             <Link to="/pedidos">
-              <Button variant="outline" size="sm">
+              <Button variant="outline" size="sm" className="w-full sm:w-auto">
                 Ver detalhes
               </Button>
             </Link>
           </div>
         )}
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
           <Card className="border-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Package size={16} />
+            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
+                <Package size={14} className="hidden sm:block" />
+                <Package size={12} className="sm:hidden" />
                 Produtos
-                {hasActiveFilters && <Filter size={12} className="text-primary" />}
+                {hasActiveFilters && <Filter size={10} className="text-primary" />}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold">{totalFiltradoProdutos}</p>
+            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+              <p className="text-xl md:text-3xl font-bold">{totalFiltradoProdutos}</p>
               {hasActiveFilters && (
-                <p className="text-xs text-muted-foreground">de {totalGeralProdutos} total</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">de {totalGeralProdutos}</p>
               )}
             </CardContent>
           </Card>
 
           <Card className="border-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <TrendingUp size={16} className={totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'} />
-                Est. Teórico
-                {hasActiveFilters && <Filter size={12} className="text-primary" />}
+            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
+                <TrendingUp size={14} className={`hidden sm:block ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`} />
+                <TrendingUp size={12} className={`sm:hidden ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`} />
+                Teórico
+                {hasActiveFilters && <Filter size={10} className="text-primary" />}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className={`text-3xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}>
+            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+              <p className={`text-xl md:text-3xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}>
                 {totalFiltradoTeorico}
               </p>
-              <p className="text-xs text-muted-foreground">unidades</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
             </CardContent>
           </Card>
 
           <Card className="border-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Package size={16} className="text-purple-600" />
-                Est. Real
-                {hasActiveFilters && <Filter size={12} className="text-primary" />}
+            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
+                <Package size={14} className="text-purple-600 hidden sm:block" />
+                <Package size={12} className="text-purple-600 sm:hidden" />
+                Real
+                {hasActiveFilters && <Filter size={10} className="text-primary" />}
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <p className="text-3xl font-bold text-purple-600">{totalFiltradoReal}</p>
-              <p className="text-xs text-muted-foreground">unidades</p>
+            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+              <p className="text-xl md:text-3xl font-bold text-purple-600">{totalFiltradoReal}</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
             </CardContent>
           </Card>
 
           <Card className="border-2">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <TrendingDown
-                  size={16}
-                  className={totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}
+                  size={14}
+                  className={`hidden sm:block ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
                 />
-                Divergência
-                {hasActiveFilters && <Filter size={12} className="text-primary" />}
+                <TrendingDown
+                  size={12}
+                  className={`sm:hidden ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
+                />
+                Diverg.
+                {hasActiveFilters && <Filter size={10} className="text-primary" />}
               </CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
               <p
-                className={`text-3xl font-bold ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
+                className={`text-xl md:text-3xl font-bold ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
               >
                 {totalFiltradoDivergencia > 0 ? `+${totalFiltradoDivergencia}` : totalFiltradoDivergencia}
               </p>
-              <p className="text-xs text-muted-foreground">unidades</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
             </CardContent>
           </Card>
         </div>
 
         <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <span className="flex items-center gap-2">
-                <Package size={20} />
-                Comparação: Teórico x Real
-              </span>
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="text-lg px-3 py-1">
-                  {totalItems} produtos
-                </Badge>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleExportExcel}
-                  disabled={dadosFiltrados.length === 0}
-                >
-                  <Download size={16} className="mr-2" />
-                  Exportar Excel
-                </Button>
+          <CardHeader className="px-3 md:px-6 py-3 md:py-6">
+            <CardTitle className="flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <span className="flex items-center gap-2 text-base md:text-lg">
+                  <Package size={18} />
+                  Comparação
+                </span>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary" className="text-sm md:text-lg px-2 md:px-3 py-0.5 md:py-1">
+                    {totalItems}
+                  </Badge>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportExcel}
+                    disabled={dadosFiltrados.length === 0}
+                    className="hidden sm:flex"
+                  >
+                    <Download size={16} className="mr-2" />
+                    Exportar
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={handleExportExcel}
+                    disabled={dadosFiltrados.length === 0}
+                    className="sm:hidden h-8 w-8"
+                  >
+                    <Download size={16} />
+                  </Button>
+                </div>
               </div>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4 flex-wrap">
+          <CardContent className="space-y-3 md:space-y-4 px-3 md:px-6 pb-3 md:pb-6">
+            <div className="space-y-2">
               <SearchFilter
                 value={searchTerm}
                 onChange={setSearchTerm}
-                placeholder="Buscar por código ou produto..."
+                placeholder="Buscar código ou produto..."
               />
-              {isGerente && (
-                <Select value={selectedVendor} onValueChange={setSelectedVendor}>
-                  <SelectTrigger className="w-full md:w-44">
-                    <SelectValue placeholder="Vendedor" />
+              <div className="grid grid-cols-2 md:flex md:flex-row gap-2">
+                {isGerente && (
+                  <Select value={selectedVendor} onValueChange={setSelectedVendor}>
+                    <SelectTrigger className="w-full md:w-40 text-xs md:text-sm h-9">
+                      <SelectValue placeholder="Vendedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos Vendedores</SelectItem>
+                      {vendedores.map((vendor) => (
+                        <SelectItem key={vendor.id} value={vendor.codigo_vendedor}>
+                          {vendor.nome}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                <Select value={teoricoFilter} onValueChange={setTeoricoFilter}>
+                  <SelectTrigger className="w-full md:w-36 text-xs md:text-sm h-9">
+                    <SelectValue placeholder="Teórico" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos os Vendedores</SelectItem>
-                    {vendedores.map((vendor) => (
-                      <SelectItem key={vendor.id} value={vendor.codigo_vendedor}>
-                        {vendor.nome}
-                      </SelectItem>
-                    ))}
+                    <SelectItem value="todos">Teórico: Todos</SelectItem>
+                    <SelectItem value="positivo">Positivo</SelectItem>
+                    <SelectItem value="zero">Zero</SelectItem>
+                    <SelectItem value="negativo">Negativo</SelectItem>
                   </SelectContent>
                 </Select>
-              )}
-              <Select value={teoricoFilter} onValueChange={setTeoricoFilter}>
-                <SelectTrigger className="w-full md:w-40">
-                  <SelectValue placeholder="Est. Teórico" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Teórico: Todos</SelectItem>
-                  <SelectItem value="positivo">Teórico: Positivo</SelectItem>
-                  <SelectItem value="zero">Teórico: Zero</SelectItem>
-                  <SelectItem value="negativo">Teórico: Negativo</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={realFilter} onValueChange={setRealFilter}>
-                <SelectTrigger className="w-full md:w-40">
-                  <SelectValue placeholder="Est. Real" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Real: Todos</SelectItem>
-                  <SelectItem value="com_real">Com Est. Real</SelectItem>
-                  <SelectItem value="sem_real">Sem Est. Real</SelectItem>
-                  <SelectItem value="positivo">Real: Positivo</SelectItem>
-                  <SelectItem value="zero">Real: Zero</SelectItem>
-                  <SelectItem value="negativo">Real: Negativo</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={divergenciaFilter} onValueChange={setDivergenciaFilter}>
-                <SelectTrigger className="w-full md:w-44">
-                  <SelectValue placeholder="Divergência" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Divergência: Todas</SelectItem>
-                  <SelectItem value="ok">Sem Divergência</SelectItem>
-                  <SelectItem value="divergente">Com Divergência</SelectItem>
-                  <SelectItem value="falta">Falta (Real &lt; Teórico)</SelectItem>
-                  <SelectItem value="sobra">Sobra (Real &gt; Teórico)</SelectItem>
-                </SelectContent>
-              </Select>
+                <Select value={realFilter} onValueChange={setRealFilter}>
+                  <SelectTrigger className="w-full md:w-36 text-xs md:text-sm h-9">
+                    <SelectValue placeholder="Real" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Real: Todos</SelectItem>
+                    <SelectItem value="com_real">Com Real</SelectItem>
+                    <SelectItem value="sem_real">Sem Real</SelectItem>
+                    <SelectItem value="positivo">Positivo</SelectItem>
+                    <SelectItem value="zero">Zero</SelectItem>
+                    <SelectItem value="negativo">Negativo</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={divergenciaFilter} onValueChange={setDivergenciaFilter}>
+                  <SelectTrigger className="w-full md:w-40 text-xs md:text-sm h-9">
+                    <SelectValue placeholder="Divergência" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Diverg.: Todas</SelectItem>
+                    <SelectItem value="ok">Sem Divergência</SelectItem>
+                    <SelectItem value="divergente">Com Divergência</SelectItem>
+                    <SelectItem value="falta">Falta</SelectItem>
+                    <SelectItem value="sobra">Sobra</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground">
+                <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground text-xs h-8 w-full md:w-auto">
                   Limpar filtros
                 </Button>
               )}
@@ -364,7 +387,7 @@ export default function EstoqueTeorico() {
             ) : totalItems === 0 ? (
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">
+                <p className="text-muted-foreground text-sm">
                   {searchTerm
                     ? 'Nenhum produto encontrado'
                     : 'Nenhum produto com estoque real registrado'}
@@ -372,7 +395,76 @@ export default function EstoqueTeorico() {
               </div>
             ) : (
               <>
-                <div className="border-2 rounded-lg overflow-hidden">
+                {/* Mobile: Card Layout */}
+                <div className="md:hidden space-y-2">
+                  {paginatedData.map((item) => (
+                    <div
+                      key={item.codigo_auxiliar}
+                      className={`border-2 rounded-lg p-3 ${item.diferenca !== 0 ? 'bg-destructive/5 border-destructive/30' : ''}`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          {item.diferenca !== 0 && (
+                            <AlertTriangle className="text-destructive shrink-0" size={14} />
+                          )}
+                          <div className="min-w-0">
+                            <span className="font-mono font-bold text-sm block">
+                              {item.codigo_auxiliar}
+                            </span>
+                            <p className="text-xs text-muted-foreground truncate">
+                              {item.nome_produto}
+                            </p>
+                          </div>
+                        </div>
+                        {item.diferenca === 0 ? (
+                          <Badge
+                            variant="outline"
+                            className="bg-green-500/10 text-green-600 border-green-500/30 text-xs shrink-0"
+                          >
+                            OK
+                          </Badge>
+                        ) : (
+                          <Badge
+                            variant="outline"
+                            className={`font-bold text-xs shrink-0 ${
+                              item.diferenca > 0
+                                ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30'
+                                : 'bg-destructive/10 text-destructive border-destructive/30'
+                            }`}
+                          >
+                            {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-center">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Teórico</p>
+                          <p className={`font-bold text-sm ${item.estoque_teorico < 0 ? 'text-destructive' : ''}`}>
+                            {item.estoque_teorico}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Real</p>
+                          <p className="font-bold text-sm text-purple-600">{item.estoque_real}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground">Diverg.</p>
+                          <p className={`font-bold text-sm ${item.diferenca === 0 ? 'text-green-600' : item.diferenca > 0 ? 'text-yellow-600' : 'text-destructive'}`}>
+                            {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                          </p>
+                        </div>
+                      </div>
+                      {item.data_atualizacao_real && (
+                        <p className="text-[10px] text-muted-foreground text-center mt-1">
+                          Atualizado: {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Desktop: Table Layout */}
+                <div className="hidden md:block border-2 rounded-lg overflow-hidden">
                   <Table>
                     <TableHeader>
                       <TableRow>
