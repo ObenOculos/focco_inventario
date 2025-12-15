@@ -21,6 +21,7 @@ import Pedidos from "./pages/Pedidos";
 
 import ControleVendedores from "./pages/ControleVendedores";
 import AnaliseInventario from "./pages/AnaliseInventario";
+import HistoricoEstoqueReal from "./pages/HistoricoEstoqueReal";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -54,6 +55,11 @@ const App = () => (
             <Route path="/estoque-teorico" element={
               <ProtectedRoute allowedRoles={['gerente']}>
                 <EstoqueTeorico />
+              </ProtectedRoute>
+            } />
+            <Route path="/historico-estoque-real" element={
+              <ProtectedRoute allowedRoles={['gerente']}>
+                <HistoricoEstoqueReal />
               </ProtectedRoute>
             } />
              <Route path="/analise-inventario" element={

@@ -42,6 +42,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   const gerenteLinks = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/estoque-teorico', icon: Package, label: 'Estoque' },
+    { to: '/historico-estoque-real', icon: History, label: 'Histórico Est. Real' },
     { to: '/controle-vendedores', icon: ClipboardList, label: 'Controle de Vendedores' },
     { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
     { to: '/pedidos', icon: FileText, label: 'Gestão de Pedidos' },
