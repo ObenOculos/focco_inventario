@@ -13,6 +13,7 @@ import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import * as XLSX from 'xlsx';
+import { TableWithFiltersSkeleton } from '@/components/skeletons/TableSkeleton';
 
 interface Movimentacao {
   id: string;
@@ -330,9 +331,7 @@ export default function ControleVendedores() {
     
   
                     {loading ? (
-  
-                      <div className="text-center py-8 text-muted-foreground">Carregando...</div>
-  
+                      <TableWithFiltersSkeleton columns={7} rows={8} />
                     ) : sumOfQuantities === 0 ? (
   
                       <div className="text-center py-8">

@@ -14,6 +14,7 @@ import { ptBR } from 'date-fns/locale';
 import { ClipboardList, CheckCircle, XCircle, AlertTriangle, TrendingUp, TrendingDown, Save, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, Clock, ChevronsRight, Loader2, Download } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
+import { ConferenciaSkeleton } from '@/components/skeletons/PageSkeleton';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
@@ -295,7 +296,7 @@ export default function Conferencia() {
   };
 
   if (loading) {
-    return <AppLayout><div className="text-center py-8 text-muted-foreground">Carregando inventários...</div></AppLayout>;
+    return <AppLayout><ConferenciaSkeleton /></AppLayout>;
   }
 
   return (

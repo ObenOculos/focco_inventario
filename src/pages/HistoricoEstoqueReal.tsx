@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/accordion";
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
+import { HistoricoSkeleton } from '@/components/skeletons/PageSkeleton';
 
 interface VendedorProfile {
   id: string;
@@ -318,7 +319,7 @@ export default function HistoricoEstoqueReal() {
             </div>
 
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+              <HistoricoSkeleton />
             ) : historicoFiltrado.length === 0 ? (
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground" />

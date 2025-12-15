@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
+import { EstoqueTeoricSkeleton } from '@/components/skeletons/PageSkeleton';
 
 interface VendedorProfile {
   id: string;
@@ -393,7 +394,7 @@ export default function EstoqueTeorico() {
             </div>
 
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+              <EstoqueTeoricSkeleton />
             ) : totalItems === 0 ? (
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
