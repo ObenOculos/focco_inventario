@@ -1,7 +1,6 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Package, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Download } from 'lucide-react';
@@ -22,34 +21,24 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 import { EstoqueTeoricSkeleton } from '@/components/skeletons/PageSkeleton';
-
-interface VendedorProfile {
-  id: string;
-  codigo_vendedor: string;
-  nome: string;
-}
-
-interface ComparacaoItem {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  estoque_teorico: number;
-  estoque_real: number;
-  diferenca: number;
-  data_atualizacao_real: string | null;
-}
+import { useEstoqueTeoricoQuery, useVendedoresQuery } from '@/hooks/useEstoqueTeoricoQuery';
 
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
   const { toast } = useToast();
-  const [dados, setDados] = useState<ComparacaoItem[]>([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [saldoFilter, setSaldoFilter] = useState<string>('todos');
   const [estoqueRealFilter, setEstoqueRealFilter] = useState<string>('todos');
   const [selectedVendor, setSelectedVendor] = useState<string>('todos');
-  const [vendedores, setVendedores] = useState<VendedorProfile[]>([]);
 
   const isGerente = profile?.role === 'gerente';
+
+  const { data: vendedores = [] } = useVendedoresQuery(isGerente);
+  const { data: dados = [], isLoading: loading } = useEstoqueTeoricoQuery(
+    isGerente,
+    selectedVendor,
+    profile?.codigo_vendedor
+  );
 
   const produtosNegativos = useMemo(
     () => dados.filter(e => e.estoque_teorico < 0),
@@ -104,99 +93,6 @@ export default function EstoqueTeorico() {
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
 
-  useEffect(() => {
-    const fetchVendedores = async () => {
-      const { data: profilesData, error } = await supabase
-        .from('profiles')
-        .select('id, nome, codigo_vendedor')
-        .eq('role', 'vendedor')
-        .not('codigo_vendedor', 'is', null);
-
-      if (error) {
-        console.error("Erro ao buscar vendedores:", error);
-      } else if (profilesData) {
-        setVendedores(profilesData as VendedorProfile[]);
-      }
-    };
-
-    if (isGerente && vendedores.length === 0) {
-      fetchVendedores();
-    }
-  }, [isGerente, vendedores.length]);
-
-  useEffect(() => {
-    const fetchComparacao = async (vendorCode: string) => {
-      const { data, error } = await supabase.rpc('comparar_estoque_teorico_vs_real', {
-        p_codigo_vendedor: vendorCode
-      });
-
-      if (error) {
-        console.error("Erro ao buscar comparação:", error);
-        return [];
-      }
-
-      return (data || []) as ComparacaoItem[];
-    };
-
-    const fetchAllComparacao = async () => {
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('codigo_vendedor')
-        .eq('role', 'vendedor')
-        .not('codigo_vendedor', 'is', null);
-
-      if (error || !profiles) {
-        console.error("Erro ao buscar vendedores:", error);
-        return;
-      }
-
-      // Otimização: buscar dados de todos os vendedores em paralelo
-      const vendorCodes = profiles
-        .map(p => p.codigo_vendedor)
-        .filter((code): code is string => !!code);
-
-      const results = await Promise.all(
-        vendorCodes.map(code => fetchComparacao(code))
-      );
-
-      const consolidated = new Map<string, ComparacaoItem>();
-
-      for (const vendorData of results) {
-        for (const item of vendorData) {
-          const existing = consolidated.get(item.codigo_auxiliar);
-          if (existing) {
-            existing.estoque_teorico += item.estoque_teorico;
-            existing.estoque_real += item.estoque_real;
-            existing.diferenca += item.diferenca;
-          } else {
-            consolidated.set(item.codigo_auxiliar, { ...item });
-          }
-        }
-      }
-
-      setDados(Array.from(consolidated.values()));
-    };
-
-    const loadData = async () => {
-      if (!profile) return;
-      setLoading(true);
-      
-      const vendorCode = isGerente ? selectedVendor : profile.codigo_vendedor;
-
-      if (isGerente && vendorCode === 'todos') {
-        await fetchAllComparacao();
-      } else if (vendorCode) {
-        const data = await fetchComparacao(vendorCode);
-        setDados(data);
-      } else {
-        setDados([]);
-      }
-      
-      setLoading(false);
-    };
-
-    loadData();
-  }, [profile, isGerente, selectedVendor]);
 
   const totalEstoqueTeorico = dados.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalEstoqueReal = dados.reduce((acc, item) => acc + item.estoque_real, 0);
