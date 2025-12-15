@@ -1,19 +1,18 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
 import { Produto } from '@/types/app';
+import { fetchAllInBatches } from '@/lib/supabaseUtils';
 
 export const useProdutosQuery = () => {
   return useQuery<Produto[], Error>({
     queryKey: ['produtos'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('produtos').select('*').order('codigo_auxiliar').limit(10000);
+      const data = await fetchAllInBatches<Produto>('produtos', {
+        select: '*',
+        orderBy: 'codigo_auxiliar',
+        ascending: true,
+      });
 
-      if (error) {
-        console.error('Erro ao buscar produtos:', error);
-        throw error;
-      }
-
-      return (data || []) as Produto[];
+      return data;
     },
   });
 };
