@@ -26,6 +26,7 @@ import * as XLSX from 'xlsx';
 import { HistoricoSkeleton } from '@/components/skeletons/PageSkeleton';
 import { useHistoricoEstoqueRealQuery } from '@/hooks/useHistoricoEstoqueRealQuery';
 import { useVendedoresQuery } from '@/hooks/useEstoqueTeoricoQuery';
+import { RefetchIndicator } from '@/components/RefetchIndicator';
 
 export default function HistoricoEstoqueReal() {
   const { profile } = useAuth();
@@ -38,7 +39,7 @@ export default function HistoricoEstoqueReal() {
   const isGerente = profile?.role === 'gerente';
 
   const { data: vendedores = [] } = useVendedoresQuery(isGerente);
-  const { data: historico = [], isLoading: loading } = useHistoricoEstoqueRealQuery(
+  const { data: historico = [], isLoading: loading, isFetching } = useHistoricoEstoqueRealQuery(
     isGerente,
     selectedVendor,
     profile?.codigo_vendedor,
@@ -122,11 +123,14 @@ export default function HistoricoEstoqueReal() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Histórico de Estoque Real</h1>
-          <p className="text-muted-foreground">
-            Visualize todas as atualizações do estoque real ao longo do tempo
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Histórico de Estoque Real</h1>
+            <p className="text-muted-foreground">
+              Visualize todas as atualizações do estoque real ao longo do tempo
+            </p>
+          </div>
+          <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

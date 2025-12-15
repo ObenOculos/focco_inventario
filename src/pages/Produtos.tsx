@@ -13,6 +13,7 @@ import QRCode from 'qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
+import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { useProdutosQuery, useInvalidateProdutos } from '@/hooks/useProdutosQuery';
 
 export default function Produtos() {
@@ -28,7 +29,7 @@ export default function Produtos() {
     valor_produto: '',
   });
 
-  const { data: produtos = [], isLoading: loading } = useProdutosQuery();
+  const { data: produtos = [], isLoading: loading, isFetching } = useProdutosQuery();
   const invalidateProdutos = useInvalidateProdutos();
 
   const {
@@ -107,11 +108,14 @@ export default function Produtos() {
     <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Produtos</h1>
-            <p className="text-muted-foreground">
-              Gerencie os produtos e gere QR Codes
-            </p>
+          <div className="flex items-start gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Produtos</h1>
+              <p className="text-muted-foreground">
+                Gerencie os produtos e gere QR Codes
+              </p>
+            </div>
+            <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>

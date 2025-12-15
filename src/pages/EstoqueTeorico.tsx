@@ -22,6 +22,7 @@ import { useToast } from '@/hooks/use-toast';
 import * as XLSX from 'xlsx';
 import { EstoqueTeoricSkeleton } from '@/components/skeletons/PageSkeleton';
 import { useEstoqueTeoricoQuery, useVendedoresQuery } from '@/hooks/useEstoqueTeoricoQuery';
+import { RefetchIndicator } from '@/components/RefetchIndicator';
 
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
@@ -34,7 +35,7 @@ export default function EstoqueTeorico() {
   const isGerente = profile?.role === 'gerente';
 
   const { data: vendedores = [] } = useVendedoresQuery(isGerente);
-  const { data: dados = [], isLoading: loading } = useEstoqueTeoricoQuery(
+  const { data: dados = [], isLoading: loading, isFetching } = useEstoqueTeoricoQuery(
     isGerente,
     selectedVendor,
     profile?.codigo_vendedor
@@ -141,13 +142,16 @@ export default function EstoqueTeorico() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Estoque (Teórico x Real)</h1>
-          <p className="text-muted-foreground">
-            {isGerente 
-              ? 'Compare o estoque teórico com o real de todos os vendedores' 
-              : 'Compare seu estoque teórico com o real baseado em inventários'}
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Estoque (Teórico x Real)</h1>
+            <p className="text-muted-foreground">
+              {isGerente 
+                ? 'Compare o estoque teórico com o real de todos os vendedores' 
+                : 'Compare seu estoque teórico com o real baseado em inventários'}
+            </p>
+          </div>
+          <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
 
         {produtosNegativos.length > 0 && (
