@@ -137,6 +137,7 @@ export default function Auth() {
                 onChange={(e) => setEmail(e.target.value)}
                 className="mt-1 border-2"
                 placeholder="seu@email.com"
+                autoComplete="email"
                 required
               />
             </div>
@@ -151,6 +152,7 @@ export default function Auth() {
                   onChange={(e) => setPassword(e.target.value)}
                   className="mt-1 border-2 pr-10"
                   placeholder="••••••"
+                  autoComplete={isLogin ? 'current-password' : 'new-password'}
                   required
                 />
                 <button
