@@ -41,6 +41,7 @@ export default function EstoqueTeorico() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [saldoFilter, setSaldoFilter] = useState<string>('todos');
+  const [estoqueRealFilter, setEstoqueRealFilter] = useState<string>('todos');
   const [selectedVendor, setSelectedVendor] = useState<string>('todos');
   const [vendedores, setVendedores] = useState<VendedorProfile[]>([]);
 
@@ -54,16 +55,34 @@ export default function EstoqueTeorico() {
   const dadosFiltrados = useMemo(() => {
     let filtered = dados;
 
-    if (saldoFilter === 'positivo') {
-      filtered = filtered.filter(e => e.estoque_teorico > 0);
-    } else if (saldoFilter === 'negativo') {
-      filtered = filtered.filter(e => e.estoque_teorico < 0);
-    } else if (saldoFilter === 'divergente') {
-      filtered = filtered.filter(e => e.diferenca !== 0);
+    // Filtro de estoque real
+    if (estoqueRealFilter === 'com_real') {
+      filtered = filtered.filter(e => e.data_atualizacao_real !== null);
+    } else if (estoqueRealFilter === 'sem_real') {
+      filtered = filtered.filter(e => e.data_atualizacao_real === null);
+    }
+
+    // Filtro de saldo/divergência
+    switch (saldoFilter) {
+      case 'ok':
+        filtered = filtered.filter(e => e.diferenca === 0);
+        break;
+      case 'divergente':
+        filtered = filtered.filter(e => e.diferenca !== 0);
+        break;
+      case 'falta':
+        filtered = filtered.filter(e => e.diferenca < 0);
+        break;
+      case 'sobra':
+        filtered = filtered.filter(e => e.diferenca > 0);
+        break;
+      case 'negativo':
+        filtered = filtered.filter(e => e.estoque_teorico < 0);
+        break;
     }
 
     return filtered;
-  }, [dados, saldoFilter]);
+  }, [dados, saldoFilter, estoqueRealFilter]);
 
   const {
     currentPage,
@@ -289,15 +308,27 @@ export default function EstoqueTeorico() {
                   </SelectContent>
                 </Select>
               )}
-              <Select value={saldoFilter} onValueChange={setSaldoFilter}>
-                <SelectTrigger className="w-full md:w-44">
-                  <SelectValue placeholder="Filtrar por" />
+              <Select value={estoqueRealFilter} onValueChange={setEstoqueRealFilter}>
+                <SelectTrigger className="w-full md:w-40">
+                  <SelectValue placeholder="Est. Real" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="todos">Todos</SelectItem>
-                  <SelectItem value="positivo">Teórico Positivo</SelectItem>
-                  <SelectItem value="negativo">Teórico Negativo</SelectItem>
+                  <SelectItem value="com_real">Com Est. Real</SelectItem>
+                  <SelectItem value="sem_real">Sem Est. Real</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={saldoFilter} onValueChange={setSaldoFilter}>
+                <SelectTrigger className="w-full md:w-44">
+                  <SelectValue placeholder="Divergência" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="ok">Sem Divergência</SelectItem>
                   <SelectItem value="divergente">Com Divergência</SelectItem>
+                  <SelectItem value="falta">Falta (Real &lt; Teórico)</SelectItem>
+                  <SelectItem value="sobra">Sobra (Real &gt; Teórico)</SelectItem>
+                  <SelectItem value="negativo">Teórico Negativo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -353,6 +384,11 @@ export default function EstoqueTeorico() {
                             <p className="font-bold text-lg text-purple-600">
                               {item.estoque_real}
                             </p>
+                            {item.data_atualizacao_real && (
+                              <p className="text-xs text-muted-foreground">
+                                {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')}
+                              </p>
+                            )}
                           </TableCell>
                           <TableCell className="text-center">
                             {item.diferenca === 0 ? (
