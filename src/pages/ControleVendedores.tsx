@@ -14,7 +14,7 @@ import { useVendedoresDesempenhoQuery, VendedorDesempenho } from '@/hooks/useVen
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import { StatsCardsSkeleton } from '@/components/skeletons/CardSkeleton';
 import * as XLSX from 'xlsx';
-import { subDays } from 'date-fns';
+import { subDays, startOfDay, endOfDay } from 'date-fns';
 
 type SortField = 'nome' | 'estoque_total' | 'total_vendas' | 'acuracidade' | 'dias_sem_inventario';
 type SortDirection = 'asc' | 'desc';
@@ -26,14 +26,16 @@ export default function ControleVendedores() {
   const [sortField, setSortField] = useState<SortField>('nome');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  // Calcular datas do período
+  // Calcular datas do período com timestamps estáveis para cache do React Query
   const periodoOptions = useMemo(() => {
-    const hoje = new Date();
     if (periodo === 'todos') return {};
+    
+    const hoje = new Date();
     const dias = parseInt(periodo);
+    
     return {
-      periodoInicio: subDays(hoje, dias),
-      periodoFim: hoje
+      periodoInicio: startOfDay(subDays(hoje, dias)),
+      periodoFim: endOfDay(hoje)
     };
   }, [periodo]);
 
