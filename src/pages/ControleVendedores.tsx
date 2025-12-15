@@ -1,3 +1,4 @@
+import { useMobile } from '@/contexts/MobileContext';
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -46,6 +47,7 @@ type SortField = 'nome' | 'estoque_total' | 'total_vendas' | 'acuracidade' | 'di
 type SortDirection = 'asc' | 'desc';
 
 export default function ControleVendedores() {
+  const { isMobile } = useMobile();
   const { profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [periodo, setPeriodo] = useState('30');
@@ -349,10 +351,12 @@ export default function ControleVendedores() {
                 <Button
                   onClick={handleExport}
                   variant="outline"
-                  className="flex items-center gap-2"
+                  size={isMobile ? 'icon' : 'default'}
+                  className={!isMobile ? 'flex items-center gap-2' : ''}
                 >
                   <FileDown size={16} />
-                  Exportar
+                  {!isMobile && 'Exportar'}
+                  {isMobile && <span className="sr-only">Exportar</span>}
                 </Button>
               </div>
             </CardTitle>

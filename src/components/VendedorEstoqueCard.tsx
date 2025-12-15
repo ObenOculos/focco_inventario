@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useMobile } from '@/contexts/MobileContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -48,6 +49,7 @@ export function VendedorEstoqueCard({
   itens,
   pedidosRecentes,
 }: VendedorEstoqueCardProps) {
+  const { isMobile } = useMobile();
   const [expanded, setExpanded] = useState(false);
   const [showItens, setShowItens] = useState(false);
   const [showPedidos, setShowPedidos] = useState(false);
@@ -106,9 +108,12 @@ export function VendedorEstoqueCard({
               >
                 <span className="flex items-center gap-2">
                   <Package size={14} />
-                  Itens em Estoque ({itens.length})
+                  {!isMobile && 'Itens em Estoque'}
                 </span>
-                {showItens ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{itens.length}</Badge>
+                  {showItens ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </div>
               </Button>
 
               {showItens && itens.length > 0 && (
@@ -159,9 +164,12 @@ export function VendedorEstoqueCard({
               >
                 <span className="flex items-center gap-2">
                   <FileText size={14} />
-                  Pedidos Recentes ({pedidosRecentes.length})
+                  {!isMobile && 'Pedidos Recentes'}
                 </span>
-                {showPedidos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{pedidosRecentes.length}</Badge>
+                  {showPedidos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                </div>
               </Button>
 
               {showPedidos && pedidosRecentes.length > 0 && (

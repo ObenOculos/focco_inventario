@@ -3,6 +3,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ImportProvider } from '@/contexts/ImportContext';
+import { MobileProvider } from '@/contexts/MobileContext';
 import { ImportProgress } from '@/components/ImportProgress';
 import { ImportBlocker } from '@/components/ImportBlocker';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -31,138 +32,140 @@ const HomeRedirect = () => {
 };
 
 const App = () => (
-  <AuthProvider>
-    <ImportProvider>
-      <TooltipProvider>
-        <Sonner />
-        <ImportProgress />
-        <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-          <ImportBlocker />
-          <Suspense
-            fallback={
-              <div className="flex items-center justify-center min-h-screen">Carregando...</div>
-            }
-          >
-            <Routes>
-              <Route path="/" element={<HomeRedirect />} />
-              <Route path="/auth" element={<Auth />} />
+  <MobileProvider>
+    <AuthProvider>
+      <ImportProvider>
+        <TooltipProvider>
+          <Sonner />
+          <ImportProgress />
+          <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <ImportBlocker />
+            <Suspense
+              fallback={
+                <div className="flex items-center justify-center min-h-screen">Carregando...</div>
+              }
+            >
+              <Routes>
+                <Route path="/" element={<HomeRedirect />} />
+                <Route path="/auth" element={<Auth />} />
 
-              {/* Rotas protegidas para todos */}
-              <Route
-                path="/dashboard"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <Dashboard />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/estoque-teorico"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <EstoqueTeorico />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/historico-estoque-real"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <HistoricoEstoqueReal />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/analise-inventario"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <AnaliseInventario />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Rotas protegidas para todos */}
+                <Route
+                  path="/dashboard"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <Dashboard />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/estoque-teorico"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <EstoqueTeorico />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/historico-estoque-real"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <HistoricoEstoqueReal />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/analise-inventario"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <AnaliseInventario />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Rotas do vendedor */}
-              <Route
-                path="/inventario"
-                element={
-                  <ProtectedRoute allowedRoles={['vendedor']}>
-                    <Inventario />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/inventario/:inventarioId"
-                element={
-                  <ProtectedRoute allowedRoles={['vendedor']}>
-                    <Inventario />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/historico"
-                element={
-                  <ProtectedRoute allowedRoles={['vendedor']}>
-                    <Historico />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Rotas do vendedor */}
+                <Route
+                  path="/inventario"
+                  element={
+                    <ProtectedRoute allowedRoles={['vendedor']}>
+                      <Inventario />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/inventario/:inventarioId"
+                  element={
+                    <ProtectedRoute allowedRoles={['vendedor']}>
+                      <Inventario />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/historico"
+                  element={
+                    <ProtectedRoute allowedRoles={['vendedor']}>
+                      <Historico />
+                    </ProtectedRoute>
+                  }
+                />
 
-              {/* Rotas do gerente */}
-              <Route
-                path="/vendedores"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <Vendedores />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/controle-vendedores"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <ControleVendedores />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/produtos"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <Produtos />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/importar"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <Importar />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/conferencia"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <Conferencia />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/pedidos"
-                element={
-                  <ProtectedRoute allowedRoles={['gerente']}>
-                    <Pedidos />
-                  </ProtectedRoute>
-                }
-              />
+                {/* Rotas do gerente */}
+                <Route
+                  path="/vendedores"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <Vendedores />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/controle-vendedores"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <ControleVendedores />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/produtos"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <Produtos />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/importar"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <Importar />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/conferencia"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <Conferencia />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/pedidos"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <Pedidos />
+                    </ProtectedRoute>
+                  }
+                />
 
-              <Route path="*" element={<NotFound />} />
-            </Routes>
-          </Suspense>
-        </BrowserRouter>
-      </TooltipProvider>
-    </ImportProvider>
-  </AuthProvider>
+                <Route path="*" element={<NotFound />} />
+              </Routes>
+            </Suspense>
+          </BrowserRouter>
+        </TooltipProvider>
+      </ImportProvider>
+    </AuthProvider>
+  </MobileProvider>
 );
 export default App;

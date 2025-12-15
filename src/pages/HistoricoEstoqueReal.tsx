@@ -196,24 +196,24 @@ export default function HistoricoEstoqueReal() {
                   </SelectContent>
                 </Select>
               )}
-              <div className="flex gap-2 items-center">
+              <div className="flex flex-col sm:flex-row gap-2 items-center w-full sm:w-auto">
                 <input
                   id="startDate"
                   name="startDate"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Data inicial"
                 />
-                <span className="text-muted-foreground">até</span>
+                <span className="text-muted-foreground hidden sm:inline">até</span>
                 <input
                   id="endDate"
                   name="endDate"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                   placeholder="Data final"
                 />
                 {(startDate || endDate) && (
@@ -269,7 +269,7 @@ export default function HistoricoEstoqueReal() {
                             <Badge variant="outline">{group.codigo_vendedor}</Badge>
                           </div>
                         )}
-                        <div className="flex gap-4 ml-auto">
+                        <div className="flex gap-4 self-start md:ml-auto md:self-center">
                           <Badge variant="secondary">{group.itens.length} itens</Badge>
                           <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30">
                             Total: {group.total_quantidade}
