@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -12,24 +12,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Camera, Plus, Trash2, Send, QrCode, Check, X, Search } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Search } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 
@@ -52,15 +36,6 @@ export default function Inventario() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Estados para modal de confirmação
-  const [pendingProduct, setPendingProduct] = useState<{
-    code: string;
-    name: string;
-    isRegistered: boolean;
-    hasRemessa: boolean;
-    isIncrement: boolean;
-  } | null>(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
 
   // Estado para informações do inventário sendo editado
   const [inventarioInfo, setInventarioInfo] = useState<{
@@ -145,26 +120,25 @@ export default function Inventario() {
       return;
     }
 
-    // Se for um item novo, buscar informações do produto e verificar se está no estoque teórico
-    const [produtoResult, estoqueResult] = await Promise.all([
-      supabase.from('produtos').select('nome_produto').eq('codigo_auxiliar', code).maybeSingle(),
-      profile?.codigo_vendedor
-        ? supabase.rpc('calcular_estoque_vendedor', { p_codigo_vendedor: profile.codigo_vendedor })
-        : Promise.resolve({ data: [], error: null }),
-    ]);
+    // Se for um item novo, buscar informações do produto
+    const { data: produtoData } = await supabase
+      .from('produtos')
+      .select('nome_produto')
+      .eq('codigo_auxiliar', code)
+      .maybeSingle();
 
-    const isRegistered = !!produtoResult.data;
-    const estoqueItem = estoqueResult.data?.find((item: any) => item.codigo_auxiliar === code);
-    const hasRemessa = !!estoqueItem && estoqueItem.quantidade_remessa > 0;
+    const nomeProduto = produtoData?.nome_produto || `Produto não cadastrado (${code})`;
 
-    setPendingProduct({
-      code,
-      name: produtoResult.data?.nome_produto || `Produto não cadastrado (${code})`,
-      isRegistered,
-      hasRemessa,
-      isIncrement: false,
-    });
-    setShowConfirmDialog(true);
+    // Adicionar diretamente à lista
+    const newItem: InventarioItem = {
+      codigo_auxiliar: code,
+      nome_produto: nomeProduto,
+      quantidade_fisica: 1,
+    };
+
+    setItems((prev) => [newItem, ...prev]);
+    toast.success(`Produto ${code} adicionado`);
+    resumeScanner();
   };
 
   const incrementItemQuantity = (codigo_auxiliar: string) => {
@@ -186,28 +160,6 @@ export default function Inventario() {
     });
   };
 
-  const confirmAddProduct = () => {
-    if (!pendingProduct) return;
-
-    const newItem: InventarioItem = {
-      codigo_auxiliar: pendingProduct.code,
-      nome_produto: pendingProduct.name,
-      quantidade_fisica: 1,
-    };
-
-    setItems((prev) => [newItem, ...prev]);
-    toast.success(`Produto ${pendingProduct.code} adicionado`);
-
-    setShowConfirmDialog(false);
-    setPendingProduct(null);
-    resumeScanner();
-  };
-
-  const cancelAddProduct = () => {
-    setShowConfirmDialog(false);
-    setPendingProduct(null);
-    resumeScanner();
-  };
 
   const resumeScanner = () => {
     if (scannerRef.current && scanning) {
@@ -588,53 +540,6 @@ export default function Inventario() {
         </Card>
       </div>
 
-      {/* Modal de Confirmação para NOVOS itens */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="max-w-md shadow-none w-[calc(100%-2rem)]">
-          <DialogHeader>
-            <DialogTitle>
-              {pendingProduct?.hasRemessa ? 'Adicionar Produto?' : 'Adicionar Novo Produto?'}
-            </DialogTitle>
-            <DialogDescription>
-              {pendingProduct?.hasRemessa
-                ? 'Confirme a adição deste produto ao inventário.'
-                : 'Este produto não foi enviado para você (sem remessa). Deseja adicioná-lo mesmo assim?'}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-3">
-            <div className="p-4 bg-secondary rounded-lg">
-              <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
-              <p className="text-muted-foreground">{pendingProduct?.name}</p>
-            </div>
-
-            {pendingProduct && !pendingProduct.isRegistered && (
-              <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
-                <p className="font-medium text-sm">⚠️ Produto não cadastrado</p>
-                <p className="text-xs">Este código não existe no sistema.</p>
-              </div>
-            )}
-
-            {pendingProduct && pendingProduct.isRegistered && !pendingProduct.hasRemessa && (
-              <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
-                <p className="font-medium text-sm">⚠️ Produto sem remessa</p>
-                <p className="text-xs">
-                  Este produto não foi enviado para você em nenhuma remessa.
-                </p>
-              </div>
-            )}
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={cancelAddProduct}>
-              <X className="mr-2" size={16} />
-              Cancelar
-            </Button>
-            <Button onClick={confirmAddProduct}>
-              <Check className="mr-2" size={16} />
-              Confirmar e Adicionar
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }
