@@ -127,6 +127,7 @@ serve(async (req: Request) => {
       throw new Error("Falha ao aprovar inventário.")
     }
 
+    // Correção 4: Manter histórico de estoque_real - não deletar registros antigos
     // Prepara dados para estoque_real usando o comparativo
     // - Itens contados (foi_contado=true): usa quantidade_fisica (mesmo se 0)
     // - Itens não contados (foi_contado=false): mantém estoque_teorico
@@ -151,28 +152,18 @@ serve(async (req: Request) => {
 
     console.log(`[INFO] Itens para estoque real: ${estoqueRealData.length} (contados + mantidos do teórico)`)
 
-    // Deleta estoque anterior do vendedor
-    const { error: deleteError } = await supabaseAdmin
-      .from('estoque_real')
-      .delete()
-      .eq('codigo_vendedor', inventario.codigo_vendedor)
-
-    if (deleteError) {
-      console.error("[ERROR] Erro ao limpar estoque real:", deleteError)
-      throw new Error("Falha ao limpar estoque antigo.")
-    }
-
-    // Insere novo estoque real
-    const { error: upsertError } = await supabaseAdmin
+    // Correção 4: Inserir novos registros SEM deletar os antigos (mantém histórico)
+    // Cada inventário aprovado cria um novo snapshot com data_atualizacao e inventario_id únicos
+    const { error: insertError } = await supabaseAdmin
       .from('estoque_real')
       .insert(estoqueRealData)
 
-    if (upsertError) {
-      console.error("[ERROR] Erro ao inserir estoque real:", upsertError)
+    if (insertError) {
+      console.error("[ERROR] Erro ao inserir estoque real:", insertError)
       throw new Error("Falha ao salvar estoque real.")
     }
 
-    console.log(`[INFO] Estoque real atualizado: ${estoqueRealData.length} itens`)
+    console.log(`[INFO] Estoque real registrado: ${estoqueRealData.length} itens (histórico mantido)`)
 
     const mensagem = divergencias.length > 0
       ? `Inventário aprovado! ${divergencias.length} divergência(s) registradas.`

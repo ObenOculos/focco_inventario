@@ -239,11 +239,27 @@ export default function Inventario() {
       return;
     }
 
-    const itemsContados = items.filter(item => item.quantidade_fisica > 0);
-
-    if (itemsContados.length === 0) {
-      toast.error('Conte pelo menos um item para enviar o inventário');
+    // Correção 1: Enviar TODOS os itens escaneados, inclusive com quantidade = 0
+    // Isso permite diferenciar "contou e tem 0" de "não contou"
+    if (items.length === 0) {
+      toast.error('Adicione pelo menos um item para enviar o inventário');
       return;
+    }
+
+    // Correção 5: Verificar se já existe inventário pendente/revisão (apenas para novos)
+    if (!editingInventarioId) {
+      const { data: existingInventario } = await supabase
+        .from('inventarios')
+        .select('id, status')
+        .eq('codigo_vendedor', profile.codigo_vendedor)
+        .in('status', ['pendente', 'revisao'])
+        .maybeSingle();
+
+      if (existingInventario) {
+        const statusText = existingInventario.status === 'revisao' ? 'em revisão' : 'pendente';
+        toast.error(`Você já possui um inventário ${statusText}. Edite-o ou aguarde a aprovação.`);
+        return;
+      }
     }
 
     setLoading(true);
@@ -269,8 +285,8 @@ export default function Inventario() {
 
         if (deleteError) throw deleteError;
 
-        // Inserir itens atualizados
-        const itensData = itemsContados.map(item => ({
+        // Inserir itens atualizados (todos os itens, inclusive com quantidade 0)
+        const itensData = items.map(item => ({
           inventario_id: editingInventarioId,
           codigo_auxiliar: item.codigo_auxiliar,
           nome_produto: item.nome_produto,
@@ -298,7 +314,8 @@ export default function Inventario() {
 
         if (invError) throw invError;
 
-        const itensData = itemsContados.map(item => ({
+        // Inserir todos os itens (inclusive com quantidade 0)
+        const itensData = items.map(item => ({
           inventario_id: inventario.id,
           codigo_auxiliar: item.codigo_auxiliar,
           nome_produto: item.nome_produto,
