@@ -32,10 +32,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
           actionButton: "bg-primary text-primary-foreground border-2 border-border",
           cancelButton: "bg-muted text-muted-foreground border-2 border-border",
           closeButton: "border-2 border-border bg-background hover:bg-muted",
-          success: "!bg-background !text-[hsl(143,70%,35%)] !border-2 !border-[hsl(143,70%,35%)] [&>svg]:!text-[hsl(143,70%,35%)] !shadow-[4px_4px_0_0_hsl(143,70%,25%)]",
-          error: "!bg-background !text-destructive !border-2 !border-destructive [&>svg]:!text-destructive !shadow-[4px_4px_0_0_hsl(0,84%,50%)]",
-          warning: "!bg-background !text-[hsl(38,92%,40%)] !border-2 !border-[hsl(38,92%,40%)] [&>svg]:!text-[hsl(38,92%,40%)] !shadow-[4px_4px_0_0_hsl(38,92%,30%)]",
-          info: "!bg-background !text-[hsl(217,91%,50%)] !border-2 !border-[hsl(217,91%,50%)] [&>svg]:!text-[hsl(217,91%,50%)] !shadow-[4px_4px_0_0_hsl(217,91%,40%)]",
+          success: "!bg-background !text-[hsl(143,70%,35%)] !border-2 !border-[hsl(143,70%,35%)] [&>svg]:!text-[hsl(143,70%,35%)] !shadow-[4px_4px_0_0_hsl(143,50%,12%)]",
+          error: "!bg-background !text-destructive !border-2 !border-destructive [&>svg]:!text-destructive !shadow-[4px_4px_0_0_hsl(0,60%,15%)]",
+          warning: "!bg-background !text-[hsl(38,92%,40%)] !border-2 !border-[hsl(38,92%,40%)] [&>svg]:!text-[hsl(38,92%,40%)] !shadow-[4px_4px_0_0_hsl(38,70%,12%)]",
+          info: "!bg-background !text-[hsl(217,91%,50%)] !border-2 !border-[hsl(217,91%,50%)] [&>svg]:!text-[hsl(217,91%,50%)] !shadow-[4px_4px_0_0_hsl(217,70%,15%)]",
         },
       }}
       {...props}
