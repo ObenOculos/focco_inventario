@@ -29,6 +29,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
+import { RefetchIndicator } from '@/components/RefetchIndicator';
 
 type ItemNaoContado = {
   codigo_auxiliar: string;
@@ -53,7 +54,7 @@ export default function Conferencia() {
 
   const queryClient = useQueryClient();
   
-  const { data: inventarios = [], isLoading: loading, refetch: refetchInventarios } = useInventariosPendentesQuery();
+  const { data: inventarios = [], isLoading: loading, isFetching, refetch: refetchInventarios } = useInventariosPendentesQuery();
 
   const filteredDivergencias = useMemo(() => {
     let filtered = divergencias;
@@ -270,11 +271,14 @@ export default function Conferencia() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Conferência de Inventários</h1>
-          <p className="text-muted-foreground">
-            Compare inventários físicos com o estoque teórico e analise divergências
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Conferência de Inventários</h1>
+            <p className="text-muted-foreground">
+              Compare inventários físicos com o estoque teórico e analise divergências
+            </p>
+          </div>
+          <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
         
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">

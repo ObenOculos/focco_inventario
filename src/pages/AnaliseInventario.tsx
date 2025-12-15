@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import * as XLSX from 'xlsx';
+import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { 
   useInventariosAnaliseQuery, 
   useComparativoInventarioQuery, 
@@ -50,7 +51,7 @@ export default function AnaliseInventario() {
     selectedVendedor,
     vendedores
   );
-  const { data: comparativo = [], isLoading: loading, error } = useComparativoInventarioQuery(selectedInventario);
+  const { data: comparativo = [], isLoading: loading, isFetching, error } = useComparativoInventarioQuery(selectedInventario);
 
   // Reset selected inventory when seller filter changes
   useEffect(() => {
@@ -161,11 +162,14 @@ export default function AnaliseInventario() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Análise de Inventário</h1>
-          <p className="text-muted-foreground">
-            Compare o estoque físico contado com o estoque teórico do sistema.
-          </p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Análise de Inventário</h1>
+            <p className="text-muted-foreground">
+              Compare o estoque físico contado com o estoque teórico do sistema.
+            </p>
+          </div>
+          <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
 
         <Card className="border-2">

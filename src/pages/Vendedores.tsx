@@ -13,6 +13,7 @@ import { Users, Plus, Pencil, UserCheck, UserX } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
+import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { useVendedoresListQuery, useCodigosDisponiveisQuery, useInvalidateVendedores } from '@/hooks/useVendedoresGerenciamentoQuery';
 
 export default function Vendedores() {
@@ -26,7 +27,7 @@ export default function Vendedores() {
     telefone: '',
   });
 
-  const { data: vendedores = [], isLoading: loading } = useVendedoresListQuery();
+  const { data: vendedores = [], isLoading: loading, isFetching } = useVendedoresListQuery();
   const { data: codigosDisponiveis = [] } = useCodigosDisponiveisQuery();
   const invalidateVendedores = useInvalidateVendedores();
 
@@ -138,11 +139,14 @@ export default function Vendedores() {
     <AppLayout>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Vendedores</h1>
-            <p className="text-muted-foreground">
-              Gerencie os representantes comerciais
-            </p>
+          <div className="flex items-start gap-4">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight">Vendedores</h1>
+              <p className="text-muted-foreground">
+                Gerencie os representantes comerciais
+              </p>
+            </div>
+            <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
