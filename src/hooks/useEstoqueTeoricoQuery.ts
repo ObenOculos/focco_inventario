@@ -18,9 +18,11 @@ interface VendedorProfile {
 }
 
 const fetchComparacao = async (vendorCode: string): Promise<ComparacaoItem[]> => {
-  const { data, error } = await supabase.rpc('comparar_estoque_teorico_vs_real', {
-    p_codigo_vendedor: vendorCode,
-  });
+  const { data, error } = await supabase
+    .rpc('comparar_estoque_teorico_vs_real', {
+      p_codigo_vendedor: vendorCode,
+    })
+    .limit(10000);
 
   if (error) {
     console.error('Erro ao buscar comparação:', error);
