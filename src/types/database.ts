@@ -2,7 +2,6 @@ import { Tables, Enums } from '@/integrations/supabase/types';
 
 export type UserRole = Enums<'user_role'>;
 export type InventoryStatus = Enums<'inventory_status'>;
-export type MovimentacaoTipo = Enums<'movimentacao_tipo'>;
 
 export type Profile = Tables<'profiles'>;
 export type Produto = Tables<'produtos'>;
@@ -10,7 +9,6 @@ export type Pedido = Tables<'pedidos'>;
 export type ItemPedido = Tables<'itens_pedido'>;
 export type Inventario = Tables<'inventarios'>;
 export type ItemInventario = Tables<'itens_inventario'>;
-export type MovimentacaoEstoque = Tables<'movimentacoes_estoque'>;
 
 export interface DivergenciaItem {
   codigo_auxiliar: string;

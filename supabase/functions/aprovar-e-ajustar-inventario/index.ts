@@ -12,6 +12,7 @@ interface DivergenciaItem {
   estoque_teorico: number;
   quantidade_fisica: number;
   divergencia: number;
+  foi_contado: boolean;
 }
 
 interface EstoqueItem {
@@ -127,17 +128,17 @@ serve(async (req: Request) => {
     }
 
     // Prepara dados para estoque_real usando o comparativo
-    // - Itens contados: usa quantidade_fisica
-    // - Itens não contados com estoque teórico: mantém estoque_teorico
+    // - Itens contados (foi_contado=true): usa quantidade_fisica (mesmo se 0)
+    // - Itens não contados (foi_contado=false): mantém estoque_teorico
     const estoqueRealData = (comparativo || [])
       .filter((item: DivergenciaItem) => 
-        item.quantidade_fisica > 0 || item.estoque_teorico !== 0
+        item.foi_contado || item.estoque_teorico !== 0
       )
       .map((item: DivergenciaItem) => ({
         codigo_vendedor: inventario.codigo_vendedor,
         codigo_auxiliar: item.codigo_auxiliar,
-        // Se foi contado (física > 0), usa a contagem física; senão, mantém o teórico
-        quantidade_real: item.quantidade_fisica > 0 
+        // Se foi contado, usa a contagem física (mesmo se 0); senão, mantém o teórico
+        quantidade_real: item.foi_contado 
           ? item.quantidade_fisica 
           : item.estoque_teorico,
         inventario_id: inventario_id,

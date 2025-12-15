@@ -172,54 +172,6 @@ export type Database = {
           },
         ]
       }
-      movimentacoes_estoque: {
-        Row: {
-          codigo_auxiliar: string
-          codigo_vendedor: string
-          created_at: string
-          data_movimentacao: string
-          id: string
-          motivo: string | null
-          nome_produto: string | null
-          observacoes: string | null
-          origem_id: string | null
-          origem_tipo: string | null
-          quantidade: number
-          tipo_movimentacao: Database["public"]["Enums"]["movimentacao_tipo"]
-          user_id: string
-        }
-        Insert: {
-          codigo_auxiliar: string
-          codigo_vendedor: string
-          created_at?: string
-          data_movimentacao?: string
-          id?: string
-          motivo?: string | null
-          nome_produto?: string | null
-          observacoes?: string | null
-          origem_id?: string | null
-          origem_tipo?: string | null
-          quantidade: number
-          tipo_movimentacao: Database["public"]["Enums"]["movimentacao_tipo"]
-          user_id: string
-        }
-        Update: {
-          codigo_auxiliar?: string
-          codigo_vendedor?: string
-          created_at?: string
-          data_movimentacao?: string
-          id?: string
-          motivo?: string | null
-          nome_produto?: string | null
-          observacoes?: string | null
-          origem_id?: string | null
-          origem_tipo?: string | null
-          quantidade?: number
-          tipo_movimentacao?: Database["public"]["Enums"]["movimentacao_tipo"]
-          user_id?: string
-        }
-        Relationships: []
-      }
       pedidos: {
         Row: {
           codigo_cliente: string | null
@@ -382,6 +334,7 @@ export type Database = {
           codigo_auxiliar: string
           divergencia: number
           estoque_teorico: number
+          foi_contado: boolean
           nome_produto: string
           quantidade_fisica: number
         }[]
@@ -430,18 +383,6 @@ export type Database = {
           quantidade: number
         }[]
       }
-      get_saldo_movimentacoes: {
-        Args: {
-          p_codigo_vendedor: string
-          p_data_fim?: string
-          p_data_inicio?: string
-        }
-        Returns: {
-          codigo_auxiliar: string
-          nome_produto: string
-          saldo: number
-        }[]
-      }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }
       get_user_role: {
         Args: { user_id: string }
@@ -450,12 +391,6 @@ export type Database = {
     }
     Enums: {
       inventory_status: "pendente" | "aprovado" | "revisao"
-      movimentacao_tipo:
-        | "ajuste_entrada"
-        | "ajuste_saida"
-        | "devolucao_cliente"
-        | "devolucao_empresa"
-        | "perda_avaria"
       user_role: "vendedor" | "gerente"
     }
     CompositeTypes: {
@@ -585,13 +520,6 @@ export const Constants = {
   public: {
     Enums: {
       inventory_status: ["pendente", "aprovado", "revisao"],
-      movimentacao_tipo: [
-        "ajuste_entrada",
-        "ajuste_saida",
-        "devolucao_cliente",
-        "devolucao_empresa",
-        "perda_avaria",
-      ],
       user_role: ["vendedor", "gerente"],
     },
   },
