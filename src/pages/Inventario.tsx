@@ -509,62 +509,46 @@ export default function Inventario() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="border-2 rounded-lg overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Produto</TableHead>
-                    <TableHead className="w-24 text-center">Qtd</TableHead>
-                    <TableHead className="w-12 text-center">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {paginatedItems.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                        {searchTerm
-                          ? `Nenhum item encontrado para "${searchTerm}"`
-                          : 'Nenhum item adicionado ainda.'}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    paginatedItems.map((item) => (
-                      <TableRow key={item.codigo_auxiliar}>
-                        <TableCell>
-                          <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
-                          <p className="text-xs text-muted-foreground truncate">
-                            {item.nome_produto}
-                          </p>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Input
-                            id={`qty-${item.codigo_auxiliar}`}
-                            name={`quantidade_${item.codigo_auxiliar}`}
-                            type="number"
-                            min="0"
-                            value={item.quantidade_fisica}
-                            onChange={(e) =>
-                              updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)
-                            }
-                            className="w-20 border-2 text-center mx-auto"
-                          />
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeItem(item.codigo_auxiliar)}
-                            className="text-destructive hover:bg-destructive/10"
-                          >
-                            <Trash2 size={16} />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
-            </div>
+            {paginatedItems.length === 0 ? (
+              <div className="border-2 rounded-lg p-8 text-center text-muted-foreground">
+                {searchTerm
+                  ? `Nenhum item encontrado para "${searchTerm}"`
+                  : 'Nenhum item adicionado ainda.'}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {paginatedItems.map((item) => (
+                  <div
+                    key={item.codigo_auxiliar}
+                    className="border-2 rounded-lg p-3 flex items-center gap-3"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
+                      <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
+                    </div>
+                    <Input
+                      id={`qty-${item.codigo_auxiliar}`}
+                      name={`quantidade_${item.codigo_auxiliar}`}
+                      type="number"
+                      min="0"
+                      value={item.quantidade_fisica}
+                      onChange={(e) =>
+                        updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)
+                      }
+                      className="w-16 border-2 text-center shrink-0"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeItem(item.codigo_auxiliar)}
+                      className="text-destructive hover:bg-destructive/10 shrink-0"
+                    >
+                      <Trash2 size={16} />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
 
             {paginationProps.totalPages > 1 && (
               <div className="mt-4">
