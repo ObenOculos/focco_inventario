@@ -4,9 +4,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Package, Calendar, User } from 'lucide-react';
-import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/Pagination';
+import { Button } from '@/components/ui/button';
+import { Package, Calendar, User, Download } from 'lucide-react';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
@@ -23,6 +22,8 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useToast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 interface VendedorProfile {
   id: string;
@@ -51,6 +52,7 @@ interface HistoricoGroup {
 
 export default function HistoricoEstoqueReal() {
   const { profile } = useAuth();
+  const { toast } = useToast();
   const [historico, setHistorico] = useState<HistoricoGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -150,6 +152,50 @@ export default function HistoricoEstoqueReal() {
   const totalRegistros = historico.reduce((acc, g) => acc + g.total_itens, 0);
   const totalAtualizacoes = historico.length;
 
+  const handleExportExcel = () => {
+    if (historicoFiltrado.length === 0) {
+      toast({
+        title: "Sem dados",
+        description: "Não há dados para exportar.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const exportData = historicoFiltrado.flatMap(group => 
+      group.itens.map(item => ({
+        'Data Atualização': new Date(item.data_atualizacao).toLocaleDateString('pt-BR', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        }),
+        'Código Vendedor': item.codigo_vendedor,
+        'Nome Vendedor': group.nome_vendedor,
+        'Código Auxiliar': item.codigo_auxiliar,
+        'Quantidade Real': item.quantidade_real
+      }))
+    );
+
+    const ws = XLSX.utils.json_to_sheet(exportData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Histórico Estoque Real');
+
+    const vendorName = selectedVendor !== 'todos' 
+      ? vendedores.find(v => v.codigo_vendedor === selectedVendor)?.nome || selectedVendor
+      : 'todos';
+    const dateStr = new Date().toISOString().split('T')[0];
+    const fileName = `historico_estoque_real_${vendorName}_${dateStr}.xlsx`;
+
+    XLSX.writeFile(wb, fileName);
+
+    toast({
+      title: "Exportação concluída",
+      description: `Arquivo ${fileName} baixado com sucesso.`
+    });
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -188,9 +234,20 @@ export default function HistoricoEstoqueReal() {
 
         <Card className="border-2">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Package size={20} />
-              Histórico de Atualizações
+            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <span className="flex items-center gap-2">
+                <Package size={20} />
+                Histórico de Atualizações
+              </span>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={handleExportExcel}
+                disabled={historicoFiltrado.length === 0}
+              >
+                <Download size={16} className="mr-2" />
+                Exportar Excel
+              </Button>
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
