@@ -131,6 +131,13 @@ export default function EstoqueTeorico() {
   // Verificar se há filtros ativos
   const hasActiveFilters = teoricoFilter !== 'todos' || realFilter !== 'todos' || divergenciaFilter !== 'todos';
 
+  const clearAllFilters = () => {
+    setTeoricoFilter('todos');
+    setRealFilter('todos');
+    setDivergenciaFilter('todos');
+    setSearchTerm('');
+  };
+
   const handleExportExcel = () => {
     if (dadosFiltrados.length === 0) {
       toast.warning('Sem dados para exportar');
@@ -345,6 +352,11 @@ export default function EstoqueTeorico() {
                   <SelectItem value="sobra">Sobra (Real &gt; Teórico)</SelectItem>
                 </SelectContent>
               </Select>
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground">
+                  Limpar filtros
+                </Button>
+              )}
             </div>
 
             {loading ? (
