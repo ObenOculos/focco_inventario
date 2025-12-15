@@ -40,9 +40,11 @@ export const useAcuracidadeMetricsQuery = (isGerente?: boolean) => {
       const vendedoresAcuracidade = new Map<string, number>();
 
       for (const [codigoVendedor, inventarioId] of ultimoInventarioPorVendedor) {
-        const { data: comparacao } = await supabase.rpc('comparar_estoque_inventario', {
-          p_inventario_id: inventarioId,
-        });
+        const { data: comparacao } = await supabase
+          .rpc('comparar_estoque_inventario', {
+            p_inventario_id: inventarioId,
+          })
+          .limit(10000);
 
         if (comparacao) {
           let corretos = 0;

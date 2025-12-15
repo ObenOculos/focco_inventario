@@ -73,9 +73,11 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
           const codigoVendedor = vendedor.codigo_vendedor!;
 
           // Buscar estoque teórico
-          const { data: estoque } = await supabase.rpc('calcular_estoque_vendedor', {
-            p_codigo_vendedor: codigoVendedor,
-          });
+          const { data: estoque } = await supabase
+            .rpc('calcular_estoque_vendedor', {
+              p_codigo_vendedor: codigoVendedor,
+            })
+            .limit(10000);
 
           const estoqueTotal =
             estoque?.reduce((sum: number, item: any) => sum + (item.estoque_teorico || 0), 0) || 0;
@@ -84,17 +86,21 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
           const periodoInicio = options?.periodoInicio?.toISOString() || null;
           const periodoFim = options?.periodoFim?.toISOString() || null;
 
-          const { data: entradas } = await supabase.rpc('get_entradas_pedidos', {
-            p_codigo_vendedor: codigoVendedor,
-            p_data_inicio: periodoInicio,
-            p_data_fim: periodoFim,
-          });
+          const { data: entradas } = await supabase
+            .rpc('get_entradas_pedidos', {
+              p_codigo_vendedor: codigoVendedor,
+              p_data_inicio: periodoInicio,
+              p_data_fim: periodoFim,
+            })
+            .limit(10000);
 
-          const { data: saidas } = await supabase.rpc('get_saidas_pedidos', {
-            p_codigo_vendedor: codigoVendedor,
-            p_data_inicio: periodoInicio,
-            p_data_fim: periodoFim,
-          });
+          const { data: saidas } = await supabase
+            .rpc('get_saidas_pedidos', {
+              p_codigo_vendedor: codigoVendedor,
+              p_data_inicio: periodoInicio,
+              p_data_fim: periodoFim,
+            })
+            .limit(10000);
 
           const totalRemessas =
             entradas?.reduce((sum: number, item: any) => sum + (item.quantidade || 0), 0) || 0;
@@ -115,9 +121,11 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
             // Calcular acuracidade se aprovado
             let acuracidade: number | undefined;
             if (ultimoInv.status === 'aprovado') {
-              const { data: comparacao } = await supabase.rpc('comparar_estoque_inventario', {
-                p_inventario_id: ultimoInv.id,
-              });
+              const { data: comparacao } = await supabase
+                .rpc('comparar_estoque_inventario', {
+                  p_inventario_id: ultimoInv.id,
+                })
+                .limit(10000);
 
               if (comparacao && comparacao.length > 0) {
                 const itensCorretos = comparacao.filter(

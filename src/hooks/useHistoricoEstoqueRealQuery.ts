@@ -39,7 +39,8 @@ export const useHistoricoEstoqueRealQuery = (
         .from('estoque_real')
         .select('*')
         .order('data_atualizacao', { ascending: false })
-        .order('codigo_auxiliar', { ascending: true });
+        .order('codigo_auxiliar', { ascending: true })
+        .limit(10000);
 
       if (!isGerente && userVendorCode) {
         query = query.eq('codigo_vendedor', userVendorCode);

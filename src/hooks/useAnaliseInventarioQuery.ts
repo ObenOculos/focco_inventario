@@ -68,9 +68,11 @@ export const useComparativoInventarioQuery = (inventarioId: string | null) => {
     queryFn: async () => {
       if (!inventarioId) return [];
 
-      const { data, error } = await supabase.rpc('comparar_estoque_inventario', {
-        p_inventario_id: inventarioId,
-      });
+      const { data, error } = await supabase
+        .rpc('comparar_estoque_inventario', {
+          p_inventario_id: inventarioId,
+        })
+        .limit(10000);
 
       if (error) {
         console.error('Erro ao buscar comparativo:', error);
