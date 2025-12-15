@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Produto } from '@/types/app';
@@ -16,7 +16,6 @@ import {
 import { toast } from 'sonner';
 import { Package, Plus, QrCode, Download } from 'lucide-react';
 import QRCode from 'qrcode';
-import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
@@ -24,6 +23,9 @@ import { useProdutosQuery, useInvalidateProdutos } from '@/hooks/useProdutosQuer
 
 export default function Produtos() {
   const [searchTerm, setSearchTerm] = useState('');
+  const [debouncedSearchTerm, setDebouncedSearchTerm] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(24);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null);
@@ -35,25 +37,38 @@ export default function Produtos() {
     valor_produto: '',
   });
 
-  const { data: produtos = [], isLoading: loading, isFetching } = useProdutosQuery();
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedSearchTerm(searchTerm);
+      setCurrentPage(1); // Reset to first page on new search
+    }, 300); // 300ms debounce delay
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [searchTerm]);
+
+  const { data, isLoading: loading, isFetching } = useProdutosQuery(
+    currentPage,
+    itemsPerPage,
+    debouncedSearchTerm
+  );
   const invalidateProdutos = useInvalidateProdutos();
 
-  const {
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    startIndex,
-    endIndex,
-    paginatedData: paginatedProdutos,
-    totalItems,
-    onPageChange,
-    onItemsPerPageChange,
-  } = usePagination({
-    data: produtos,
-    itemsPerPage: 24,
-    searchTerm,
-    searchFields: ['codigo_auxiliar', 'nome_produto'],
-  });
+  const produtos = data?.data ?? [];
+  const totalItems = data?.count ?? 0;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage - 1, totalItems - 1);
+
+  const onPageChange = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const onItemsPerPageChange = (value: string) => {
+    setItemsPerPage(Number(value));
+    setCurrentPage(1);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -234,7 +249,7 @@ export default function Produtos() {
         ) : (
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-              {paginatedProdutos.map((produto) => (
+              {produtos.map((produto) => (
                 <Card key={produto.id} className="border-2">
                   <CardContent className="py-4">
                     <div className="flex items-start justify-between gap-2">

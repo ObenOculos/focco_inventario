@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { fetchAllInBatches } from '@/lib/supabaseUtils';
 
 interface ComparacaoItem {
   codigo_auxiliar: string;
@@ -30,16 +31,16 @@ const fetchComparacao = async (vendorCode: string): Promise<ComparacaoItem[]> =>
 };
 
 const fetchAllComparacao = async (): Promise<ComparacaoItem[]> => {
-  const { data: profiles, error } = await supabase
-    .from('profiles')
-    .select('codigo_vendedor')
-    .eq('role', 'vendedor')
-    .not('codigo_vendedor', 'is', null);
-
-  if (error || !profiles) {
-    console.error('Erro ao buscar vendedores:', error);
-    return [];
-  }
+  const profiles = await fetchAllInBatches<{ codigo_vendedor: string }>(
+    'profiles',
+    {
+      select: 'codigo_vendedor',
+      filters: [
+        { column: 'role', operator: 'eq', value: 'vendedor' },
+        { column: 'codigo_vendedor', operator: 'not', inner_operator: 'is', value: null },
+      ],
+    }
+  );
 
   const vendorCodes = profiles
     .map((p) => p.codigo_vendedor)
@@ -90,18 +91,15 @@ export const useVendedoresQuery = (enabled: boolean) => {
   return useQuery<VendedorProfile[], Error>({
     queryKey: ['vendedoresProfiles'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, nome, codigo_vendedor')
-        .eq('role', 'vendedor')
-        .not('codigo_vendedor', 'is', null);
+      const data = await fetchAllInBatches<VendedorProfile>('profiles', {
+        select: 'id, nome, codigo_vendedor',
+        filters: [
+            { column: 'role', operator: 'eq', value: 'vendedor' },
+            { column: 'codigo_vendedor', operator: 'not', inner_operator: 'is', value: null }
+        ]
+      });
 
-      if (error) {
-        console.error('Erro ao buscar vendedores:', error);
-        return [];
-      }
-
-      return (data || []) as VendedorProfile[];
+      return data;
     },
     enabled,
   });
