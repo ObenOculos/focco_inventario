@@ -26,7 +26,11 @@ interface UseVendedoresDesempenhoOptions {
 
 export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOptions) {
   return useQuery({
-    queryKey: ['vendedores-desempenho', options?.periodoInicio?.toISOString(), options?.periodoFim?.toISOString()],
+    queryKey: [
+      'vendedores-desempenho',
+      options?.periodoInicio?.toISOString(),
+      options?.periodoFim?.toISOString(),
+    ],
     queryFn: async (): Promise<VendedorDesempenho[]> => {
       // 1. Buscar todos os vendedores
       const { data: vendedores, error: vendedoresError } = await supabase
@@ -42,20 +46,22 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
       // 2. Buscar último inventário de cada vendedor
       const { data: inventarios, error: invError } = await supabase
         .from('inventarios')
-        .select(`
+        .select(
+          `
           id,
           codigo_vendedor,
           data_inventario,
           status,
           itens_inventario (id)
-        `)
+        `
+        )
         .order('data_inventario', { ascending: false });
 
       if (invError) throw invError;
 
       // Agrupar inventários por vendedor (pegar o mais recente)
       const ultimoInventarioPorVendedor = new Map<string, any>();
-      inventarios?.forEach(inv => {
+      inventarios?.forEach((inv) => {
         if (!ultimoInventarioPorVendedor.has(inv.codigo_vendedor)) {
           ultimoInventarioPorVendedor.set(inv.codigo_vendedor, inv);
         }
@@ -67,31 +73,33 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
           const codigoVendedor = vendedor.codigo_vendedor!;
 
           // Buscar estoque teórico
-          const { data: estoque } = await supabase
-            .rpc('calcular_estoque_vendedor', { p_codigo_vendedor: codigoVendedor });
-          
-          const estoqueTotal = estoque?.reduce((sum: number, item: any) => sum + (item.estoque_teorico || 0), 0) || 0;
+          const { data: estoque } = await supabase.rpc('calcular_estoque_vendedor', {
+            p_codigo_vendedor: codigoVendedor,
+          });
+
+          const estoqueTotal =
+            estoque?.reduce((sum: number, item: any) => sum + (item.estoque_teorico || 0), 0) || 0;
 
           // Buscar remessas e vendas no período
           const periodoInicio = options?.periodoInicio?.toISOString() || null;
           const periodoFim = options?.periodoFim?.toISOString() || null;
 
-          const { data: entradas } = await supabase
-            .rpc('get_entradas_pedidos', { 
-              p_codigo_vendedor: codigoVendedor,
-              p_data_inicio: periodoInicio,
-              p_data_fim: periodoFim
-            });
+          const { data: entradas } = await supabase.rpc('get_entradas_pedidos', {
+            p_codigo_vendedor: codigoVendedor,
+            p_data_inicio: periodoInicio,
+            p_data_fim: periodoFim,
+          });
 
-          const { data: saidas } = await supabase
-            .rpc('get_saidas_pedidos', { 
-              p_codigo_vendedor: codigoVendedor,
-              p_data_inicio: periodoInicio,
-              p_data_fim: periodoFim
-            });
+          const { data: saidas } = await supabase.rpc('get_saidas_pedidos', {
+            p_codigo_vendedor: codigoVendedor,
+            p_data_inicio: periodoInicio,
+            p_data_fim: periodoFim,
+          });
 
-          const totalRemessas = entradas?.reduce((sum: number, item: any) => sum + (item.quantidade || 0), 0) || 0;
-          const totalVendas = saidas?.reduce((sum: number, item: any) => sum + (item.quantidade || 0), 0) || 0;
+          const totalRemessas =
+            entradas?.reduce((sum: number, item: any) => sum + (item.quantidade || 0), 0) || 0;
+          const totalVendas =
+            saidas?.reduce((sum: number, item: any) => sum + (item.quantidade || 0), 0) || 0;
 
           // Último inventário
           const ultimoInv = ultimoInventarioPorVendedor.get(codigoVendedor);
@@ -100,16 +108,21 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
 
           if (ultimoInv) {
             const dataInv = new Date(ultimoInv.data_inventario);
-            diasSemInventario = Math.floor((Date.now() - dataInv.getTime()) / (1000 * 60 * 60 * 24));
+            diasSemInventario = Math.floor(
+              (Date.now() - dataInv.getTime()) / (1000 * 60 * 60 * 24)
+            );
 
             // Calcular acuracidade se aprovado
             let acuracidade: number | undefined;
             if (ultimoInv.status === 'aprovado') {
-              const { data: comparacao } = await supabase
-                .rpc('comparar_estoque_inventario', { p_inventario_id: ultimoInv.id });
-              
+              const { data: comparacao } = await supabase.rpc('comparar_estoque_inventario', {
+                p_inventario_id: ultimoInv.id,
+              });
+
               if (comparacao && comparacao.length > 0) {
-                const itensCorretos = comparacao.filter((item: any) => item.divergencia === 0).length;
+                const itensCorretos = comparacao.filter(
+                  (item: any) => item.divergencia === 0
+                ).length;
                 acuracidade = Math.round((itensCorretos / comparacao.length) * 100);
               }
             }
@@ -119,7 +132,7 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
               data: ultimoInv.data_inventario,
               status: ultimoInv.status,
               itens_contados: ultimoInv.itens_inventario?.length || 0,
-              acuracidade
+              acuracidade,
             };
           }
 
@@ -132,7 +145,7 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
             total_remessas: totalRemessas,
             total_vendas: totalVendas,
             ultimo_inventario: ultimoInventario,
-            dias_sem_inventario: diasSemInventario
+            dias_sem_inventario: diasSemInventario,
           };
         })
       );

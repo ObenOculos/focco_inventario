@@ -53,7 +53,12 @@ export default function Auth() {
         }
       } else {
         const validated = signupSchema.parse({ email, password, nome });
-        const { error } = await signUp(validated.email, validated.password, validated.nome, 'vendedor');
+        const { error } = await signUp(
+          validated.email,
+          validated.password,
+          validated.nome,
+          'vendedor'
+        );
         if (error) {
           if (error.message.includes('already registered')) {
             toast.error('Este email já está cadastrado');
@@ -92,8 +97,8 @@ export default function Auth() {
               type="button"
               onClick={() => setIsLogin(true)}
               className={`flex-1 py-3 font-medium border-2 border-r-0 transition-all ${
-                isLogin 
-                  ? 'bg-foreground text-background border-foreground' 
+                isLogin
+                  ? 'bg-foreground text-background border-foreground'
                   : 'border-foreground hover:bg-secondary'
               }`}
             >
@@ -103,8 +108,8 @@ export default function Auth() {
               type="button"
               onClick={() => setIsLogin(false)}
               className={`flex-1 py-3 font-medium border-2 transition-all ${
-                !isLogin 
-                  ? 'bg-foreground text-background border-foreground' 
+                !isLogin
+                  ? 'bg-foreground text-background border-foreground'
                   : 'border-foreground hover:bg-secondary'
               }`}
             >
@@ -115,7 +120,9 @@ export default function Auth() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <Label htmlFor="nome" className="font-medium">Nome</Label>
+                <Label htmlFor="nome" className="font-medium">
+                  Nome
+                </Label>
                 <Input
                   id="nome"
                   type="text"
@@ -129,7 +136,9 @@ export default function Auth() {
             )}
 
             <div>
-              <Label htmlFor="email" className="font-medium">Email</Label>
+              <Label htmlFor="email" className="font-medium">
+                Email
+              </Label>
               <Input
                 id="email"
                 type="email"
@@ -143,7 +152,9 @@ export default function Auth() {
             </div>
 
             <div>
-              <Label htmlFor="password" className="font-medium">Senha</Label>
+              <Label htmlFor="password" className="font-medium">
+                Senha
+              </Label>
               <div className="relative">
                 <Input
                   id="password"
@@ -165,11 +176,7 @@ export default function Auth() {
               </div>
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full mt-6" 
-              disabled={loading}
-            >
+            <Button type="submit" className="w-full mt-6" disabled={loading}>
               {loading ? 'Aguarde...' : isLogin ? 'ENTRAR' : 'CRIAR CONTA'}
             </Button>
           </form>

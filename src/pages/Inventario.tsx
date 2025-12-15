@@ -29,7 +29,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 
@@ -54,8 +54,8 @@ export default function Inventario() {
 
   // Estados para modal de confirmação
   const [pendingProduct, setPendingProduct] = useState<{
-    code: string; 
-    name: string; 
+    code: string;
+    name: string;
     isRegistered: boolean;
     hasRemessa: boolean;
     isIncrement: boolean;
@@ -73,10 +73,7 @@ export default function Inventario() {
   const [observacoesGerente, setObservacoesGerente] = useState<string>('');
 
   // Filtrar e paginar itens
-  const {
-    paginatedData: paginatedItems,
-    ...paginationProps
-  } = usePagination({
+  const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
     data: items,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
@@ -86,11 +83,11 @@ export default function Inventario() {
   const startScanner = async () => {
     try {
       setScanning(true);
-      await new Promise(resolve => setTimeout(resolve, 100));
-      const html5QrCode = new Html5Qrcode("qr-reader");
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const html5QrCode = new Html5Qrcode('qr-reader');
       scannerRef.current = html5QrCode;
       await html5QrCode.start(
-        { facingMode: "environment" },
+        { facingMode: 'environment' },
         { fps: 10, qrbox: { width: 250, height: 250 } },
         (decodedText) => handleCodeScanned(decodedText),
         () => {}
@@ -118,9 +115,11 @@ export default function Inventario() {
     if (scannerRef.current) {
       try {
         await scannerRef.current.pause(true);
-      } catch (err) { console.error('Erro ao pausar scanner:', err); }
+      } catch (err) {
+        console.error('Erro ao pausar scanner:', err);
+      }
     }
-    
+
     processCode(code);
   };
 
@@ -136,7 +135,7 @@ export default function Inventario() {
 
   const processCode = async (code: string) => {
     // Verificar se o item já existe na lista
-    const existingItemIndex = items.findIndex(item => item.codigo_auxiliar === code);
+    const existingItemIndex = items.findIndex((item) => item.codigo_auxiliar === code);
 
     if (existingItemIndex !== -1) {
       const existingItem = items[existingItemIndex];
@@ -149,36 +148,36 @@ export default function Inventario() {
     // Se for um item novo, buscar informações do produto e verificar se está no estoque teórico
     const [produtoResult, estoqueResult] = await Promise.all([
       supabase.from('produtos').select('nome_produto').eq('codigo_auxiliar', code).maybeSingle(),
-      profile?.codigo_vendedor 
+      profile?.codigo_vendedor
         ? supabase.rpc('calcular_estoque_vendedor', { p_codigo_vendedor: profile.codigo_vendedor })
-        : Promise.resolve({ data: [], error: null })
+        : Promise.resolve({ data: [], error: null }),
     ]);
 
     const isRegistered = !!produtoResult.data;
     const estoqueItem = estoqueResult.data?.find((item: any) => item.codigo_auxiliar === code);
     const hasRemessa = !!estoqueItem && estoqueItem.quantidade_remessa > 0;
 
-    setPendingProduct({ 
-      code, 
+    setPendingProduct({
+      code,
       name: produtoResult.data?.nome_produto || `Produto não cadastrado (${code})`,
       isRegistered,
       hasRemessa,
-      isIncrement: false
+      isIncrement: false,
     });
     setShowConfirmDialog(true);
   };
-  
+
   const incrementItemQuantity = (codigo_auxiliar: string) => {
-    setItems(prevItems => {
-      const itemIndex = prevItems.findIndex(i => i.codigo_auxiliar === codigo_auxiliar);
+    setItems((prevItems) => {
+      const itemIndex = prevItems.findIndex((i) => i.codigo_auxiliar === codigo_auxiliar);
       if (itemIndex === -1) return prevItems;
-      
+
       const updatedItems = [...prevItems];
       const item = updatedItems[itemIndex];
-      
+
       // Incrementa a quantidade
       updatedItems[itemIndex] = { ...item, quantidade_fisica: item.quantidade_fisica + 1 };
-      
+
       // Move o item para o topo da lista
       const [movedItem] = updatedItems.splice(itemIndex, 1);
       updatedItems.unshift(movedItem);
@@ -189,16 +188,16 @@ export default function Inventario() {
 
   const confirmAddProduct = () => {
     if (!pendingProduct) return;
-    
+
     const newItem: InventarioItem = {
       codigo_auxiliar: pendingProduct.code,
       nome_produto: pendingProduct.name,
       quantidade_fisica: 1,
     };
 
-    setItems(prev => [newItem, ...prev]);
+    setItems((prev) => [newItem, ...prev]);
     toast.success(`Produto ${pendingProduct.code} adicionado`);
-    
+
     setShowConfirmDialog(false);
     setPendingProduct(null);
     resumeScanner();
@@ -221,18 +220,18 @@ export default function Inventario() {
   };
 
   const updateQuantidade = (codigo_auxiliar: string, quantidade: number) => {
-    setItems(prevItems => {
-        const itemIndex = prevItems.findIndex(i => i.codigo_auxiliar === codigo_auxiliar);
-        if (itemIndex === -1) return prevItems;
+    setItems((prevItems) => {
+      const itemIndex = prevItems.findIndex((i) => i.codigo_auxiliar === codigo_auxiliar);
+      if (itemIndex === -1) return prevItems;
 
-        const newItems = [...prevItems];
-        newItems[itemIndex].quantidade_fisica = Math.max(0, quantidade);
-        return newItems;
+      const newItems = [...prevItems];
+      newItems[itemIndex].quantidade_fisica = Math.max(0, quantidade);
+      return newItems;
     });
   };
 
   const removeItem = (codigo_auxiliar: string) => {
-    setItems(items.filter(item => item.codigo_auxiliar !== codigo_auxiliar));
+    setItems(items.filter((item) => item.codigo_auxiliar !== codigo_auxiliar));
   };
 
   const handleSubmit = async () => {
@@ -273,7 +272,7 @@ export default function Inventario() {
           .from('inventarios')
           .update({
             observacoes,
-            status: 'pendente'
+            status: 'pendente',
           })
           .eq('id', editingInventarioId);
 
@@ -288,16 +287,14 @@ export default function Inventario() {
         if (deleteError) throw deleteError;
 
         // Inserir itens atualizados (todos os itens, inclusive com quantidade 0)
-        const itensData = items.map(item => ({
+        const itensData = items.map((item) => ({
           inventario_id: editingInventarioId,
           codigo_auxiliar: item.codigo_auxiliar,
           nome_produto: item.nome_produto,
           quantidade_fisica: item.quantidade_fisica,
         }));
 
-        const { error: itensError } = await supabase
-          .from('itens_inventario')
-          .insert(itensData);
+        const { error: itensError } = await supabase.from('itens_inventario').insert(itensData);
 
         if (itensError) throw itensError;
 
@@ -317,16 +314,14 @@ export default function Inventario() {
         if (invError) throw invError;
 
         // Inserir todos os itens (inclusive com quantidade 0)
-        const itensData = items.map(item => ({
+        const itensData = items.map((item) => ({
           inventario_id: inventario.id,
           codigo_auxiliar: item.codigo_auxiliar,
           nome_produto: item.nome_produto,
           quantidade_fisica: item.quantidade_fisica,
         }));
 
-        const { error: itensError } = await supabase
-          .from('itens_inventario')
-          .insert(itensData);
+        const { error: itensError } = await supabase.from('itens_inventario').insert(itensData);
 
         if (itensError) throw itensError;
 
@@ -380,13 +375,13 @@ export default function Inventario() {
           data_inventario: data.data_inventario,
           status: data.status,
         });
-        
-        const loadedItems: InventarioItem[] = data.itens_inventario.map(item => ({
+
+        const loadedItems: InventarioItem[] = data.itens_inventario.map((item) => ({
           codigo_auxiliar: item.codigo_auxiliar,
           nome_produto: item.nome_produto || '',
           quantidade_fisica: item.quantidade_fisica,
         }));
-        
+
         setItems(loadedItems);
         toast.info('Inventário carregado para edição.');
       } else {
@@ -410,8 +405,8 @@ export default function Inventario() {
               <QrCode size={48} className="mx-auto mb-4 text-muted-foreground" />
               <h2 className="text-xl font-bold mb-2">Código de Vendedor Necessário</h2>
               <p className="text-muted-foreground">
-                Você precisa ter um código de vendedor configurado para realizar inventários.
-                Entre em contato com o gerente.
+                Você precisa ter um código de vendedor configurado para realizar inventários. Entre
+                em contato com o gerente.
               </p>
             </CardContent>
           </Card>
@@ -428,15 +423,22 @@ export default function Inventario() {
             {editingInventarioId ? 'Editar Inventário' : 'Novo Inventário'}
           </h1>
           <p className="text-muted-foreground">
-            {editingInventarioId 
+            {editingInventarioId
               ? 'Edite os itens do seu inventário e reenvie para conferência.'
-              : 'Use o scanner ou a adição manual para começar a montar seu inventário.'
-            }
+              : 'Use o scanner ou a adição manual para começar a montar seu inventário.'}
           </p>
           {inventarioInfo && (
             <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="font-medium text-blue-800">Editando Inventário de {format(new Date(inventarioInfo.data_inventario), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</h3>
-              <p className="text-sm text-blue-700 mt-1">Status atual: {inventarioInfo.status === 'revisao' ? 'Não aprovado' : inventarioInfo.status}</p>
+              <h3 className="font-medium text-blue-800">
+                Editando Inventário de{' '}
+                {format(new Date(inventarioInfo.data_inventario), "dd/MM/yyyy 'às' HH:mm", {
+                  locale: ptBR,
+                })}
+              </h3>
+              <p className="text-sm text-blue-700 mt-1">
+                Status atual:{' '}
+                {inventarioInfo.status === 'revisao' ? 'Não aprovado' : inventarioInfo.status}
+              </p>
             </div>
           )}
         </div>
@@ -450,11 +452,11 @@ export default function Inventario() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div 
-              id="qr-reader" 
+            <div
+              id="qr-reader"
               className={`w-full aspect-square max-w-sm mx-auto bg-secondary ${!scanning ? 'hidden' : ''}`}
             />
-            
+
             <div className="flex justify-center">
               {scanning ? (
                 <Button variant="destructive" onClick={stopScanner}>
@@ -492,7 +494,10 @@ export default function Inventario() {
           <CardHeader>
             <CardTitle>Itens do Inventário ({items.length})</CardTitle>
             <div className="relative mt-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={16} />
+              <Search
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                size={16}
+              />
               <Input
                 id="inventario-search"
                 name="search"
@@ -517,7 +522,9 @@ export default function Inventario() {
                   {paginatedItems.length === 0 ? (
                     <TableRow>
                       <TableCell colSpan={3} className="h-24 text-center text-muted-foreground">
-                        {searchTerm ? `Nenhum item encontrado para "${searchTerm}"` : 'Nenhum item adicionado ainda.'}
+                        {searchTerm
+                          ? `Nenhum item encontrado para "${searchTerm}"`
+                          : 'Nenhum item adicionado ainda.'}
                       </TableCell>
                     </TableRow>
                   ) : (
@@ -525,7 +532,9 @@ export default function Inventario() {
                       <TableRow key={item.codigo_auxiliar}>
                         <TableCell>
                           <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
-                          <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
+                          <p className="text-xs text-muted-foreground truncate">
+                            {item.nome_produto}
+                          </p>
                         </TableCell>
                         <TableCell className="text-center">
                           <Input
@@ -534,7 +543,9 @@ export default function Inventario() {
                             type="number"
                             min="0"
                             value={item.quantidade_fisica}
-                            onChange={(e) => updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)}
+                            onChange={(e) =>
+                              updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)
+                            }
                             className="w-20 border-2 text-center mx-auto"
                           />
                         </TableCell>
@@ -568,7 +579,9 @@ export default function Inventario() {
                   <p className="text-yellow-700 mt-1">{observacoesGerente}</p>
                 </div>
               )}
-              <Label htmlFor="inventario-observacoes" className="font-medium">Observações</Label>
+              <Label htmlFor="inventario-observacoes" className="font-medium">
+                Observações
+              </Label>
               <Textarea
                 id="inventario-observacoes"
                 name="observacoes"
@@ -579,13 +592,13 @@ export default function Inventario() {
               />
             </div>
 
-            <Button 
-              className="w-full mt-4" 
-              onClick={handleSubmit}
-              disabled={loading}
-            >
+            <Button className="w-full mt-4" onClick={handleSubmit} disabled={loading}>
               <Send className="mr-2" size={16} />
-              {loading ? 'Enviando...' : editingInventarioId ? 'Reenviar para Conferência' : 'Enviar para Conferência'}
+              {loading
+                ? 'Enviando...'
+                : editingInventarioId
+                  ? 'Reenviar para Conferência'
+                  : 'Enviar para Conferência'}
             </Button>
           </CardContent>
         </Card>
@@ -599,10 +612,9 @@ export default function Inventario() {
               {pendingProduct?.hasRemessa ? 'Adicionar Produto?' : 'Adicionar Novo Produto?'}
             </DialogTitle>
             <DialogDescription>
-              {pendingProduct?.hasRemessa 
+              {pendingProduct?.hasRemessa
                 ? 'Confirme a adição deste produto ao inventário.'
-                : 'Este produto não foi enviado para você (sem remessa). Deseja adicioná-lo mesmo assim?'
-              }
+                : 'Este produto não foi enviado para você (sem remessa). Deseja adicioná-lo mesmo assim?'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -610,7 +622,7 @@ export default function Inventario() {
               <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
               <p className="text-muted-foreground">{pendingProduct?.name}</p>
             </div>
-            
+
             {pendingProduct && !pendingProduct.isRegistered && (
               <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
                 <p className="font-medium text-sm">⚠️ Produto não cadastrado</p>
@@ -621,7 +633,9 @@ export default function Inventario() {
             {pendingProduct && pendingProduct.isRegistered && !pendingProduct.hasRemessa && (
               <div className="p-3 bg-yellow-100 text-yellow-800 rounded-lg border border-yellow-300">
                 <p className="font-medium text-sm">⚠️ Produto sem remessa</p>
-                <p className="text-xs">Este produto não foi enviado para você em nenhuma remessa.</p>
+                <p className="text-xs">
+                  Este produto não foi enviado para você em nenhuma remessa.
+                </p>
               </div>
             )}
           </div>

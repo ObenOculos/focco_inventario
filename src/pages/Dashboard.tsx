@@ -1,11 +1,29 @@
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { useEstoqueQuery, useMovimentacaoResumoQuery, useDivergenciasQuery } from '@/hooks/useDashboardQuery';
+import {
+  useEstoqueQuery,
+  useMovimentacaoResumoQuery,
+  useDivergenciasQuery,
+} from '@/hooks/useDashboardQuery';
 import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
 import { useAcuracidadeMetricsQuery } from '@/hooks/useDashboardMetricsQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Package, TrendingUp, TrendingDown, ClipboardList, AlertTriangle, ArrowRight, Clock, CheckCircle2, XCircle, Target, Users, BarChart3, RefreshCw } from 'lucide-react';
+import {
+  Package,
+  TrendingUp,
+  TrendingDown,
+  ClipboardList,
+  AlertTriangle,
+  ArrowRight,
+  Clock,
+  CheckCircle2,
+  XCircle,
+  Target,
+  Users,
+  BarChart3,
+  RefreshCw,
+} from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { DashboardSkeleton } from '@/components/skeletons/PageSkeleton';
@@ -19,10 +37,10 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  const {
-    data: estoqueArray = [],
-    isLoading: loadingEstoque
-  } = useEstoqueQuery(profile?.codigo_vendedor, isGerente);
+  const { data: estoqueArray = [], isLoading: loadingEstoque } = useEstoqueQuery(
+    profile?.codigo_vendedor,
+    isGerente
+  );
 
   const {
     data: movimentacao = {
@@ -31,22 +49,34 @@ export default function Dashboard() {
       valorRemessa: 0,
       totalVendas: 0,
       unidadesVenda: 0,
-      valorVenda: 0
+      valorVenda: 0,
     },
-    isLoading: loadingMovimentacao
+    isLoading: loadingMovimentacao,
   } = useMovimentacaoResumoQuery(profile?.codigo_vendedor, isGerente);
 
-  const { data: inventariosPendentes = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'pendente');
-  const { data: inventariosAprovados = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'aprovado');
-  const { data: inventariosRevisao = 0 } = useInventariosCountQuery(isGerente ? null : profile?.codigo_vendedor, 'revisao');
+  const { data: inventariosPendentes = 0 } = useInventariosCountQuery(
+    isGerente ? null : profile?.codigo_vendedor,
+    'pendente'
+  );
+  const { data: inventariosAprovados = 0 } = useInventariosCountQuery(
+    isGerente ? null : profile?.codigo_vendedor,
+    'aprovado'
+  );
+  const { data: inventariosRevisao = 0 } = useInventariosCountQuery(
+    isGerente ? null : profile?.codigo_vendedor,
+    'revisao'
+  );
 
   const { data: divergencias = [] } = useDivergenciasQuery(isGerente);
-  const { data: acuracidadeMetrics, isLoading: loadingAcuracidade } = useAcuracidadeMetricsQuery(isGerente);
+  const { data: acuracidadeMetrics, isLoading: loadingAcuracidade } =
+    useAcuracidadeMetricsQuery(isGerente);
 
-  const produtosNegativos = estoqueArray.filter(e => e.estoque_teorico < 0);
-  const produtosCriticos = estoqueArray.filter(e => e.estoque_teorico > 0 && e.estoque_teorico <= 5).length;
+  const produtosNegativos = estoqueArray.filter((e) => e.estoque_teorico < 0);
+  const produtosCriticos = estoqueArray.filter(
+    (e) => e.estoque_teorico > 0 && e.estoque_teorico <= 5
+  ).length;
   const totalItens = estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0);
-  const totalModelos = new Set(estoqueArray.map(e => e.modelo)).size;
+  const totalModelos = new Set(estoqueArray.map((e) => e.modelo)).size;
 
   const isLoading = loadingEstoque || loadingMovimentacao;
 
@@ -54,13 +84,17 @@ export default function Dashboard() {
     setIsRefreshing(true);
     await queryClient.invalidateQueries();
     setIsRefreshing(false);
-    toast.success("Dados atualizados", {
-      description: "Todas as informações foram recarregadas com sucesso.",
+    toast.success('Dados atualizados', {
+      description: 'Todas as informações foram recarregadas com sucesso.',
     });
   };
 
   if (isLoading) {
-    return <AppLayout><DashboardSkeleton /></AppLayout>;
+    return (
+      <AppLayout>
+        <DashboardSkeleton />
+      </AppLayout>
+    );
   }
 
   return (
@@ -70,7 +104,9 @@ export default function Dashboard() {
           <div className="space-y-2">
             <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
             <p className="text-muted-foreground text-base">
-              {isGerente ? 'Visão geral do sistema - Últimos 30 dias' : 'Seu resumo de atividades - Últimos 30 dias'}
+              {isGerente
+                ? 'Visão geral do sistema - Últimos 30 dias'
+                : 'Seu resumo de atividades - Últimos 30 dias'}
             </p>
           </div>
           <Button
@@ -86,7 +122,8 @@ export default function Dashboard() {
         </div>
 
         {/* Alertas - apenas para problemas críticos */}
-        {(produtosNegativos.length > 0 || (isGerente && (inventariosPendentes + inventariosRevisao > 0))) && (
+        {(produtosNegativos.length > 0 ||
+          (isGerente && inventariosPendentes + inventariosRevisao > 0)) && (
           <div className="space-y-3">
             {produtosNegativos.length > 0 && (
               <div className="flex items-center gap-4 p-5 bg-destructive/10 border-2 border-destructive rounded-lg">
@@ -100,11 +137,13 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <Link to="/estoque-teorico">
-                  <Button variant="outline" size="sm">Ver detalhes</Button>
+                  <Button variant="outline" size="sm">
+                    Ver detalhes
+                  </Button>
                 </Link>
               </div>
             )}
-            {isGerente && (inventariosPendentes + inventariosRevisao > 0) && (
+            {isGerente && inventariosPendentes + inventariosRevisao > 0 && (
               <div className="flex items-center gap-4 p-5 bg-orange-100 dark:bg-orange-900/20 border-2 border-orange-500 rounded-lg">
                 <Clock className="text-orange-600 shrink-0 h-6 w-6" />
                 <div className="flex-1">
@@ -118,7 +157,9 @@ export default function Dashboard() {
                   </p>
                 </div>
                 <Link to="/conferencia">
-                  <Button variant="outline" size="sm">Conferir</Button>
+                  <Button variant="outline" size="sm">
+                    Conferir
+                  </Button>
                 </Link>
               </div>
             )}
@@ -196,10 +237,15 @@ export default function Dashboard() {
                     <div className="h-10 bg-muted animate-pulse rounded" />
                   ) : (
                     <>
-                      <p className={`text-3xl font-bold ${
-                        (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 95 ? 'text-green-600' :
-                        (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 85 ? 'text-yellow-600' : 'text-destructive'
-                      }`}>
+                      <p
+                        className={`text-3xl font-bold ${
+                          (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 95
+                            ? 'text-green-600'
+                            : (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 85
+                              ? 'text-yellow-600'
+                              : 'text-destructive'
+                        }`}
+                      >
                         {(acuracidadeMetrics?.taxaAcuracidadeGeral || 0).toFixed(1)}%
                       </p>
                       <p className="text-xs text-muted-foreground mt-1">últimos inventários</p>
@@ -266,7 +312,9 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">{inventariosPendentes}</p>
+                  <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+                    {inventariosPendentes}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">inventários para conferir</p>
                 </CardContent>
               </Card>
@@ -279,7 +327,9 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">{inventariosRevisao}</p>
+                  <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+                    {inventariosRevisao}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">aguardando correção</p>
                 </CardContent>
               </Card>
@@ -292,49 +342,58 @@ export default function Dashboard() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <p className="text-3xl font-bold text-green-700 dark:text-green-300">{inventariosAprovados}</p>
+                  <p className="text-3xl font-bold text-green-700 dark:text-green-300">
+                    {inventariosAprovados}
+                  </p>
                   <p className="text-xs text-muted-foreground mt-1">inventários finalizados</p>
                 </CardContent>
               </Card>
             </div>
 
             {/* Alertas de Vendedores */}
-            {!loadingAcuracidade && acuracidadeMetrics && (acuracidadeMetrics.vendedoresSemInventario60Dias > 0 || acuracidadeMetrics.vendedoresBaixaAcuracidade > 0) && (
-              <Card className="border-2">
-                <CardHeader className="pb-4">
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Users className="text-primary" size={22} />
-                    Alertas de Vendedores
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {acuracidadeMetrics.vendedoresSemInventario60Dias > 0 && (
-                      <div className="flex items-center gap-3 p-4 border-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
-                        <Clock className="text-orange-600 shrink-0" size={24} />
-                        <div>
-                          <p className="font-semibold text-orange-700 dark:text-orange-300">
-                            {acuracidadeMetrics.vendedoresSemInventario60Dias} vendedor(es)
-                          </p>
-                          <p className="text-sm text-muted-foreground">sem inventário há mais de 60 dias</p>
+            {!loadingAcuracidade &&
+              acuracidadeMetrics &&
+              (acuracidadeMetrics.vendedoresSemInventario60Dias > 0 ||
+                acuracidadeMetrics.vendedoresBaixaAcuracidade > 0) && (
+                <Card className="border-2">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center gap-2 text-lg">
+                      <Users className="text-primary" size={22} />
+                      Alertas de Vendedores
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {acuracidadeMetrics.vendedoresSemInventario60Dias > 0 && (
+                        <div className="flex items-center gap-3 p-4 border-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
+                          <Clock className="text-orange-600 shrink-0" size={24} />
+                          <div>
+                            <p className="font-semibold text-orange-700 dark:text-orange-300">
+                              {acuracidadeMetrics.vendedoresSemInventario60Dias} vendedor(es)
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              sem inventário há mais de 60 dias
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {acuracidadeMetrics.vendedoresBaixaAcuracidade > 0 && (
-                      <div className="flex items-center gap-3 p-4 border-2 rounded-lg bg-destructive/10 border-destructive">
-                        <Target className="text-destructive shrink-0" size={24} />
-                        <div>
-                          <p className="font-semibold text-destructive">
-                            {acuracidadeMetrics.vendedoresBaixaAcuracidade} vendedor(es)
-                          </p>
-                          <p className="text-sm text-muted-foreground">com acuracidade abaixo de 85%</p>
+                      )}
+                      {acuracidadeMetrics.vendedoresBaixaAcuracidade > 0 && (
+                        <div className="flex items-center gap-3 p-4 border-2 rounded-lg bg-destructive/10 border-destructive">
+                          <Target className="text-destructive shrink-0" size={24} />
+                          <div>
+                            <p className="font-semibold text-destructive">
+                              {acuracidadeMetrics.vendedoresBaixaAcuracidade} vendedor(es)
+                            </p>
+                            <p className="text-sm text-muted-foreground">
+                              com acuracidade abaixo de 85%
+                            </p>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
             {/* Ações Rápidas */}
             <Card className="border-2">
@@ -362,7 +421,10 @@ export default function Dashboard() {
                     <Button variant="outline" className="w-full justify-between h-auto py-4">
                       <div className="flex items-center gap-3 text-left">
                         <div className="p-2.5 bg-orange-100 dark:bg-orange-900 rounded-lg">
-                          <ClipboardList className="text-orange-600 dark:text-orange-400" size={20} />
+                          <ClipboardList
+                            className="text-orange-600 dark:text-orange-400"
+                            size={20}
+                          />
                         </div>
                         <div>
                           <p className="font-medium text-base">Conferir Inventários</p>

@@ -51,12 +51,19 @@ export const usePedidosPaginatedQuery = (filters: PedidosFilters) => {
   } = filters;
 
   return useQuery({
-    queryKey: ['pedidos-paginated', codigoVendedor, isGerente, tipoFilter, vendedorFilter, searchTerm, page, pageSize],
+    queryKey: [
+      'pedidos-paginated',
+      codigoVendedor,
+      isGerente,
+      tipoFilter,
+      vendedorFilter,
+      searchTerm,
+      page,
+      pageSize,
+    ],
     queryFn: async (): Promise<PedidosResult> => {
       // Build base query for count
-      let countQuery = supabase
-        .from('pedidos')
-        .select('*', { count: 'exact', head: true });
+      let countQuery = supabase.from('pedidos').select('*', { count: 'exact', head: true });
 
       // Build base query for data
       let dataQuery = supabase
@@ -119,10 +126,7 @@ export const usePedidosQuery = (codigoVendedor?: string | null, isGerente?: bool
   return useQuery({
     queryKey: ['pedidos', codigoVendedor, isGerente],
     queryFn: async () => {
-      let query = supabase
-        .from('pedidos')
-        .select('*')
-        .order('data_emissao', { ascending: false });
+      let query = supabase.from('pedidos').select('*').order('data_emissao', { ascending: false });
 
       // Para vendedores, busca apenas seus pedidos (limite natural)
       // Para gerentes, precisa de paginação - usar usePedidosPaginatedQuery
@@ -153,7 +157,12 @@ export const useVendedoresQuery = () => {
       if (error) throw error;
 
       const uniqueVendedores = Array.from(
-        new Map(data?.map(p => [p.codigo_vendedor, { codigo: p.codigo_vendedor, nome: p.nome_vendedor || p.codigo_vendedor }])).values()
+        new Map(
+          data?.map((p) => [
+            p.codigo_vendedor,
+            { codigo: p.codigo_vendedor, nome: p.nome_vendedor || p.codigo_vendedor },
+          ])
+        ).values()
       );
       return uniqueVendedores;
     },

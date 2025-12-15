@@ -1,14 +1,14 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { AppLayout } from "@/components/layout/AppLayout";
-import { useAuth } from "@/contexts/AuthContext";
-import { useInventariosQuery } from "@/hooks/useInventariosQuery";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
-import { ptBR } from "date-fns/locale";
-import { ClipboardList, ChevronDown, ChevronUp } from "lucide-react";
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { useAuth } from '@/contexts/AuthContext';
+import { useInventariosQuery } from '@/hooks/useInventariosQuery';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import { InventoryStatus } from '@/types/app';
 
@@ -21,22 +21,28 @@ export default function Historico() {
   const navigate = useNavigate();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  const { data: inventarios = [], isLoading: loading } = useInventariosQuery(profile?.codigo_vendedor);
+  const { data: inventarios = [], isLoading: loading } = useInventariosQuery(
+    profile?.codigo_vendedor
+  );
 
   const getStatusBadge = (status: InventoryStatus) => {
     const styles = {
-      pendente: "bg-yellow-100 text-yellow-800 border-yellow-300",
-      aprovado: "bg-green-100 text-green-800 border-green-300",
-      revisao: "bg-red-100 text-red-800 border-red-300",
+      pendente: 'bg-yellow-100 text-yellow-800 border-yellow-300',
+      aprovado: 'bg-green-100 text-green-800 border-green-300',
+      revisao: 'bg-red-100 text-red-800 border-red-300',
     };
 
     const labels = {
-      pendente: "Pendente",
-      aprovado: "Aprovado",
-      revisao: "Não aprovado",
+      pendente: 'Pendente',
+      aprovado: 'Aprovado',
+      revisao: 'Não aprovado',
     };
 
-    return <span className={`px-3 py-1 text-xs font-bold border-2 ${styles[status]}`}>{labels[status]}</span>;
+    return (
+      <span className={`px-3 py-1 text-xs font-bold border-2 ${styles[status]}`}>
+        {labels[status]}
+      </span>
+    );
   };
 
   return (
@@ -44,7 +50,9 @@ export default function Historico() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Histórico de Inventários</h1>
-          <p className="text-muted-foreground">Acompanhe seus inventários anteriores e seus status</p>
+          <p className="text-muted-foreground">
+            Acompanhe seus inventários anteriores e seus status
+          </p>
         </div>
 
         {loading ? (
@@ -68,11 +76,13 @@ export default function Historico() {
                   <div className="flex items-center justify-between">
                     <div>
                       <CardTitle className="text-lg">
-                        {format(new Date(inventario.data_inventario), "dd 'de' MMMM 'de' yyyy", { locale: ptBR })}
+                        {format(new Date(inventario.data_inventario), "dd 'de' MMMM 'de' yyyy", {
+                          locale: ptBR,
+                        })}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {inventario.itens_inventario.length} itens •{" "}
-                        {format(new Date(inventario.data_inventario), "HH:mm")}
+                        {inventario.itens_inventario.length} itens •{' '}
+                        {format(new Date(inventario.data_inventario), 'HH:mm')}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">
@@ -88,7 +98,11 @@ export default function Historico() {
                           Editar
                         </Button>
                       )}
-                      {expandedId === inventario.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                      {expandedId === inventario.id ? (
+                        <ChevronUp size={20} />
+                      ) : (
+                        <ChevronDown size={20} />
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -104,7 +118,9 @@ export default function Historico() {
 
                     {inventario.observacoes_gerente && (
                       <div className="mb-4 p-3 bg-yellow-50 border-2 border-yellow-200">
-                        <p className="text-sm font-medium text-yellow-800">Observações do gerente:</p>
+                        <p className="text-sm font-medium text-yellow-800">
+                          Observações do gerente:
+                        </p>
                         <p className="text-sm text-yellow-700">{inventario.observacoes_gerente}</p>
                       </div>
                     )}
@@ -113,7 +129,9 @@ export default function Historico() {
                       <thead>
                         <tr className="border-b-2 border-foreground">
                           <th className="text-left py-2 text-sm font-bold">Código</th>
-                          <th className="text-left py-2 text-sm font-bold hidden sm:table-cell">Produto</th>
+                          <th className="text-left py-2 text-sm font-bold hidden sm:table-cell">
+                            Produto
+                          </th>
                           <th className="text-center py-2 text-sm font-bold">Qtd</th>
                         </tr>
                       </thead>
@@ -121,8 +139,12 @@ export default function Historico() {
                         {inventario.itens_inventario.map((item) => (
                           <tr key={item.id} className="border-b border-border">
                             <td className="py-2 font-mono text-sm">{item.codigo_auxiliar}</td>
-                            <td className="py-2 text-sm hidden sm:table-cell">{item.nome_produto}</td>
-                            <td className="py-2 text-center font-medium">{item.quantidade_fisica}</td>
+                            <td className="py-2 text-sm hidden sm:table-cell">
+                              {item.nome_produto}
+                            </td>
+                            <td className="py-2 text-center font-medium">
+                              {item.quantidade_fisica}
+                            </td>
                           </tr>
                         ))}
                       </tbody>

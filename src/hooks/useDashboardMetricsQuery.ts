@@ -26,7 +26,7 @@ export const useAcuracidadeMetricsQuery = (isGerente?: boolean) => {
 
       // Agrupar por vendedor, pegando apenas o mais recente
       const ultimoInventarioPorVendedor = new Map<string, string>();
-      inventariosAprovados?.forEach(inv => {
+      inventariosAprovados?.forEach((inv) => {
         if (!ultimoInventarioPorVendedor.has(inv.codigo_vendedor)) {
           ultimoInventarioPorVendedor.set(inv.codigo_vendedor, inv.id);
         }
@@ -41,7 +41,7 @@ export const useAcuracidadeMetricsQuery = (isGerente?: boolean) => {
 
       for (const [codigoVendedor, inventarioId] of ultimoInventarioPorVendedor) {
         const { data: comparacao } = await supabase.rpc('comparar_estoque_inventario', {
-          p_inventario_id: inventarioId
+          p_inventario_id: inventarioId,
         });
 
         if (comparacao) {
@@ -78,12 +78,13 @@ export const useAcuracidadeMetricsQuery = (isGerente?: boolean) => {
       // Contar vendedores sem inventário nos últimos 60 dias
       const vendedoresComInventario = new Set(ultimoInventarioPorVendedor.keys());
       const vendedoresSemInventario60Dias = (vendedoresAtivos || []).filter(
-        v => v.codigo_vendedor && !vendedoresComInventario.has(v.codigo_vendedor)
+        (v) => v.codigo_vendedor && !vendedoresComInventario.has(v.codigo_vendedor)
       ).length;
 
       // Contar vendedores com baixa acuracidade (< 85%)
-      const vendedoresBaixaAcuracidade = Array.from(vendedoresAcuracidade.values())
-        .filter(acuracidade => acuracidade < 85).length;
+      const vendedoresBaixaAcuracidade = Array.from(vendedoresAcuracidade.values()).filter(
+        (acuracidade) => acuracidade < 85
+      ).length;
 
       const taxaAcuracidadeGeral = totalItens > 0 ? (totalCorretos / totalItens) * 100 : 0;
 
@@ -92,7 +93,7 @@ export const useAcuracidadeMetricsQuery = (isGerente?: boolean) => {
         totalDivergencias,
         valorDivergencias,
         vendedoresBaixaAcuracidade,
-        vendedoresSemInventario60Dias
+        vendedoresSemInventario60Dias,
       };
     },
     enabled: isGerente === true,

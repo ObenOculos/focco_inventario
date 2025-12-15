@@ -13,12 +13,12 @@ export const useEstoqueTeoricoPorVendedor = (codigoVendedor?: string | null) => 
       if (!codigoVendedor) {
         return [];
       }
-      
+
       const estoqueMap = await calcularEstoqueTeorico(codigoVendedor);
-      
+
       // Converte o Map para um Array para facilitar a renderização
       const estoqueArray = Array.from(estoqueMap.values());
-      
+
       // Retorna todos os produtos que já tiveram movimentação para o vendedor
       return estoqueArray;
     },

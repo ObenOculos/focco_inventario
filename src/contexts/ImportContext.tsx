@@ -41,7 +41,11 @@ export function ImportProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<ImportStatus>('idle');
   const [progress, setProgress] = useState<ImportProgress>({ current: 0, total: 0, phase: '' });
   const [validation, setValidation] = useState<ValidationResult | null>(null);
-  const [importResult, setImportResult] = useState<{ success: number; errors: number; errorDetails: ImportError[] } | null>(null);
+  const [importResult, setImportResult] = useState<{
+    success: number;
+    errors: number;
+    errorDetails: ImportError[];
+  } | null>(null);
 
   const startImport = async (validationData: ValidationResult) => {
     if (!validationData.isValid) return;
@@ -49,11 +53,11 @@ export function ImportProvider({ children }: { children: ReactNode }) {
     setValidation(validationData);
     setStatus('importing');
     setImportResult(null);
-    
+
     const errorDetails: ImportError[] = [];
     let success = 0;
     let errors = 0;
-    
+
     const totalPedidos = validationData.pedidosMap.size;
     const totalProdutos = validationData.produtosMap.size;
     const totalSteps = totalProdutos > 0 ? totalPedidos + 1 : totalPedidos;
@@ -69,8 +73,10 @@ export function ImportProvider({ children }: { children: ReactNode }) {
 
       for (let i = 0; i < produtosArray.length; i += BATCH_SIZE) {
         const batch = produtosArray.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase.from('produtos').upsert(batch, { onConflict: 'codigo_auxiliar' });
-        
+        const { error } = await supabase
+          .from('produtos')
+          .upsert(batch, { onConflict: 'codigo_auxiliar' });
+
         if (error) {
           console.error(`Erro no lote de produtos:`, error);
           errorDetails.push({
@@ -86,7 +92,7 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           return;
         }
       }
-      
+
       if (produtosArray.length > 0) {
         setProgress({ current: 1, total: totalSteps, phase: 'Inserindo pedidos...' });
       }
@@ -94,14 +100,14 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       // Inserir pedidos
       let pedidoIndex = 0;
       const baseStep = produtosArray.length > 0 ? 1 : 0;
-      
+
       for (const [, { pedido, itens }] of validationData.pedidosMap) {
-        setProgress({ 
-          current: baseStep + pedidoIndex, 
-          total: totalSteps, 
-          phase: `Pedido ${pedidoIndex + 1} de ${totalPedidos}` 
+        setProgress({
+          current: baseStep + pedidoIndex,
+          total: totalSteps,
+          phase: `Pedido ${pedidoIndex + 1} de ${totalPedidos}`,
         });
-        
+
         const { data: pedidoData, error: pedidoError } = await supabase
           .from('pedidos')
           .insert(pedido)
@@ -114,7 +120,8 @@ export function ImportProvider({ children }: { children: ReactNode }) {
             tipo: 'pedido',
             identificador: `Pedido #${pedido.numero_pedido}`,
             mensagem: pedidoError.message,
-            detalhes: pedidoError.details || pedidoError.hint || `Vendedor: ${pedido.codigo_vendedor}`,
+            detalhes:
+              pedidoError.details || pedidoError.hint || `Vendedor: ${pedido.codigo_vendedor}`,
           });
           setImportResult({ success, errors, errorDetails });
           setStatus('error');
@@ -122,16 +129,14 @@ export function ImportProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const itensWithPedidoId = itens.map(item => ({
+        const itensWithPedidoId = itens.map((item) => ({
           ...item,
           pedido_id: pedidoData.id,
         }));
 
         for (let i = 0; i < itensWithPedidoId.length; i += BATCH_SIZE) {
           const batch = itensWithPedidoId.slice(i, i + BATCH_SIZE);
-          const { error: itensError } = await supabase
-            .from('itens_pedido')
-            .insert(batch);
+          const { error: itensError } = await supabase.from('itens_pedido').insert(batch);
 
           if (itensError) {
             errors++;
@@ -143,11 +148,13 @@ export function ImportProvider({ children }: { children: ReactNode }) {
             });
             setImportResult({ success, errors, errorDetails });
             setStatus('error');
-            toast.error(`Erro ao inserir itens do pedido #${pedido.numero_pedido}. Importação interrompida.`);
+            toast.error(
+              `Erro ao inserir itens do pedido #${pedido.numero_pedido}. Importação interrompida.`
+            );
             return;
           }
         }
-        
+
         success++;
         pedidoIndex++;
       }
@@ -156,7 +163,6 @@ export function ImportProvider({ children }: { children: ReactNode }) {
       setStatus('completed');
       setProgress({ current: totalSteps, total: totalSteps, phase: 'Concluído' });
       toast.success(`Importação concluída! ${success} pedidos importados.`);
-
     } catch (err: any) {
       console.error(err);
       errorDetails.push({

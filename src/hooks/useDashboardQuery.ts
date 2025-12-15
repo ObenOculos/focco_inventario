@@ -10,7 +10,7 @@ export const useEstoqueQuery = (codigoVendedor?: string | null, isGerente?: bool
       // Vendedor específico: usar função SQL diretamente
       if (!isGerente && codigoVendedor) {
         const estoqueMap = await calcularEstoqueTeorico(codigoVendedor);
-        return Array.from(estoqueMap.values()).filter(e => e.estoque_teorico !== 0);
+        return Array.from(estoqueMap.values()).filter((e) => e.estoque_teorico !== 0);
       }
 
       // Gerente: buscar apenas vendedores cadastrados e consolidar
@@ -25,7 +25,7 @@ export const useEstoqueQuery = (codigoVendedor?: string | null, isGerente?: bool
       for (const p of profiles || []) {
         if (p.codigo_vendedor) {
           const vendedorEstoque = await calcularEstoqueTeorico(p.codigo_vendedor);
-          
+
           // Consolidar estoques
           for (const [key, item] of vendedorEstoque) {
             const existing = allEstoque.get(key);
@@ -40,7 +40,7 @@ export const useEstoqueQuery = (codigoVendedor?: string | null, isGerente?: bool
         }
       }
 
-      return Array.from(allEstoque.values()).filter(e => e.estoque_teorico !== 0);
+      return Array.from(allEstoque.values()).filter((e) => e.estoque_teorico !== 0);
     },
     enabled: !!codigoVendedor || isGerente === true,
   });
@@ -66,7 +66,7 @@ export const useMovimentacaoResumoQuery = (codigoVendedor?: string | null, isGer
       const { data: pedidos, error: pedidosError } = await pedidosQuery;
       if (pedidosError) throw pedidosError;
 
-      const pedidoIds = pedidos?.map(p => p.id) || [];
+      const pedidoIds = pedidos?.map((p) => p.id) || [];
 
       // Buscar itens em lotes para evitar limite
       let allItens: { pedido_id: string; quantidade: number }[] = [];
@@ -82,15 +82,19 @@ export const useMovimentacaoResumoQuery = (codigoVendedor?: string | null, isGer
       }
 
       const itensPorPedido = new Map<string, number>();
-      allItens.forEach(item => {
+      allItens.forEach((item) => {
         const current = itensPorPedido.get(item.pedido_id) || 0;
         itensPorPedido.set(item.pedido_id, current + Number(item.quantidade));
       });
 
-      let totalRemessas = 0, unidadesRemessa = 0, valorRemessa = 0;
-      let totalVendas = 0, unidadesVenda = 0, valorVenda = 0;
+      let totalRemessas = 0,
+        unidadesRemessa = 0,
+        valorRemessa = 0;
+      let totalVendas = 0,
+        unidadesVenda = 0,
+        valorVenda = 0;
 
-      pedidos?.forEach(p => {
+      pedidos?.forEach((p) => {
         const unidades = itensPorPedido.get(p.id) || 0;
         if (p.codigo_tipo === 7) {
           totalRemessas++;
@@ -125,11 +129,13 @@ export const useEstoqueRealStatsQuery = (isGerente?: boolean) => {
       // Buscar estatísticas de estoque real
       const { data: stats, error } = await supabase
         .from('estoque_real')
-        .select(`
+        .select(
+          `
           codigo_vendedor,
           data_atualizacao,
           inventario_id
-        `)
+        `
+        )
         .order('data_atualizacao', { ascending: false });
 
       if (error) throw error;
@@ -137,31 +143,32 @@ export const useEstoqueRealStatsQuery = (isGerente?: boolean) => {
       // Agrupar por vendedor e pegar a data mais recente
       const vendedorStats = new Map<string, { ultima_atualizacao: string; total_itens: number }>();
 
-      stats?.forEach(item => {
+      stats?.forEach((item) => {
         const existing = vendedorStats.get(item.codigo_vendedor);
         if (!existing || new Date(item.data_atualizacao) > new Date(existing.ultima_atualizacao)) {
           // Contar quantos itens únicos este vendedor tem
-          const itemCount = stats.filter(s => s.codigo_vendedor === item.codigo_vendedor).length;
+          const itemCount = stats.filter((s) => s.codigo_vendedor === item.codigo_vendedor).length;
           vendedorStats.set(item.codigo_vendedor, {
             ultima_atualizacao: item.data_atualizacao,
-            total_itens: itemCount
+            total_itens: itemCount,
           });
         }
       });
 
       // Calcular estatísticas
       const vendedoresComEstoqueReal = vendedorStats.size;
-      const vendedoresAtualizadosRecentemente = Array.from(vendedorStats.values())
-        .filter(stat => {
+      const vendedoresAtualizadosRecentemente = Array.from(vendedorStats.values()).filter(
+        (stat) => {
           const diffTime = Date.now() - new Date(stat.ultima_atualizacao).getTime();
           const diffDays = diffTime / (1000 * 60 * 60 * 24);
           return diffDays <= 7; // Últimos 7 dias
-        }).length;
+        }
+      ).length;
 
       return {
         vendedoresComEstoqueReal,
         vendedoresAtualizadosRecentemente,
-        totalItensEstoqueReal: stats?.length || 0
+        totalItensEstoqueReal: stats?.length || 0,
       };
     },
     enabled: isGerente === true,
@@ -189,24 +196,24 @@ export const useStatusInventariosQuery = (isGerente?: boolean) => {
       if (invError) throw invError;
 
       // Buscar vendedores únicos
-      const vendedorCodigos = [...new Set(inventarios?.map(i => i.codigo_vendedor) || [])];
+      const vendedorCodigos = [...new Set(inventarios?.map((i) => i.codigo_vendedor) || [])];
       const { data: profiles } = await supabase
         .from('profiles')
         .select('codigo_vendedor, nome')
         .in('codigo_vendedor', vendedorCodigos);
 
-      const nomeMap = new Map(profiles?.map(p => [p.codigo_vendedor, p.nome]) || []);
+      const nomeMap = new Map(profiles?.map((p) => [p.codigo_vendedor, p.nome]) || []);
 
       // Agrupar por vendedor
       const statusMap = new Map<string, StatusInventario>();
-      inventarios?.forEach(inv => {
+      inventarios?.forEach((inv) => {
         const current = statusMap.get(inv.codigo_vendedor) || {
           codigo_vendedor: inv.codigo_vendedor,
           nome_vendedor: nomeMap.get(inv.codigo_vendedor) || inv.codigo_vendedor,
           inventarios_pendentes: 0,
           inventarios_aprovados: 0,
           inventarios_revisao: 0,
-          ultimo_inventario: null
+          ultimo_inventario: null,
         };
 
         if (inv.status === 'pendente') current.inventarios_pendentes++;
@@ -214,7 +221,10 @@ export const useStatusInventariosQuery = (isGerente?: boolean) => {
         if (inv.status === 'revisao') current.inventarios_revisao++;
 
         // Atualizar último inventário
-        if (!current.ultimo_inventario || new Date(inv.data_inventario) > new Date(current.ultimo_inventario)) {
+        if (
+          !current.ultimo_inventario ||
+          new Date(inv.data_inventario) > new Date(current.ultimo_inventario)
+        ) {
           current.ultimo_inventario = inv.data_inventario;
         }
         statusMap.set(inv.codigo_vendedor, current);
@@ -258,20 +268,22 @@ export const useDivergenciasQuery = (isGerente?: boolean) => {
       if (error) throw error;
 
       // Get vendedor names
-      const vendedorCodigos = [...new Set(data?.map(d => d.codigo_vendedor) || [])];
+      const vendedorCodigos = [...new Set(data?.map((d) => d.codigo_vendedor) || [])];
       const { data: profiles } = await supabase
         .from('profiles')
         .select('codigo_vendedor, nome')
         .in('codigo_vendedor', vendedorCodigos);
 
-      const nomeMap = new Map(profiles?.map(p => [p.codigo_vendedor, p.nome]) || []);
+      const nomeMap = new Map(profiles?.map((p) => [p.codigo_vendedor, p.nome]) || []);
 
-      return data?.map(d => ({
-        codigo_vendedor: d.codigo_vendedor,
-        nome_vendedor: nomeMap.get(d.codigo_vendedor) || d.codigo_vendedor,
-        inventario_id: d.id,
-        data: d.data_inventario
-      })) || [];
+      return (
+        data?.map((d) => ({
+          codigo_vendedor: d.codigo_vendedor,
+          nome_vendedor: nomeMap.get(d.codigo_vendedor) || d.codigo_vendedor,
+          inventario_id: d.id,
+          data: d.data_inventario,
+        })) || []
+      );
     },
     enabled: isGerente === true,
     staleTime: 5 * 60 * 1000, // 5 minutos

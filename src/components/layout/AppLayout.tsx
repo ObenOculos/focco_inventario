@@ -2,12 +2,12 @@ import { ReactNode } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { 
-  LayoutDashboard, 
-  Package, 
-  ClipboardList, 
-  Users, 
-  FileSpreadsheet, 
+import {
+  LayoutDashboard,
+  Package,
+  ClipboardList,
+  Users,
+  FileSpreadsheet,
   LogOut,
   Menu,
   X,
@@ -18,7 +18,7 @@ import {
   History,
   FileText,
   UserCog,
-  PackageSearch
+  PackageSearch,
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -78,7 +78,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               <span className="font-bold text-xl tracking-tight hidden sm:block">OPTISTOCK</span>
             </Link>
           </div>
-          
+
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="font-medium text-sm">{profile?.nome}</p>
@@ -103,8 +103,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                   key={link.to}
                   to={link.to}
                   className={`flex items-center gap-3 px-4 py-3 border-2 transition-all ${
-                    isActive 
-                      ? 'bg-foreground text-background border-foreground' 
+                    isActive
+                      ? 'bg-foreground text-background border-foreground'
                       : 'border-transparent hover:border-foreground'
                   }`}
                 >
@@ -119,7 +119,10 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Mobile Menu */}
         {mobileMenuOpen && (
           <div className="fixed inset-0 z-50 md:hidden">
-            <div className="absolute inset-0 bg-foreground/20" onClick={() => setMobileMenuOpen(false)} />
+            <div
+              className="absolute inset-0 bg-foreground/20"
+              onClick={() => setMobileMenuOpen(false)}
+            />
             <aside className="absolute left-0 top-0 h-full w-64 bg-card border-r-2 border-foreground">
               <div className="p-4 border-b-2 border-foreground flex items-center justify-between">
                 <span className="font-bold">Menu</span>
@@ -136,8 +139,8 @@ export function AppLayout({ children }: AppLayoutProps) {
                       to={link.to}
                       onClick={() => setMobileMenuOpen(false)}
                       className={`flex items-center gap-3 px-4 py-3 border-2 transition-all ${
-                        isActive 
-                          ? 'bg-foreground text-background border-foreground' 
+                        isActive
+                          ? 'bg-foreground text-background border-foreground'
                           : 'border-transparent hover:border-foreground'
                       }`}
                     >
@@ -152,9 +155,7 @@ export function AppLayout({ children }: AppLayoutProps) {
         )}
 
         {/* Main Content */}
-        <main className="flex-1 p-4 md:p-6">
-          {children}
-        </main>
+        <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
   );

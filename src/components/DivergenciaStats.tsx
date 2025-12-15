@@ -29,7 +29,9 @@ export function DivergenciaStats({
         </CardHeader>
         <CardContent>
           <p className="text-2xl font-bold">{acuracidade}%</p>
-          <p className="text-xs text-muted-foreground">{itensCorretos}/{totalItens} corretos</p>
+          <p className="text-xs text-muted-foreground">
+            {itensCorretos}/{totalItens} corretos
+          </p>
         </CardContent>
       </Card>
 

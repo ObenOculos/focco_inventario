@@ -18,11 +18,11 @@ interface VendedorProfile {
 
 const fetchComparacao = async (vendorCode: string): Promise<ComparacaoItem[]> => {
   const { data, error } = await supabase.rpc('comparar_estoque_teorico_vs_real', {
-    p_codigo_vendedor: vendorCode
+    p_codigo_vendedor: vendorCode,
   });
 
   if (error) {
-    console.error("Erro ao buscar comparação:", error);
+    console.error('Erro ao buscar comparação:', error);
     return [];
   }
 
@@ -37,17 +37,15 @@ const fetchAllComparacao = async (): Promise<ComparacaoItem[]> => {
     .not('codigo_vendedor', 'is', null);
 
   if (error || !profiles) {
-    console.error("Erro ao buscar vendedores:", error);
+    console.error('Erro ao buscar vendedores:', error);
     return [];
   }
 
   const vendorCodes = profiles
-    .map(p => p.codigo_vendedor)
+    .map((p) => p.codigo_vendedor)
     .filter((code): code is string => !!code);
 
-  const results = await Promise.all(
-    vendorCodes.map(code => fetchComparacao(code))
-  );
+  const results = await Promise.all(vendorCodes.map((code) => fetchComparacao(code)));
 
   const consolidated = new Map<string, ComparacaoItem>();
 
@@ -99,7 +97,7 @@ export const useVendedoresQuery = (enabled: boolean) => {
         .not('codigo_vendedor', 'is', null);
 
       if (error) {
-        console.error("Erro ao buscar vendedores:", error);
+        console.error('Erro ao buscar vendedores:', error);
         return [];
       }
 

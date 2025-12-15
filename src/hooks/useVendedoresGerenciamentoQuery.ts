@@ -50,14 +50,16 @@ export const useCodigosDisponiveisQuery = () => {
       }
 
       // Extrair códigos únicos dos pedidos
-      const codigosPedidos = [...new Set(pedidosData.map(p => p.codigo_vendedor).filter(Boolean))] as string[];
-      
+      const codigosPedidos = [
+        ...new Set(pedidosData.map((p) => p.codigo_vendedor).filter(Boolean)),
+      ] as string[];
+
       // Extrair códigos já associados
-      const codigosAssociados = new Set(profilesData.map(p => p.codigo_vendedor).filter(Boolean));
-      
+      const codigosAssociados = new Set(profilesData.map((p) => p.codigo_vendedor).filter(Boolean));
+
       // Filtrar apenas os códigos não associados
-      const disponiveis = codigosPedidos.filter(codigo => !codigosAssociados.has(codigo));
-      
+      const disponiveis = codigosPedidos.filter((codigo) => !codigosAssociados.has(codigo));
+
       return disponiveis.sort();
     },
   });

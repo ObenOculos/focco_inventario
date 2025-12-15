@@ -6,15 +6,31 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Users, Plus, Pencil, UserCheck, UserX } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
-import { useVendedoresListQuery, useCodigosDisponiveisQuery, useInvalidateVendedores } from '@/hooks/useVendedoresGerenciamentoQuery';
+import {
+  useVendedoresListQuery,
+  useCodigosDisponiveisQuery,
+  useInvalidateVendedores,
+} from '@/hooks/useVendedoresGerenciamentoQuery';
 
 export default function Vendedores() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -72,8 +88,10 @@ export default function Vendedores() {
       }
     } else {
       // Criar novo vendedor via Edge Function
-      const { data: { session } } = await supabase.auth.getSession();
-      
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
       if (!session) {
         toast.error('Sessão expirada');
         return;
@@ -84,7 +102,7 @@ export default function Vendedores() {
         {
           method: 'POST',
           headers: {
-            'Authorization': `Bearer ${session.access_token}`,
+            Authorization: `Bearer ${session.access_token}`,
             'Content-Type': 'application/json',
           },
           body: JSON.stringify(formData),
@@ -142,13 +160,17 @@ export default function Vendedores() {
           <div className="flex items-start gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Vendedores</h1>
-              <p className="text-muted-foreground">
-                Gerencie os representantes comerciais
-              </p>
+              <p className="text-muted-foreground">Gerencie os representantes comerciais</p>
             </div>
             <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
-          <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
+          <Dialog
+            open={dialogOpen}
+            onOpenChange={(open) => {
+              setDialogOpen(open);
+              if (!open) resetForm();
+            }}
+          >
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2" size={16} />
@@ -157,9 +179,7 @@ export default function Vendedores() {
             </DialogTrigger>
             <DialogContent className="border-2">
               <DialogHeader>
-                <DialogTitle>
-                  {editingVendedor ? 'Editar Vendedor' : 'Novo Vendedor'}
-                </DialogTitle>
+                <DialogTitle>{editingVendedor ? 'Editar Vendedor' : 'Novo Vendedor'}</DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -195,7 +215,9 @@ export default function Vendedores() {
                       id="vendedor-codigo"
                       name="codigo_vendedor"
                       value={formData.codigo_vendedor}
-                      onChange={(e) => setFormData({ ...formData, codigo_vendedor: e.target.value })}
+                      onChange={(e) =>
+                        setFormData({ ...formData, codigo_vendedor: e.target.value })
+                      }
                       className="border-2"
                       placeholder="Ex: 11"
                     />
@@ -203,7 +225,9 @@ export default function Vendedores() {
                     <Select
                       name="codigo_vendedor"
                       value={formData.codigo_vendedor}
-                      onValueChange={(value) => setFormData({ ...formData, codigo_vendedor: value })}
+                      onValueChange={(value) =>
+                        setFormData({ ...formData, codigo_vendedor: value })
+                      }
                     >
                       <SelectTrigger className="border-2">
                         <SelectValue placeholder="Selecione um código" />
@@ -260,7 +284,9 @@ export default function Vendedores() {
                 {searchTerm ? 'Nenhum vendedor encontrado' : 'Nenhum vendedor cadastrado'}
               </h2>
               <p className="text-muted-foreground">
-                {searchTerm ? 'Tente outro termo de busca' : 'Adicione vendedores para começar a gerenciar o estoque.'}
+                {searchTerm
+                  ? 'Tente outro termo de busca'
+                  : 'Adicione vendedores para começar a gerenciar o estoque.'}
               </p>
             </CardContent>
           </Card>
@@ -268,14 +294,19 @@ export default function Vendedores() {
           <>
             <div className="grid gap-4">
               {paginatedVendedores.map((vendedor) => (
-                <Card key={vendedor.id} className={`border-2 ${!vendedor.ativo ? 'opacity-60' : ''}`}>
+                <Card
+                  key={vendedor.id}
+                  className={`border-2 ${!vendedor.ativo ? 'opacity-60' : ''}`}
+                >
                   <CardContent className="py-4">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <h3 className="font-bold truncate">{vendedor.nome}</h3>
                           {!vendedor.ativo && (
-                            <span className="text-xs px-2 py-0.5 bg-secondary font-medium">INATIVO</span>
+                            <span className="text-xs px-2 py-0.5 bg-secondary font-medium">
+                              INATIVO
+                            </span>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">{vendedor.email}</p>

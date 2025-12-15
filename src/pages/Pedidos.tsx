@@ -1,12 +1,30 @@
 import { useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { usePedidosPaginatedQuery, useVendedoresQuery, usePedidoDetalhesQuery, Pedido } from '@/hooks/usePedidosQuery';
+import {
+  usePedidosPaginatedQuery,
+  useVendedoresQuery,
+  usePedidoDetalhesQuery,
+  Pedido,
+} from '@/hooks/usePedidosQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Package, DollarSign, AlertTriangle, FileText } from 'lucide-react';
 import { format } from 'date-fns';
@@ -81,35 +99,43 @@ export default function Pedidos() {
     setDialogOpen(true);
   };
 
-  const selectedPedido = selectedPedidoId 
-    ? { ...pedidos.find(p => p.id === selectedPedidoId)!, itens_pedido: itensPedido }
+  const selectedPedido = selectedPedidoId
+    ? { ...pedidos.find((p) => p.id === selectedPedidoId)!, itens_pedido: itensPedido }
     : null;
 
   const getTipoBadge = (codigoTipo: number) => {
     if (codigoTipo === 7) {
       return (
-        <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200">
+        <Badge
+          variant="secondary"
+          className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200"
+        >
           <Package className="w-3 h-3 mr-1" />
           Remessa
         </Badge>
       );
     } else if (codigoTipo === 2) {
       return (
-        <Badge variant="secondary" className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+        <Badge
+          variant="secondary"
+          className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+        >
           <DollarSign className="w-3 h-3 mr-1" />
           Venda
         </Badge>
       );
     } else {
       return (
-        <Badge variant="secondary" className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200">
+        <Badge
+          variant="secondary"
+          className="bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200"
+        >
           <AlertTriangle className="w-3 h-3 mr-1" />
           Tipo {codigoTipo}
         </Badge>
       );
     }
   };
-
 
   const totalUnidades = (itens: ItemPedido[]) => {
     return itens.reduce((acc, item) => acc + Number(item.quantidade), 0);
@@ -119,7 +145,7 @@ export default function Pedidos() {
     const parts = codigo.split(' ');
     return {
       modelo: parts[0] || codigo,
-      cor: parts.slice(1).join(' ') || '-'
+      cor: parts.slice(1).join(' ') || '-',
     };
   };
 
@@ -131,10 +157,9 @@ export default function Pedidos() {
             {isGerente ? 'Gestão de Pedidos' : 'Meus Pedidos'}
           </h1>
           <p className="text-muted-foreground">
-            {isGerente 
+            {isGerente
               ? 'Visualize e gerencie todos os pedidos do sistema'
-              : 'Acompanhe suas remessas recebidas e vendas realizadas'
-            }
+              : 'Acompanhe suas remessas recebidas e vendas realizadas'}
           </p>
         </div>
 
@@ -158,13 +183,16 @@ export default function Pedidos() {
                 </SelectContent>
               </Select>
               {isGerente && (
-                <Select value={vendedorFilter} onValueChange={handleFilterChange(setVendedorFilter)}>
+                <Select
+                  value={vendedorFilter}
+                  onValueChange={handleFilterChange(setVendedorFilter)}
+                >
                   <SelectTrigger className="w-full md:w-52">
                     <SelectValue placeholder="Vendedor" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="todos">Todos os vendedores</SelectItem>
-                    {vendedores.map(v => (
+                    {vendedores.map((v) => (
                       <SelectItem key={v.codigo} value={v.codigo}>
                         {v.nome}
                       </SelectItem>
@@ -186,13 +214,9 @@ export default function Pedidos() {
           </CardHeader>
           <CardContent>
             {loading ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Carregando pedidos...
-              </div>
+              <div className="text-center py-8 text-muted-foreground">Carregando pedidos...</div>
             ) : pedidos.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Nenhum pedido encontrado
-              </div>
+              <div className="text-center py-8 text-muted-foreground">Nenhum pedido encontrado</div>
             ) : (
               <div className="overflow-x-auto">
                 <Table>
@@ -212,7 +236,9 @@ export default function Pedidos() {
                       <TableRow key={pedido.id} className="cursor-pointer hover:bg-muted/50">
                         <TableCell className="font-medium">#{pedido.numero_pedido}</TableCell>
                         <TableCell>
-                          {format(new Date(pedido.data_emissao), 'dd/MM/yyyy HH:mm', { locale: ptBR })}
+                          {format(new Date(pedido.data_emissao), 'dd/MM/yyyy HH:mm', {
+                            locale: ptBR,
+                          })}
                         </TableCell>
                         {isGerente && (
                           <TableCell className="max-w-[200px] truncate">
@@ -221,17 +247,19 @@ export default function Pedidos() {
                         )}
                         <TableCell>{getTipoBadge(pedido.codigo_tipo)}</TableCell>
                         <TableCell>
-                          {pedido.numero_nota_fiscal 
+                          {pedido.numero_nota_fiscal
                             ? `${pedido.numero_nota_fiscal}${pedido.serie_nota_fiscal ? `-${pedido.serie_nota_fiscal}` : ''}`
-                            : '-'
-                          }
+                            : '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          {Number(pedido.valor_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {Number(pedido.valor_total).toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL',
+                          })}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            variant="outline" 
+                          <Button
+                            variant="outline"
                             size="sm"
                             onClick={() => handleViewPedido(pedido)}
                           >
@@ -277,31 +305,42 @@ export default function Pedidos() {
                     <div>
                       <span className="text-muted-foreground">Data:</span>
                       <p className="font-medium">
-                        {format(new Date(selectedPedido.data_emissao), "dd/MM/yyyy HH:mm:ss", { locale: ptBR })}
+                        {format(new Date(selectedPedido.data_emissao), 'dd/MM/yyyy HH:mm:ss', {
+                          locale: ptBR,
+                        })}
                       </p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Vendedor:</span>
-                      <p className="font-medium">{selectedPedido.nome_vendedor || selectedPedido.codigo_vendedor}</p>
+                      <p className="font-medium">
+                        {selectedPedido.nome_vendedor || selectedPedido.codigo_vendedor}
+                      </p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Nota Fiscal:</span>
                       <p className="font-medium">
-                        {selectedPedido.numero_nota_fiscal 
+                        {selectedPedido.numero_nota_fiscal
                           ? `${selectedPedido.numero_nota_fiscal} - Série ${selectedPedido.serie_nota_fiscal || '1'}`
-                          : '-'
-                        }
+                          : '-'}
                       </p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Tipo:</span>
                       <p className="font-medium">
-                        {selectedPedido.codigo_tipo === 7 ? 'Remessa' : selectedPedido.codigo_tipo === 2 ? 'Venda' : `Tipo ${selectedPedido.codigo_tipo}`}
+                        {selectedPedido.codigo_tipo === 7
+                          ? 'Remessa'
+                          : selectedPedido.codigo_tipo === 2
+                            ? 'Venda'
+                            : `Tipo ${selectedPedido.codigo_tipo}`}
                       </p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Situação:</span>
-                      <p className="font-medium">{selectedPedido.situacao === 'N' ? 'Normal' : selectedPedido.situacao || '-'}</p>
+                      <p className="font-medium">
+                        {selectedPedido.situacao === 'N'
+                          ? 'Normal'
+                          : selectedPedido.situacao || '-'}
+                      </p>
                     </div>
                     <div>
                       <span className="text-muted-foreground">Cliente:</span>
@@ -324,7 +363,9 @@ export default function Pedidos() {
                             <TableHead>Modelo</TableHead>
                             <TableHead>Cor</TableHead>
                             <TableHead className="text-right">Qtd</TableHead>
-                            <TableHead className="text-right hidden md:table-cell">Valor Un.</TableHead>
+                            <TableHead className="text-right hidden md:table-cell">
+                              Valor Un.
+                            </TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -332,15 +373,22 @@ export default function Pedidos() {
                             const { modelo, cor } = parseCodigoAuxiliar(item.codigo_auxiliar);
                             return (
                               <TableRow key={item.id}>
-                                <TableCell className="font-mono text-sm">{item.codigo_auxiliar}</TableCell>
+                                <TableCell className="font-mono text-sm">
+                                  {item.codigo_auxiliar}
+                                </TableCell>
                                 <TableCell className="hidden md:table-cell max-w-[200px] truncate">
                                   {item.nome_produto}
                                 </TableCell>
                                 <TableCell>{modelo}</TableCell>
                                 <TableCell>{cor}</TableCell>
-                                <TableCell className="text-right">{Number(item.quantidade)} un</TableCell>
+                                <TableCell className="text-right">
+                                  {Number(item.quantidade)} un
+                                </TableCell>
                                 <TableCell className="text-right hidden md:table-cell">
-                                  {Number(item.valor_produto).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                  {Number(item.valor_produto).toLocaleString('pt-BR', {
+                                    style: 'currency',
+                                    currency: 'BRL',
+                                  })}
                                 </TableCell>
                               </TableRow>
                             );
@@ -360,12 +408,17 @@ export default function Pedidos() {
                       </div>
                       <div>
                         <span className="text-muted-foreground">Total de unidades:</span>
-                        <p className="font-bold text-lg">{totalUnidades(selectedPedido.itens_pedido)} un</p>
+                        <p className="font-bold text-lg">
+                          {totalUnidades(selectedPedido.itens_pedido)} un
+                        </p>
                       </div>
                       <div>
                         <span className="text-muted-foreground">Valor Total:</span>
                         <p className="font-bold text-lg text-primary">
-                          {Number(selectedPedido.valor_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          {Number(selectedPedido.valor_total).toLocaleString('pt-BR', {
+                            style: 'currency',
+                            currency: 'BRL',
+                          })}
                         </p>
                       </div>
                     </div>

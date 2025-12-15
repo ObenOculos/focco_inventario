@@ -1,16 +1,42 @@
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { AlertTriangle, Users, Package, TrendingUp, TrendingDown, Clock, CheckCircle, FileDown, ArrowUpDown } from 'lucide-react';
+import {
+  AlertTriangle,
+  Users,
+  Package,
+  TrendingUp,
+  TrendingDown,
+  Clock,
+  CheckCircle,
+  FileDown,
+  ArrowUpDown,
+} from 'lucide-react';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { SearchFilter } from '@/components/SearchFilter';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { useVendedoresDesempenhoQuery, VendedorDesempenho } from '@/hooks/useVendedoresDesempenhoQuery';
+import {
+  useVendedoresDesempenhoQuery,
+  VendedorDesempenho,
+} from '@/hooks/useVendedoresDesempenhoQuery';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import { StatsCardsSkeleton } from '@/components/skeletons/CardSkeleton';
 import * as XLSX from 'xlsx';
@@ -29,13 +55,13 @@ export default function ControleVendedores() {
   // Calcular datas do período com timestamps estáveis para cache do React Query
   const periodoOptions = useMemo(() => {
     if (periodo === 'todos') return {};
-    
+
     const hoje = new Date();
     const dias = parseInt(periodo);
-    
+
     return {
       periodoInicio: startOfDay(subDays(hoje, dias)),
-      periodoFim: endOfDay(hoje)
+      periodoFim: endOfDay(hoje),
     };
   }, [periodo]);
 
@@ -45,15 +71,16 @@ export default function ControleVendedores() {
   const vendedoresFiltrados = useMemo(() => {
     if (!vendedores) return [];
 
-    let resultado = vendedores.filter(v => 
-      v.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      v.codigo_vendedor.toLowerCase().includes(searchTerm.toLowerCase())
+    let resultado = vendedores.filter(
+      (v) =>
+        v.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        v.codigo_vendedor.toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     // Ordenar
     resultado.sort((a, b) => {
       let comparison = 0;
-      
+
       switch (sortField) {
         case 'nome':
           comparison = a.nome.localeCompare(b.nome);
@@ -86,13 +113,15 @@ export default function ControleVendedores() {
   const metricas = useMemo(() => {
     if (!vendedores) return null;
 
-    const ativos = vendedores.filter(v => v.ativo);
-    const comInventarioRecente = vendedores.filter(v => 
-      v.dias_sem_inventario !== null && v.dias_sem_inventario <= 30
+    const ativos = vendedores.filter((v) => v.ativo);
+    const comInventarioRecente = vendedores.filter(
+      (v) => v.dias_sem_inventario !== null && v.dias_sem_inventario <= 30
     );
-    const semInventario = vendedores.filter(v => v.dias_sem_inventario === null || v.dias_sem_inventario > 30);
-    const baixaAcuracidade = vendedores.filter(v => 
-      v.ultimo_inventario?.acuracidade !== undefined && v.ultimo_inventario.acuracidade < 80
+    const semInventario = vendedores.filter(
+      (v) => v.dias_sem_inventario === null || v.dias_sem_inventario > 30
+    );
+    const baixaAcuracidade = vendedores.filter(
+      (v) => v.ultimo_inventario?.acuracidade !== undefined && v.ultimo_inventario.acuracidade < 80
     );
 
     return {
@@ -102,7 +131,7 @@ export default function ControleVendedores() {
       semInventario: semInventario.length,
       baixaAcuracidade: baixaAcuracidade.length,
       estoqueTotal: vendedores.reduce((sum, v) => sum + v.estoque_total, 0),
-      vendasTotal: vendedores.reduce((sum, v) => sum + v.total_vendas, 0)
+      vendasTotal: vendedores.reduce((sum, v) => sum + v.total_vendas, 0),
     };
   }, [vendedores]);
 
@@ -118,19 +147,19 @@ export default function ControleVendedores() {
   const handleExport = () => {
     if (!vendedoresFiltrados) return;
 
-    const dataToExport = vendedoresFiltrados.map(v => ({
-      'Vendedor': v.nome,
-      'Código': v.codigo_vendedor,
-      'Status': v.ativo ? 'Ativo' : 'Inativo',
+    const dataToExport = vendedoresFiltrados.map((v) => ({
+      Vendedor: v.nome,
+      Código: v.codigo_vendedor,
+      Status: v.ativo ? 'Ativo' : 'Inativo',
       'Estoque Total': v.estoque_total,
       'Remessas (período)': v.total_remessas,
       'Vendas (período)': v.total_vendas,
-      'Último Inventário': v.ultimo_inventario 
-        ? new Date(v.ultimo_inventario.data).toLocaleDateString('pt-BR') 
+      'Último Inventário': v.ultimo_inventario
+        ? new Date(v.ultimo_inventario.data).toLocaleDateString('pt-BR')
         : 'Nunca',
       'Status Inventário': v.ultimo_inventario?.status || '-',
       'Acuracidade (%)': v.ultimo_inventario?.acuracidade ?? '-',
-      'Dias sem Inventário': v.dias_sem_inventario ?? 'N/A'
+      'Dias sem Inventário': v.dias_sem_inventario ?? 'N/A',
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -141,14 +170,20 @@ export default function ControleVendedores() {
 
   const getStatusBadge = (status: string | undefined) => {
     if (!status) return null;
-    
+
     switch (status) {
       case 'aprovado':
-        return <Badge className="bg-green-500/20 text-green-700 border-green-500/30">Aprovado</Badge>;
+        return (
+          <Badge className="bg-green-500/20 text-green-700 border-green-500/30">Aprovado</Badge>
+        );
       case 'pendente':
-        return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">Pendente</Badge>;
+        return (
+          <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">Pendente</Badge>
+        );
       case 'revisao':
-        return <Badge className="bg-orange-500/20 text-orange-700 border-orange-500/30">Revisão</Badge>;
+        return (
+          <Badge className="bg-orange-500/20 text-orange-700 border-orange-500/30">Revisão</Badge>
+        );
       default:
         return null;
     }
@@ -156,13 +191,23 @@ export default function ControleVendedores() {
 
   const getAcuracidadeBadge = (acuracidade: number | undefined) => {
     if (acuracidade === undefined) return <span className="text-muted-foreground">-</span>;
-    
+
     if (acuracidade >= 95) {
-      return <Badge className="bg-green-500/20 text-green-700 border-green-500/30">{acuracidade}%</Badge>;
+      return (
+        <Badge className="bg-green-500/20 text-green-700 border-green-500/30">{acuracidade}%</Badge>
+      );
     } else if (acuracidade >= 80) {
-      return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">{acuracidade}%</Badge>;
+      return (
+        <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">
+          {acuracidade}%
+        </Badge>
+      );
     } else {
-      return <Badge className="bg-destructive/20 text-destructive border-destructive/30">{acuracidade}%</Badge>;
+      return (
+        <Badge className="bg-destructive/20 text-destructive border-destructive/30">
+          {acuracidade}%
+        </Badge>
+      );
     }
   };
 
@@ -193,75 +238,86 @@ export default function ControleVendedores() {
         {/* Cards de métricas */}
         {isLoading ? (
           <StatsCardsSkeleton count={4} />
-        ) : metricas && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-primary/10">
-                    <Users className="h-5 w-5 text-primary" />
+        ) : (
+          metricas && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-primary/10">
+                      <Users className="h-5 w-5 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{metricas.vendedoresAtivos}</p>
+                      <p className="text-xs text-muted-foreground">Vendedores Ativos</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{metricas.vendedoresAtivos}</p>
-                    <p className="text-xs text-muted-foreground">Vendedores Ativos</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-green-500/10">
-                    <CheckCircle className="h-5 w-5 text-green-600" />
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-green-500/10">
+                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{metricas.comInventarioRecente}</p>
+                      <p className="text-xs text-muted-foreground">Inventário em dia</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{metricas.comInventarioRecente}</p>
-                    <p className="text-xs text-muted-foreground">Inventário em dia</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-yellow-500/10">
-                    <Clock className="h-5 w-5 text-yellow-600" />
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-yellow-500/10">
+                      <Clock className="h-5 w-5 text-yellow-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{metricas.semInventario}</p>
+                      <p className="text-xs text-muted-foreground">Sem inventário recente</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{metricas.semInventario}</p>
-                    <p className="text-xs text-muted-foreground">Sem inventário recente</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-2 rounded-full bg-destructive/10">
-                    <AlertTriangle className="h-5 w-5 text-destructive" />
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-full bg-destructive/10">
+                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-bold">{metricas.baixaAcuracidade}</p>
+                      <p className="text-xs text-muted-foreground">Baixa acuracidade</p>
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-2xl font-bold">{metricas.baixaAcuracidade}</p>
-                    <p className="text-xs text-muted-foreground">Baixa acuracidade</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </CardContent>
+              </Card>
+            </div>
+          )
         )}
 
         {/* Alertas */}
-        {vendedores && vendedores.filter(v => v.dias_sem_inventario === null || v.dias_sem_inventario > 60).length > 0 && (
-          <Alert className="border-yellow-500/50 bg-yellow-500/10">
-            <Clock className="h-4 w-4 text-yellow-600" />
-            <AlertDescription className="text-yellow-700">
-              <strong>{vendedores.filter(v => v.dias_sem_inventario === null || v.dias_sem_inventario > 60).length}</strong> vendedor(es) sem inventário há mais de 60 dias.
-            </AlertDescription>
-          </Alert>
-        )}
+        {vendedores &&
+          vendedores.filter((v) => v.dias_sem_inventario === null || v.dias_sem_inventario > 60)
+            .length > 0 && (
+            <Alert className="border-yellow-500/50 bg-yellow-500/10">
+              <Clock className="h-4 w-4 text-yellow-600" />
+              <AlertDescription className="text-yellow-700">
+                <strong>
+                  {
+                    vendedores.filter(
+                      (v) => v.dias_sem_inventario === null || v.dias_sem_inventario > 60
+                    ).length
+                  }
+                </strong>{' '}
+                vendedor(es) sem inventário há mais de 60 dias.
+              </AlertDescription>
+            </Alert>
+          )}
 
         {/* Tabela */}
         <Card className="border-2">
@@ -290,7 +346,11 @@ export default function ControleVendedores() {
                     <SelectItem value="todos">Todo período</SelectItem>
                   </SelectContent>
                 </Select>
-                <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
+                <Button
+                  onClick={handleExport}
+                  variant="outline"
+                  className="flex items-center gap-2"
+                >
                   <FileDown size={16} />
                   Exportar
                 </Button>
@@ -304,7 +364,9 @@ export default function ControleVendedores() {
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  {searchTerm ? 'Nenhum vendedor encontrado para a busca.' : 'Nenhum vendedor cadastrado.'}
+                  {searchTerm
+                    ? 'Nenhum vendedor encontrado para a busca.'
+                    : 'Nenhum vendedor cadastrado.'}
                 </p>
               </div>
             ) : (
@@ -312,7 +374,7 @@ export default function ControleVendedores() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => handleSort('nome')}
                       >
@@ -321,7 +383,7 @@ export default function ControleVendedores() {
                           <ArrowUpDown size={14} className="text-muted-foreground" />
                         </span>
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 text-center"
                         onClick={() => handleSort('estoque_total')}
                       >
@@ -336,7 +398,7 @@ export default function ControleVendedores() {
                           Remessas
                         </span>
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 text-center"
                         onClick={() => handleSort('total_vendas')}
                       >
@@ -346,7 +408,7 @@ export default function ControleVendedores() {
                           <ArrowUpDown size={14} className="text-muted-foreground" />
                         </span>
                       </TableHead>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 text-center"
                         onClick={() => handleSort('dias_sem_inventario')}
                       >
@@ -356,7 +418,7 @@ export default function ControleVendedores() {
                         </span>
                       </TableHead>
                       <TableHead className="text-center">Status</TableHead>
-                      <TableHead 
+                      <TableHead
                         className="cursor-pointer hover:bg-muted/50 text-center"
                         onClick={() => handleSort('acuracidade')}
                       >
@@ -369,11 +431,16 @@ export default function ControleVendedores() {
                   </TableHeader>
                   <TableBody>
                     {vendedoresFiltrados.map((vendedor) => (
-                      <TableRow key={vendedor.codigo_vendedor} className={!vendedor.ativo ? 'opacity-50' : ''}>
+                      <TableRow
+                        key={vendedor.codigo_vendedor}
+                        className={!vendedor.ativo ? 'opacity-50' : ''}
+                      >
                         <TableCell>
                           <div>
                             <p className="font-medium">{vendedor.nome}</p>
-                            <p className="text-xs text-muted-foreground">{vendedor.codigo_vendedor}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {vendedor.codigo_vendedor}
+                            </p>
                           </div>
                         </TableCell>
                         <TableCell className="text-center font-bold">
@@ -389,13 +456,16 @@ export default function ControleVendedores() {
                           {vendedor.ultimo_inventario ? (
                             <div>
                               <p className="text-sm">
-                                {new Date(vendedor.ultimo_inventario.data).toLocaleDateString('pt-BR')}
+                                {new Date(vendedor.ultimo_inventario.data).toLocaleDateString(
+                                  'pt-BR'
+                                )}
                               </p>
-                              {vendedor.dias_sem_inventario !== null && vendedor.dias_sem_inventario > 30 && (
-                                <p className="text-xs text-yellow-600">
-                                  ({vendedor.dias_sem_inventario} dias)
-                                </p>
-                              )}
+                              {vendedor.dias_sem_inventario !== null &&
+                                vendedor.dias_sem_inventario > 30 && (
+                                  <p className="text-xs text-yellow-600">
+                                    ({vendedor.dias_sem_inventario} dias)
+                                  </p>
+                                )}
                             </div>
                           ) : (
                             <span className="text-muted-foreground text-sm">Nunca</span>

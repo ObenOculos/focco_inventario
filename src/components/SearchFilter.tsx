@@ -10,7 +10,10 @@ interface SearchFilterProps {
 export function SearchFilter({ value, onChange, placeholder = 'Buscar...' }: SearchFilterProps) {
   return (
     <div className="relative flex-1 max-w-sm">
-      <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+      <Search
+        className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+        size={18}
+      />
       <Input
         id="search-filter"
         name="search"

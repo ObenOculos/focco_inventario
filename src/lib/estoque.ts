@@ -5,9 +5,11 @@ import { EstoqueItem } from '@/types/app';
  * Calcula o estoque teórico de um vendedor usando função SQL agregada.
  * Retorna apenas os totais por produto (máximo ~4k linhas vs 79k linhas brutas).
  */
-export async function calcularEstoqueTeorico(codigoVendedor: string): Promise<Map<string, EstoqueItem>> {
+export async function calcularEstoqueTeorico(
+  codigoVendedor: string
+): Promise<Map<string, EstoqueItem>> {
   const { data, error } = await supabase.rpc('calcular_estoque_vendedor', {
-    p_codigo_vendedor: codigoVendedor
+    p_codigo_vendedor: codigoVendedor,
   });
 
   if (error) {
@@ -35,9 +37,13 @@ export async function calcularEstoqueTeorico(codigoVendedor: string): Promise<Ma
 /**
  * Busca o estoque real (contagem física) de um vendedor.
  */
-export async function buscarEstoqueReal(codigoVendedor: string): Promise<Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>> {
+export async function buscarEstoqueReal(
+  codigoVendedor: string
+): Promise<
+  Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>
+> {
   const { data, error } = await supabase.rpc('get_estoque_real_vendedor', {
-    p_codigo_vendedor: codigoVendedor
+    p_codigo_vendedor: codigoVendedor,
   });
 
   if (error) {
@@ -45,7 +51,10 @@ export async function buscarEstoqueReal(codigoVendedor: string): Promise<Map<str
     throw error;
   }
 
-  const estoqueRealMap = new Map<string, { quantidade_real: number; data_atualizacao: string; inventario_id: string }>();
+  const estoqueRealMap = new Map<
+    string,
+    { quantidade_real: number; data_atualizacao: string; inventario_id: string }
+  >();
 
   data?.forEach((item: any) => {
     estoqueRealMap.set(item.codigo_auxiliar, {

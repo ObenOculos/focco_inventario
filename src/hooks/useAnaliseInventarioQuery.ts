@@ -35,7 +35,7 @@ export const useInventariosAnaliseQuery = (
         .from('inventarios')
         .select('id, data_inventario, status, codigo_vendedor')
         .order('data_inventario', { ascending: false });
-      
+
       if (!isGerente) {
         query = query.eq('codigo_vendedor', userVendorCode);
       } else if (selectedVendedor !== 'todos') {
@@ -45,13 +45,13 @@ export const useInventariosAnaliseQuery = (
       const { data, error } = await query;
 
       if (error) {
-        console.error("Erro ao buscar inventários:", error);
+        console.error('Erro ao buscar inventários:', error);
         throw error;
       }
 
       // Enrich inventories with seller names
       return (data || []).map((inv) => {
-        const vendedor = vendedores.find(v => v.codigo_vendedor === inv.codigo_vendedor);
+        const vendedor = vendedores.find((v) => v.codigo_vendedor === inv.codigo_vendedor);
         return {
           ...inv,
           vendedor_nome: vendedor?.nome || inv.codigo_vendedor,
@@ -94,11 +94,11 @@ export const useVendedoresSimpleQuery = (enabled: boolean) => {
         .order('nome');
 
       if (error) {
-        console.error("Erro ao buscar vendedores:", error);
+        console.error('Erro ao buscar vendedores:', error);
         return [];
       }
 
-      return (data || []).filter(v => v.codigo_vendedor) as VendedorSimples[];
+      return (data || []).filter((v) => v.codigo_vendedor) as VendedorSimples[];
     },
     enabled,
   });

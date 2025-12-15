@@ -6,7 +6,13 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Package, Calendar, User, Download } from 'lucide-react';
 import { SearchFilter } from '@/components/SearchFilter';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -14,13 +20,13 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
-} from "@/components/ui/accordion";
+} from '@/components/ui/accordion';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { HistoricoSkeleton } from '@/components/skeletons/PageSkeleton';
@@ -38,38 +44,37 @@ export default function HistoricoEstoqueReal() {
   const isGerente = profile?.role === 'gerente';
 
   const { data: vendedores = [] } = useVendedoresQuery(isGerente);
-  const { data: historico = [], isLoading: loading, isFetching } = useHistoricoEstoqueRealQuery(
-    isGerente,
-    selectedVendor,
-    profile?.codigo_vendedor,
-    vendedores
-  );
+  const {
+    data: historico = [],
+    isLoading: loading,
+    isFetching,
+  } = useHistoricoEstoqueRealQuery(isGerente, selectedVendor, profile?.codigo_vendedor, vendedores);
 
   const historicoFiltrado = useMemo(() => {
     let filtered = historico;
-    
+
     // Filtro por período
     if (startDate) {
       const start = new Date(startDate);
       start.setHours(0, 0, 0, 0);
-      filtered = filtered.filter(group => new Date(group.data_atualizacao) >= start);
+      filtered = filtered.filter((group) => new Date(group.data_atualizacao) >= start);
     }
     if (endDate) {
       const end = new Date(endDate);
       end.setHours(23, 59, 59, 999);
-      filtered = filtered.filter(group => new Date(group.data_atualizacao) <= end);
+      filtered = filtered.filter((group) => new Date(group.data_atualizacao) <= end);
     }
-    
+
     // Filtro por texto
     if (!searchTerm) return filtered;
-    
+
     const term = searchTerm.toLowerCase();
-    return filtered.map(group => ({
-      ...group,
-      itens: group.itens.filter(item => 
-        item.codigo_auxiliar.toLowerCase().includes(term)
-      )
-    })).filter(group => group.itens.length > 0);
+    return filtered
+      .map((group) => ({
+        ...group,
+        itens: group.itens.filter((item) => item.codigo_auxiliar.toLowerCase().includes(term)),
+      }))
+      .filter((group) => group.itens.length > 0);
   }, [historico, searchTerm, startDate, endDate]);
 
   const totalRegistros = historico.reduce((acc, g) => acc + g.total_itens, 0);
@@ -77,23 +82,23 @@ export default function HistoricoEstoqueReal() {
 
   const handleExportExcel = () => {
     if (historicoFiltrado.length === 0) {
-      toast.warning("Sem dados para exportar");
+      toast.warning('Sem dados para exportar');
       return;
     }
 
-    const exportData = historicoFiltrado.flatMap(group => 
-      group.itens.map(item => ({
+    const exportData = historicoFiltrado.flatMap((group) =>
+      group.itens.map((item) => ({
         'Data Atualização': new Date(item.data_atualizacao).toLocaleDateString('pt-BR', {
           day: '2-digit',
           month: '2-digit',
           year: 'numeric',
           hour: '2-digit',
-          minute: '2-digit'
+          minute: '2-digit',
         }),
         'Código Vendedor': item.codigo_vendedor,
         'Nome Vendedor': group.nome_vendedor,
         'Código Auxiliar': item.codigo_auxiliar,
-        'Quantidade Real': item.quantidade_real
+        'Quantidade Real': item.quantidade_real,
       }))
     );
 
@@ -101,9 +106,10 @@ export default function HistoricoEstoqueReal() {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Histórico Estoque Real');
 
-    const vendorName = selectedVendor !== 'todos' 
-      ? vendedores.find(v => v.codigo_vendedor === selectedVendor)?.nome || selectedVendor
-      : 'todos';
+    const vendorName =
+      selectedVendor !== 'todos'
+        ? vendedores.find((v) => v.codigo_vendedor === selectedVendor)?.nome || selectedVendor
+        : 'todos';
     const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `historico_estoque_real_${vendorName}_${dateStr}.xlsx`;
 
@@ -157,9 +163,9 @@ export default function HistoricoEstoqueReal() {
                 <Package size={20} />
                 Histórico de Atualizações
               </span>
-              <Button 
-                variant="outline" 
-                size="sm" 
+              <Button
+                variant="outline"
+                size="sm"
                 onClick={handleExportExcel}
                 disabled={historicoFiltrado.length === 0}
               >
@@ -211,10 +217,13 @@ export default function HistoricoEstoqueReal() {
                   placeholder="Data final"
                 />
                 {(startDate || endDate) && (
-                  <Button 
-                    variant="ghost" 
+                  <Button
+                    variant="ghost"
                     size="sm"
-                    onClick={() => { setStartDate(''); setEndDate(''); }}
+                    onClick={() => {
+                      setStartDate('');
+                      setEndDate('');
+                    }}
                   >
                     Limpar
                   </Button>
@@ -234,8 +243,8 @@ export default function HistoricoEstoqueReal() {
             ) : (
               <Accordion type="single" collapsible className="space-y-2">
                 {historicoFiltrado.map((group, index) => (
-                  <AccordionItem 
-                    key={`${group.data_atualizacao}_${group.codigo_vendedor}`} 
+                  <AccordionItem
+                    key={`${group.data_atualizacao}_${group.codigo_vendedor}`}
                     value={`item-${index}`}
                     className="border-2 rounded-lg px-4"
                   >
@@ -249,7 +258,7 @@ export default function HistoricoEstoqueReal() {
                               month: '2-digit',
                               year: 'numeric',
                               hour: '2-digit',
-                              minute: '2-digit'
+                              minute: '2-digit',
                             })}
                           </span>
                         </div>
@@ -261,9 +270,7 @@ export default function HistoricoEstoqueReal() {
                           </div>
                         )}
                         <div className="flex gap-4 ml-auto">
-                          <Badge variant="secondary">
-                            {group.itens.length} itens
-                          </Badge>
+                          <Badge variant="secondary">{group.itens.length} itens</Badge>
                           <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30">
                             Total: {group.total_quantidade}
                           </Badge>
@@ -292,7 +299,10 @@ export default function HistoricoEstoqueReal() {
                             ))}
                             {group.itens.length > 50 && (
                               <TableRow>
-                                <TableCell colSpan={2} className="text-center text-muted-foreground">
+                                <TableCell
+                                  colSpan={2}
+                                  className="text-center text-muted-foreground"
+                                >
                                   ... e mais {group.itens.length - 50} itens
                                 </TableCell>
                               </TableRow>

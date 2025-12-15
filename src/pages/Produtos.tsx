@@ -6,7 +6,13 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog';
 import { toast } from 'sonner';
 import { Package, Plus, QrCode, Download } from 'lucide-react';
 import QRCode from 'qrcode';
@@ -53,17 +59,15 @@ export default function Produtos() {
     e.preventDefault();
 
     const [modelo, cor] = formData.codigo_auxiliar.split(' ');
-    
-    const { error } = await supabase
-      .from('produtos')
-      .insert({
-        codigo_produto: formData.codigo_produto,
-        codigo_auxiliar: formData.codigo_auxiliar.toUpperCase(),
-        nome_produto: formData.nome_produto,
-        modelo: modelo || formData.codigo_produto,
-        cor: cor || '',
-        valor_produto: parseFloat(formData.valor_produto) || 0,
-      });
+
+    const { error } = await supabase.from('produtos').insert({
+      codigo_produto: formData.codigo_produto,
+      codigo_auxiliar: formData.codigo_auxiliar.toUpperCase(),
+      nome_produto: formData.nome_produto,
+      modelo: modelo || formData.codigo_produto,
+      cor: cor || '',
+      valor_produto: parseFloat(formData.valor_produto) || 0,
+    });
 
     if (error) {
       if (error.code === '23505') {
@@ -96,13 +100,12 @@ export default function Produtos() {
 
   const downloadQRCode = () => {
     if (!qrCodeUrl || !selectedProduto) return;
-    
+
     const link = document.createElement('a');
     link.download = `qr-${selectedProduto.codigo_auxiliar.replace(' ', '-')}.png`;
     link.href = qrCodeUrl;
     link.click();
   };
-
 
   return (
     <AppLayout>
@@ -111,9 +114,7 @@ export default function Produtos() {
           <div className="flex items-start gap-4">
             <div>
               <h1 className="text-2xl font-bold tracking-tight">Produtos</h1>
-              <p className="text-muted-foreground">
-                Gerencie os produtos e gere QR Codes
-              </p>
+              <p className="text-muted-foreground">Gerencie os produtos e gere QR Codes</p>
             </div>
             <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
@@ -147,7 +148,9 @@ export default function Produtos() {
                     id="produto-codigo-auxiliar"
                     name="codigo_auxiliar"
                     value={formData.codigo_auxiliar}
-                    onChange={(e) => setFormData({ ...formData, codigo_auxiliar: e.target.value.toUpperCase() })}
+                    onChange={(e) =>
+                      setFormData({ ...formData, codigo_auxiliar: e.target.value.toUpperCase() })
+                    }
                     className="border-2 font-mono"
                     placeholder="Ex: OB1215 Q01"
                     required
@@ -190,11 +193,7 @@ export default function Produtos() {
         </div>
 
         {/* Search */}
-        <SearchFilter
-          value={searchTerm}
-          onChange={setSearchTerm}
-          placeholder="Buscar produto..."
-        />
+        <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
 
         {/* QR Code Dialog */}
         <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
@@ -226,7 +225,9 @@ export default function Produtos() {
                 {searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}
               </h2>
               <p className="text-muted-foreground">
-                {searchTerm ? 'Tente outro termo de busca' : 'Cadastre produtos ou importe via Excel'}
+                {searchTerm
+                  ? 'Tente outro termo de busca'
+                  : 'Cadastre produtos ou importe via Excel'}
               </p>
             </CardContent>
           </Card>
@@ -234,30 +235,32 @@ export default function Produtos() {
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {paginatedProdutos.map((produto) => (
-              <Card key={produto.id} className="border-2">
-                <CardContent className="py-4">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="font-mono font-bold">{produto.codigo_auxiliar}</p>
-                      <p className="text-sm text-muted-foreground truncate">{produto.nome_produto}</p>
-                      <p className="text-sm mt-1">
-                        R$ {Number(produto.valor_produto).toFixed(2)}
-                      </p>
+                <Card key={produto.id} className="border-2">
+                  <CardContent className="py-4">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-mono font-bold">{produto.codigo_auxiliar}</p>
+                        <p className="text-sm text-muted-foreground truncate">
+                          {produto.nome_produto}
+                        </p>
+                        <p className="text-sm mt-1">
+                          R$ {Number(produto.valor_produto).toFixed(2)}
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="border-2 flex-shrink-0"
+                        onClick={() => generateQRCode(produto)}
+                      >
+                        <QrCode size={16} />
+                      </Button>
                     </div>
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      className="border-2 flex-shrink-0"
-                      onClick={() => generateQRCode(produto)}
-                    >
-                      <QrCode size={16} />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
               ))}
             </div>
-            
+
             <Pagination
               currentPage={currentPage}
               totalPages={totalPages}

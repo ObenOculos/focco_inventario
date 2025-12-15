@@ -2,14 +2,7 @@ import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { 
-  ChevronDown, 
-  ChevronUp, 
-  Package, 
-  TrendingUp, 
-  TrendingDown,
-  FileText
-} from 'lucide-react';
+import { ChevronDown, ChevronUp, Package, TrendingUp, TrendingDown, FileText } from 'lucide-react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Table,
@@ -64,17 +57,10 @@ export function VendedorEstoqueCard({
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-base font-semibold truncate">
-              {nome_vendedor}
-            </CardTitle>
+            <CardTitle className="text-base font-semibold truncate">{nome_vendedor}</CardTitle>
             <p className="text-xs text-muted-foreground mt-1">{codigo_vendedor}</p>
           </div>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setExpanded(!expanded)}
-            className="ml-2"
-          >
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="ml-2">
             {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </Button>
         </div>
@@ -124,7 +110,7 @@ export function VendedorEstoqueCard({
                 </span>
                 {showItens ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </Button>
-              
+
               {showItens && itens.length > 0 && (
                 <ScrollArea className="h-[200px] mt-2 border rounded-lg">
                   <Table>
@@ -148,9 +134,11 @@ export function VendedorEstoqueCard({
                           <TableCell className="text-xs text-right text-green-600 dark:text-green-400">
                             {item.quantidade_venda}
                           </TableCell>
-                          <TableCell className={`text-xs text-right font-semibold ${
-                            item.estoque_teorico < 0 ? 'text-destructive' : ''
-                          }`}>
+                          <TableCell
+                            className={`text-xs text-right font-semibold ${
+                              item.estoque_teorico < 0 ? 'text-destructive' : ''
+                            }`}
+                          >
                             {item.estoque_teorico}
                           </TableCell>
                         </TableRow>
@@ -175,7 +163,7 @@ export function VendedorEstoqueCard({
                 </span>
                 {showPedidos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
               </Button>
-              
+
               {showPedidos && pedidosRecentes.length > 0 && (
                 <ScrollArea className="h-[200px] mt-2 border rounded-lg">
                   <Table>
@@ -197,18 +185,22 @@ export function VendedorEstoqueCard({
                             {new Date(pedido.data_emissao).toLocaleDateString('pt-BR')}
                           </TableCell>
                           <TableCell className="text-xs">
-                            <Badge 
-                              variant="secondary" 
-                              className={pedido.codigo_tipo === 7 
-                                ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200' 
-                                : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                            <Badge
+                              variant="secondary"
+                              className={
+                                pedido.codigo_tipo === 7
+                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
+                                  : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
                               }
                             >
                               {pedido.codigo_tipo === 7 ? 'Remessa' : 'Venda'}
                             </Badge>
                           </TableCell>
                           <TableCell className="text-xs text-right">
-                            R$ {pedido.valor_total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            R${' '}
+                            {pedido.valor_total.toLocaleString('pt-BR', {
+                              minimumFractionDigits: 2,
+                            })}
                           </TableCell>
                         </TableRow>
                       ))}

@@ -5,7 +5,15 @@ import { ExcelRow } from '@/types/app';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { FileSpreadsheet, Upload, CheckCircle, AlertCircle, Loader2, Search, ShieldCheck } from 'lucide-react';
+import {
+  FileSpreadsheet,
+  Upload,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Search,
+  ShieldCheck,
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { useImport } from '@/contexts/ImportContext';
 
@@ -39,12 +47,14 @@ export default function Importar() {
   const parseValue = (value: string | number): number => {
     if (typeof value === 'number') return value;
     if (!value) return 0;
-    return parseFloat(String(value).replace('R$', '').replace('.', '').replace(',', '.').trim()) || 0;
+    return (
+      parseFloat(String(value).replace('R$', '').replace('.', '').replace(',', '.').trim()) || 0
+    );
   };
 
   const parseExcelDate = (value: string | number): string => {
     if (!value) return new Date().toISOString();
-    
+
     // Se for número (serial date do Excel), converter
     if (typeof value === 'number') {
       // Excel usa 1/1/1900 como base (com bug do ano bissexto de 1900)
@@ -56,13 +66,13 @@ export default function Importar() {
       date.setTime(date.getTime() + fraction * 24 * 60 * 60 * 1000);
       return date.toISOString();
     }
-    
+
     // Se for string, tentar converter diretamente
     const parsed = new Date(value);
     if (!isNaN(parsed.getTime())) {
       return parsed.toISOString();
     }
-    
+
     // Tentar formato DD/MM/YYYY
     const parts = String(value).split('/');
     if (parts.length === 3) {
@@ -72,7 +82,7 @@ export default function Importar() {
         return date.toISOString();
       }
     }
-    
+
     return new Date().toISOString();
   };
 
@@ -87,16 +97,18 @@ export default function Importar() {
     try {
       const data = await selectedFile.arrayBuffer();
       const isCsv = selectedFile.name.toLowerCase().endsWith('.csv');
-      const workbook = XLSX.read(data, { 
+      const workbook = XLSX.read(data, {
         type: 'array',
-        FS: isCsv ? ';' : undefined // CSV brasileiro usa ; como delimitador
+        FS: isCsv ? ';' : undefined, // CSV brasileiro usa ; como delimitador
       });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
       const jsonData = XLSX.utils.sheet_to_json<ExcelRow>(worksheet);
 
       setPreview(jsonData.slice(0, 5));
-      toast.success(`${jsonData.length} registros encontrados. Clique em "Validar" para verificar.`);
+      toast.success(
+        `${jsonData.length} registros encontrados. Clique em "Validar" para verificar.`
+      );
     } catch (err) {
       toast.error('Erro ao ler arquivo');
       console.error(err);
@@ -117,7 +129,7 @@ export default function Importar() {
       const isCsv = file.name.toLowerCase().endsWith('.csv');
       const workbook = XLSX.read(data, {
         type: 'array',
-        FS: isCsv ? ';' : undefined
+        FS: isCsv ? ';' : undefined,
       });
       const sheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[sheetName];
@@ -130,7 +142,7 @@ export default function Importar() {
       let rowNumber = 1;
       for (const row of rows) {
         rowNumber++;
-        
+
         if (!row.codigo_auxiliar) {
           errors.push({
             tipo: 'validacao',
@@ -174,7 +186,7 @@ export default function Importar() {
         const codigoTipo = Number(row.codigo_tipo);
         const codigoEmpresa = row.codigo_empresa ? Number(row.codigo_empresa) : null;
         const key = `${codigoEmpresa}-${numeroPedido}-${codigoTipo}`;
-        
+
         if (!pedidosMap.has(key)) {
           pedidosMap.set(key, {
             pedido: {
@@ -222,15 +234,15 @@ export default function Importar() {
 
       for (let i = 0; i < pedidoKeys.length; i += 100) {
         const batchKeys = pedidoKeys.slice(i, i + 100);
-        const numerosToCheck = batchKeys.map(k => k.split('-')[1]); // numero_pedido é o segundo elemento
-        
+        const numerosToCheck = batchKeys.map((k) => k.split('-')[1]); // numero_pedido é o segundo elemento
+
         const { data: existing } = await supabase
           .from('pedidos')
           .select('numero_pedido, codigo_tipo, codigo_empresa')
           .in('numero_pedido', numerosToCheck);
 
         if (existing) {
-          existing.forEach(p => {
+          existing.forEach((p) => {
             const key = `${p.codigo_empresa}-${p.numero_pedido}-${p.codigo_tipo}`;
             existingPedidos.add(key);
             if (pedidosMap.has(key)) {
@@ -247,10 +259,10 @@ export default function Importar() {
       }
 
       // Filtrar pedidos duplicados
-      duplicates.forEach(key => pedidosMap.delete(key));
+      duplicates.forEach((key) => pedidosMap.delete(key));
 
       const newPedidos = pedidosMap.size;
-      const isValid = errors.filter(e => e.tipo === 'validacao').length === 0 && newPedidos > 0;
+      const isValid = errors.filter((e) => e.tipo === 'validacao').length === 0 && newPedidos > 0;
 
       setValidation({
         isValid,
@@ -270,9 +282,10 @@ export default function Importar() {
         toast.warning('Todos os pedidos já existem no banco de dados.');
       } else {
         setStatus('error');
-        toast.error(`Validação falhou: ${errors.filter(e => e.tipo === 'validacao').length} erros encontrados.`);
+        toast.error(
+          `Validação falhou: ${errors.filter((e) => e.tipo === 'validacao').length} erros encontrados.`
+        );
       }
-
     } catch (err: any) {
       console.error(err);
       errors.push({
@@ -280,7 +293,15 @@ export default function Importar() {
         identificador: 'Erro Geral',
         mensagem: err?.message || 'Erro desconhecido ao validar arquivo',
       });
-      setValidation({ isValid: false, errors, duplicates: [], newPedidos: 0, totalProdutos: 0, pedidosMap: new Map(), produtosMap: new Map() });
+      setValidation({
+        isValid: false,
+        errors,
+        duplicates: [],
+        newPedidos: 0,
+        totalProdutos: 0,
+        pedidosMap: new Map(),
+        produtosMap: new Map(),
+      });
       setStatus('error');
       toast.error('Erro durante a validação');
     }
@@ -319,7 +340,7 @@ export default function Importar() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div 
+            <div
               className="border-2 border-dashed border-muted-foreground/50 p-8 text-center cursor-pointer hover:border-foreground transition-colors"
               onClick={() => fileInputRef.current?.click()}
             >
@@ -327,9 +348,7 @@ export default function Importar() {
               <p className="font-medium">
                 {file ? file.name : 'Clique para selecionar um arquivo Excel'}
               </p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Formato: .xlsx, .xls ou .csv
-              </p>
+              <p className="text-sm text-muted-foreground mt-1">Formato: .xlsx, .xls ou .csv</p>
               <input
                 id="file-upload"
                 name="file"
@@ -361,10 +380,16 @@ export default function Importar() {
                           <td className="py-2 px-1 font-mono">{row.pedido}</td>
                           <td className="py-2 px-1">{row.codigo_vendedor}</td>
                           <td className="py-2 px-1">
-                            <span className={`px-2 py-0.5 text-xs font-bold ${
-                              row.codigo_tipo === 7 || row.codigo_tipo === 99 ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                            }`}>
-                              {row.codigo_tipo === 7 || row.codigo_tipo === 99 ? 'REMESSA' : 'VENDA'}
+                            <span
+                              className={`px-2 py-0.5 text-xs font-bold ${
+                                row.codigo_tipo === 7 || row.codigo_tipo === 99
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : 'bg-green-100 text-green-800'
+                              }`}
+                            >
+                              {row.codigo_tipo === 7 || row.codigo_tipo === 99
+                                ? 'REMESSA'
+                                : 'VENDA'}
                             </span>
                           </td>
                           <td className="py-2 px-1 font-mono">{row.codigo_auxiliar}</td>
@@ -379,7 +404,9 @@ export default function Importar() {
 
             {/* Resultado da Validação */}
             {validation && (
-              <div className={`p-4 border-2 ${validation.isValid ? 'border-green-500 bg-green-50' : 'border-destructive bg-destructive/10'}`}>
+              <div
+                className={`p-4 border-2 ${validation.isValid ? 'border-green-500 bg-green-50' : 'border-destructive bg-destructive/10'}`}
+              >
                 <div className="flex items-start gap-2">
                   {validation.isValid ? (
                     <ShieldCheck className="text-green-600 mt-0.5" size={20} />
@@ -388,9 +415,11 @@ export default function Importar() {
                   )}
                   <div className="flex-1">
                     <p className="font-medium">
-                      {validation.isValid ? 'Validação concluída com sucesso!' : 'Validação encontrou problemas'}
+                      {validation.isValid
+                        ? 'Validação concluída com sucesso!'
+                        : 'Validação encontrou problemas'}
                     </p>
-                    
+
                     <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
                       <div className="bg-background p-2 rounded border">
                         <span className="text-muted-foreground">Pedidos novos:</span>
@@ -403,32 +432,50 @@ export default function Importar() {
                       {validation.duplicates.length > 0 && (
                         <div className="bg-yellow-50 p-2 rounded border border-yellow-300 col-span-2">
                           <span className="text-yellow-700">Duplicatas ignoradas:</span>
-                          <span className="font-bold ml-2 text-yellow-800">{validation.duplicates.length}</span>
+                          <span className="font-bold ml-2 text-yellow-800">
+                            {validation.duplicates.length}
+                          </span>
                         </div>
                       )}
                     </div>
-                    
+
                     {validation.errors.length > 0 && (
                       <div className="mt-3 space-y-2">
                         <p className="text-sm font-medium text-foreground">
-                          Detalhes ({validation.errors.length} {validation.errors.length === 1 ? 'item' : 'itens'}):
+                          Detalhes ({validation.errors.length}{' '}
+                          {validation.errors.length === 1 ? 'item' : 'itens'}):
                         </p>
                         <div className="max-h-48 overflow-y-auto space-y-2">
                           {validation.errors.map((error, index) => (
-                            <div key={index} className="text-xs bg-background border border-border p-2 rounded">
+                            <div
+                              key={index}
+                              className="text-xs bg-background border border-border p-2 rounded"
+                            >
                               <div className="flex items-center gap-2">
-                                <span className={`px-1.5 py-0.5 font-medium uppercase ${
-                                  error.tipo === 'validacao' ? 'bg-red-100 text-red-800' :
-                                  error.tipo === 'duplicata' ? 'bg-yellow-100 text-yellow-800' :
-                                  error.tipo === 'produto' ? 'bg-blue-100 text-blue-800' :
-                                  error.tipo === 'pedido' ? 'bg-orange-100 text-orange-800' :
-                                  'bg-purple-100 text-purple-800'
-                                }`}>
+                                <span
+                                  className={`px-1.5 py-0.5 font-medium uppercase ${
+                                    error.tipo === 'validacao'
+                                      ? 'bg-red-100 text-red-800'
+                                      : error.tipo === 'duplicata'
+                                        ? 'bg-yellow-100 text-yellow-800'
+                                        : error.tipo === 'produto'
+                                          ? 'bg-blue-100 text-blue-800'
+                                          : error.tipo === 'pedido'
+                                            ? 'bg-orange-100 text-orange-800'
+                                            : 'bg-purple-100 text-purple-800'
+                                  }`}
+                                >
                                   {error.tipo}
                                 </span>
                                 <span className="font-mono font-medium">{error.identificador}</span>
                               </div>
-                              <p className={error.tipo === 'duplicata' ? 'text-yellow-700 mt-1' : 'text-destructive mt-1'}>
+                              <p
+                                className={
+                                  error.tipo === 'duplicata'
+                                    ? 'text-yellow-700 mt-1'
+                                    : 'text-destructive mt-1'
+                                }
+                              >
                                 {error.mensagem}
                               </p>
                               {error.detalhes && (
@@ -446,7 +493,9 @@ export default function Importar() {
 
             {/* Resultado da Importação */}
             {importResult && (
-              <div className={`p-4 border-2 ${importResult.errors > 0 ? 'border-destructive bg-destructive/10' : 'border-green-500 bg-green-50'}`}>
+              <div
+                className={`p-4 border-2 ${importResult.errors > 0 ? 'border-destructive bg-destructive/10' : 'border-green-500 bg-green-50'}`}
+              >
                 <div className="flex items-start gap-2">
                   {importResult.errors > 0 ? (
                     <AlertCircle className="text-destructive mt-0.5" size={20} />
@@ -462,19 +511,26 @@ export default function Importar() {
                         {importResult.errors} erros - Importação interrompida
                       </p>
                     )}
-                    
+
                     {importResult.errorDetails.length > 0 && (
                       <div className="mt-3 space-y-2">
                         <p className="text-sm font-medium text-foreground">Detalhes dos erros:</p>
                         <div className="max-h-48 overflow-y-auto space-y-2">
                           {importResult.errorDetails.map((error, index) => (
-                            <div key={index} className="text-xs bg-background border border-border p-2 rounded">
+                            <div
+                              key={index}
+                              className="text-xs bg-background border border-border p-2 rounded"
+                            >
                               <div className="flex items-center gap-2">
-                                <span className={`px-1.5 py-0.5 font-medium uppercase ${
-                                  error.tipo === 'produto' ? 'bg-blue-100 text-blue-800' :
-                                  error.tipo === 'pedido' ? 'bg-orange-100 text-orange-800' :
-                                  'bg-purple-100 text-purple-800'
-                                }`}>
+                                <span
+                                  className={`px-1.5 py-0.5 font-medium uppercase ${
+                                    error.tipo === 'produto'
+                                      ? 'bg-blue-100 text-blue-800'
+                                      : error.tipo === 'pedido'
+                                        ? 'bg-orange-100 text-orange-800'
+                                        : 'bg-purple-100 text-purple-800'
+                                  }`}
+                                >
                                   {error.tipo}
                                 </span>
                                 <span className="font-mono font-medium">{error.identificador}</span>
@@ -496,10 +552,7 @@ export default function Importar() {
             {/* Botões de Ação */}
             <div className="flex gap-3">
               {status === 'idle' && file && (
-                <Button
-                  onClick={handleValidate}
-                  className="flex-1"
-                >
+                <Button onClick={handleValidate} className="flex-1">
                   <Search className="mr-2" size={16} />
                   Validar Dados
                 </Button>
@@ -513,30 +566,26 @@ export default function Importar() {
               )}
 
               {status === 'validated' && validation?.isValid && importStatus !== 'importing' && (
-                <Button
-                  onClick={handleImport}
-                  className="flex-1 bg-green-600 hover:bg-green-700"
-                >
+                <Button onClick={handleImport} className="flex-1 bg-green-600 hover:bg-green-700">
                   <Upload className="mr-2" size={16} />
                   Importar {validation.newPedidos} Pedidos
                 </Button>
               )}
 
               {(importStatus === 'error' || importStatus === 'completed') && (
-                <Button
-                  onClick={resetImport}
-                  variant="outline"
-                  className="flex-1 border-2"
-                >
+                <Button onClick={resetImport} variant="outline" className="flex-1 border-2">
                   Nova Importação
                 </Button>
               )}
 
-              {file && status !== 'validating' && importStatus !== 'importing' && importStatus !== 'completed' && (
-                <Button variant="outline" onClick={resetImport} className="border-2">
-                  Limpar
-                </Button>
-              )}
+              {file &&
+                status !== 'validating' &&
+                importStatus !== 'importing' &&
+                importStatus !== 'completed' && (
+                  <Button variant="outline" onClick={resetImport} className="border-2">
+                    Limpar
+                  </Button>
+                )}
             </div>
           </CardContent>
         </Card>
@@ -551,20 +600,41 @@ export default function Importar() {
             </p>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
               {[
-                'codigo_empresa', 'empresa', 'pedido', 'data_emissao', 'codigo_cliente', 
-                'codigo_vendedor', 'nome_vendedor', 'valor_total', 'codigo_tipo', 'situacao',
-                'numero_nota_fiscal', 'serie_nota_fiscal', 'nome_produto',
-                'codigo_auxiliar', 'codigo_produto', 'quantidade', 'valor_produto'
-              ].map(col => (
-                <span key={col} className="bg-secondary px-2 py-1">{col}</span>
+                'codigo_empresa',
+                'empresa',
+                'pedido',
+                'data_emissao',
+                'codigo_cliente',
+                'codigo_vendedor',
+                'nome_vendedor',
+                'valor_total',
+                'codigo_tipo',
+                'situacao',
+                'numero_nota_fiscal',
+                'serie_nota_fiscal',
+                'nome_produto',
+                'codigo_auxiliar',
+                'codigo_produto',
+                'quantidade',
+                'valor_produto',
+              ].map((col) => (
+                <span key={col} className="bg-secondary px-2 py-1">
+                  {col}
+                </span>
               ))}
             </div>
             <div className="mt-4 p-3 bg-secondary">
               <p className="text-sm font-medium">Tipos de Movimentação (codigo_tipo):</p>
               <ul className="text-sm text-muted-foreground mt-2 space-y-1">
-                <li><strong>2</strong> = Venda (saída de estoque)</li>
-                <li><strong>7</strong> = Remessa (entrada de estoque)</li>
-                <li><strong>99</strong> = Remessa (entrada de estoque)</li>
+                <li>
+                  <strong>2</strong> = Venda (saída de estoque)
+                </li>
+                <li>
+                  <strong>7</strong> = Remessa (entrada de estoque)
+                </li>
+                <li>
+                  <strong>99</strong> = Remessa (entrada de estoque)
+                </li>
               </ul>
             </div>
             <div className="mt-3 p-3 bg-secondary">

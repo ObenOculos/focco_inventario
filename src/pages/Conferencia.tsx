@@ -10,14 +10,35 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, CheckCircle, XCircle, AlertTriangle, Save, PackageX, ChevronDown, ChevronUp, User, Calendar, Package, ChevronsRight, Loader2, Download } from 'lucide-react';
+import {
+  ClipboardList,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
+  Save,
+  PackageX,
+  ChevronDown,
+  ChevronUp,
+  User,
+  Calendar,
+  Package,
+  ChevronsRight,
+  Loader2,
+  Download,
+} from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { ConferenciaSkeleton } from '@/components/skeletons/PageSkeleton';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -27,7 +48,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 
@@ -40,7 +61,7 @@ type ItemNaoContado = {
 export default function Conferencia() {
   const { profile } = useAuth();
   const isGerente = profile?.role === 'gerente';
-  
+
   const [selectedInventario, setSelectedInventario] = useState<InventarioComItens | null>(null);
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
   const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
@@ -53,99 +74,115 @@ export default function Conferencia() {
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   const queryClient = useQueryClient();
-  
-  const { data: inventarios = [], isLoading: loading, isFetching, refetch: refetchInventarios } = useInventariosPendentesQuery();
+
+  const {
+    data: inventarios = [],
+    isLoading: loading,
+    isFetching,
+    refetch: refetchInventarios,
+  } = useInventariosPendentesQuery();
 
   const filteredDivergencias = useMemo(() => {
     let filtered = divergencias;
-    if (filterTipo === 'ok') filtered = filtered.filter(item => item.tipo === 'ok');
-    if (filterTipo === 'sobra') filtered = filtered.filter(item => item.tipo === 'sobra');
-    if (filterTipo === 'falta') filtered = filtered.filter(item => item.tipo === 'falta');
+    if (filterTipo === 'ok') filtered = filtered.filter((item) => item.tipo === 'ok');
+    if (filterTipo === 'sobra') filtered = filtered.filter((item) => item.tipo === 'sobra');
+    if (filterTipo === 'falta') filtered = filtered.filter((item) => item.tipo === 'falta');
     return filtered;
   }, [divergencias, filterTipo]);
 
-  const {
-    paginatedData: paginatedDivergencias,
-    ...paginationProps
-  } = usePagination({
+  const { paginatedData: paginatedDivergencias, ...paginationProps } = usePagination({
     data: filteredDivergencias,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
     itemsPerPage: 20,
   });
-  
-  const handleSelectInventario = useCallback(async (inventario: InventarioComItens) => {
-    if (selectedInventario?.id === inventario.id) return;
-    
-    setIsDetailLoading(true);
-    setSelectedInventario(inventario);
-    setObservacoes('');
-    setSearchTerm('');
-    setFilterTipo('todos');
-    setEditedValues({});
-    setShowItensNaoContados(false);
-  
-    const { data: comparativo, error } = await supabase.rpc('comparar_estoque_inventario', {
-      p_inventario_id: inventario.id
-    });
 
-    if (error) {
-      console.error('Erro ao comparar inventário:', error);
-      toast.error('Erro ao carregar divergências');
-      setIsDetailLoading(false);
-      return;
-    }
+  const handleSelectInventario = useCallback(
+    async (inventario: InventarioComItens) => {
+      if (selectedInventario?.id === inventario.id) return;
 
-    const divergenciasList: DivergenciaItem[] = [];
-    const itensNaoContadosList: ItemNaoContado[] = [];
+      setIsDetailLoading(true);
+      setSelectedInventario(inventario);
+      setObservacoes('');
+      setSearchTerm('');
+      setFilterTipo('todos');
+      setEditedValues({});
+      setShowItensNaoContados(false);
 
-    for (const item of (comparativo || [])) {
-      const diferenca = item.quantidade_fisica - item.estoque_teorico;
-      const percentual = item.estoque_teorico !== 0 
-        ? ((diferenca / item.estoque_teorico) * 100) 
-        : (item.quantidade_fisica > 0 ? 100 : 0);
-      
-      let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
-      if (diferenca > 0) tipo = 'sobra';
-      else if (diferenca < 0) tipo = 'falta';
+      const { data: comparativo, error } = await supabase.rpc('comparar_estoque_inventario', {
+        p_inventario_id: inventario.id,
+      });
 
-      if (item.foi_contado) {
-        divergenciasList.push({
-          codigo_auxiliar: item.codigo_auxiliar,
-          nome_produto: item.nome_produto || '',
-          estoque_teorico: item.estoque_teorico,
-          quantidade_fisica: item.quantidade_fisica,
-          diferenca, percentual, tipo,
-        });
-      } else {
-        if (item.estoque_teorico !== 0) {
-          itensNaoContadosList.push({
+      if (error) {
+        console.error('Erro ao comparar inventário:', error);
+        toast.error('Erro ao carregar divergências');
+        setIsDetailLoading(false);
+        return;
+      }
+
+      const divergenciasList: DivergenciaItem[] = [];
+      const itensNaoContadosList: ItemNaoContado[] = [];
+
+      for (const item of comparativo || []) {
+        const diferenca = item.quantidade_fisica - item.estoque_teorico;
+        const percentual =
+          item.estoque_teorico !== 0
+            ? (diferenca / item.estoque_teorico) * 100
+            : item.quantidade_fisica > 0
+              ? 100
+              : 0;
+
+        let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
+        if (diferenca > 0) tipo = 'sobra';
+        else if (diferenca < 0) tipo = 'falta';
+
+        if (item.foi_contado) {
+          divergenciasList.push({
             codigo_auxiliar: item.codigo_auxiliar,
             nome_produto: item.nome_produto || '',
             estoque_teorico: item.estoque_teorico,
+            quantidade_fisica: item.quantidade_fisica,
+            diferenca,
+            percentual,
+            tipo,
           });
+        } else {
+          if (item.estoque_teorico !== 0) {
+            itensNaoContadosList.push({
+              codigo_auxiliar: item.codigo_auxiliar,
+              nome_produto: item.nome_produto || '',
+              estoque_teorico: item.estoque_teorico,
+            });
+          }
         }
       }
-    }
 
-    setItensNaoContados(itensNaoContadosList.sort((a, b) => Math.abs(b.estoque_teorico) - Math.abs(a.estoque_teorico)));
-    setDivergencias(divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca)));
-    setIsDetailLoading(false);
-  }, [selectedInventario]);
-  
+      setItensNaoContados(
+        itensNaoContadosList.sort(
+          (a, b) => Math.abs(b.estoque_teorico) - Math.abs(a.estoque_teorico)
+        )
+      );
+      setDivergencias(
+        divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca))
+      );
+      setIsDetailLoading(false);
+    },
+    [selectedInventario]
+  );
+
   const handleManagerAction = async (action: 'aprovar' | 'revisao') => {
     if (!selectedInventario) return;
-    
+
     if (!isGerente) {
       toast.error('Acesso negado. Apenas gerentes podem aprovar ou revisar inventários.');
       return;
     }
-  
+
     if (action === 'revisao' && !observacoes.trim()) {
       toast.error('Informe o motivo da não aprovação para enviar para revisão.');
       return;
     }
-  
+
     setSaving(true);
     try {
       if (action === 'aprovar') {
@@ -162,7 +199,7 @@ export default function Conferencia() {
         if (error) throw error;
         toast.info('Inventário enviado para revisão.');
       }
-  
+
       queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
       queryClient.invalidateQueries({ queryKey: ['inventarios'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
@@ -170,20 +207,22 @@ export default function Conferencia() {
       refetchInventarios();
     } catch (error: any) {
       console.error(`Erro ao ${action} inventário:`, error);
-      toast.error(`Erro ao ${action} inventário`, { description: error.message || 'Ocorreu um erro.' });
+      toast.error(`Erro ao ${action} inventário`, {
+        description: error.message || 'Ocorreu um erro.',
+      });
     } finally {
       setSaving(false);
     }
   };
-  
+
   const handleEditValue = (codigoAuxiliar: string, value: string) => {
     if (value === '' || value === '-') {
-      setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: 0 }));
+      setEditedValues((prev) => ({ ...prev, [codigoAuxiliar]: 0 }));
       return;
     }
     const numValue = parseInt(value, 10);
     if (!isNaN(numValue)) {
-      setEditedValues(prev => ({ ...prev, [codigoAuxiliar]: numValue }));
+      setEditedValues((prev) => ({ ...prev, [codigoAuxiliar]: numValue }));
     }
   };
 
@@ -193,20 +232,27 @@ export default function Conferencia() {
     setSaving(true);
     try {
       const updates = Object.entries(editedValues).map(([codigo, quantidade]) => {
-        const item = selectedInventario.itens_inventario.find(i => i.codigo_auxiliar === codigo);
-        return supabase.from('itens_inventario').update({ quantidade_fisica: quantidade }).eq('id', item!.id);
+        const item = selectedInventario.itens_inventario.find((i) => i.codigo_auxiliar === codigo);
+        return supabase
+          .from('itens_inventario')
+          .update({ quantidade_fisica: quantidade })
+          .eq('id', item!.id);
       });
       const results = await Promise.all(updates);
-      results.forEach(res => { if (res.error) throw res.error; });
+      results.forEach((res) => {
+        if (res.error) throw res.error;
+      });
 
-      setDivergencias(prev => prev.map(d => {
-        if (editedValues[d.codigo_auxiliar] !== undefined) {
-          const novaQuantidade = editedValues[d.codigo_auxiliar];
-          const diferenca = novaQuantidade - d.estoque_teorico;
-          return { ...d, quantidade_fisica: novaQuantidade, diferenca };
-        }
-        return d;
-      }));
+      setDivergencias((prev) =>
+        prev.map((d) => {
+          if (editedValues[d.codigo_auxiliar] !== undefined) {
+            const novaQuantidade = editedValues[d.codigo_auxiliar];
+            const diferenca = novaQuantidade - d.estoque_teorico;
+            return { ...d, quantidade_fisica: novaQuantidade, diferenca };
+          }
+          return d;
+        })
+      );
 
       setEditedValues({});
       toast.success('Alterações salvas com sucesso!');
@@ -219,12 +265,15 @@ export default function Conferencia() {
   };
 
   const hasEdits = Object.keys(editedValues).length > 0;
-  const stats = useMemo(() => ({
-    itensCorretos: divergencias.filter(d => d.diferenca === 0).length,
-    itensSobra: divergencias.filter(d => d.diferenca > 0).length,
-    itensFalta: divergencias.filter(d => d.diferenca < 0).length,
-    valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
-  }), [divergencias]);
+  const stats = useMemo(
+    () => ({
+      itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
+      itensSobra: divergencias.filter((d) => d.diferenca > 0).length,
+      itensFalta: divergencias.filter((d) => d.diferenca < 0).length,
+      valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
+    }),
+    [divergencias]
+  );
 
   const handleExportExcel = () => {
     if (!selectedInventario || divergencias.length === 0) {
@@ -232,23 +281,23 @@ export default function Conferencia() {
       return;
     }
 
-    const exportData = divergencias.map(item => ({
+    const exportData = divergencias.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
       'Nome Produto': item.nome_produto,
       'Estoque Teórico': item.estoque_teorico,
       'Quantidade Física': item.quantidade_fisica,
-      'Divergência': item.diferenca,
-      'Status': item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta'
+      Divergência: item.diferenca,
+      Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
     }));
 
-    itensNaoContados.forEach(item => {
+    itensNaoContados.forEach((item) => {
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
-        'Divergência': -item.estoque_teorico,
-        'Status': 'Não Contado'
+        Divergência: -item.estoque_teorico,
+        Status: 'Não Contado',
       });
     });
 
@@ -265,7 +314,11 @@ export default function Conferencia() {
   };
 
   if (loading) {
-    return <AppLayout><ConferenciaSkeleton /></AppLayout>;
+    return (
+      <AppLayout>
+        <ConferenciaSkeleton />
+      </AppLayout>
+    );
   }
 
   return (
@@ -280,7 +333,7 @@ export default function Conferencia() {
           </div>
           <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
-        
+
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
           {/* Coluna de Inventários (Master) */}
           <div className="lg:col-span-1 overflow-y-auto pr-2">
@@ -312,17 +365,30 @@ export default function Conferencia() {
                           <CardTitle className="text-base flex items-center gap-2">
                             <User size={16} /> {inv.profiles?.nome || 'Vendedor'}
                           </CardTitle>
-                          <Badge variant={isRevisao ? 'destructive' : 'outline'}>{isRevisao ? 'Revisão' : 'Pendente'}</Badge>
+                          <Badge variant={isRevisao ? 'destructive' : 'outline'}>
+                            {isRevisao ? 'Revisão' : 'Pendente'}
+                          </Badge>
                         </div>
-                        <p className="font-mono text-xs text-muted-foreground pt-1">{inv.codigo_vendedor}</p>
+                        <p className="font-mono text-xs text-muted-foreground pt-1">
+                          {inv.codigo_vendedor}
+                        </p>
                       </CardHeader>
                       <CardContent className="text-sm space-y-2">
                         <div className="flex justify-between items-center text-muted-foreground">
-                          <span className="flex items-center gap-1.5"><Package size={14} /> {inv.itens_inventario.length} itens</span>
-                          <span className="flex items-center gap-1.5"><Calendar size={14} /> {format(new Date(inv.data_inventario), "dd/MM/yy")}</span>
+                          <span className="flex items-center gap-1.5">
+                            <Package size={14} /> {inv.itens_inventario.length} itens
+                          </span>
+                          <span className="flex items-center gap-1.5">
+                            <Calendar size={14} />{' '}
+                            {format(new Date(inv.data_inventario), 'dd/MM/yy')}
+                          </span>
                         </div>
                         <div className="text-xs text-muted-foreground pt-1">
-                          Enviado {formatDistanceToNow(new Date(inv.created_at), { addSuffix: true, locale: ptBR })}
+                          Enviado{' '}
+                          {formatDistanceToNow(new Date(inv.created_at), {
+                            addSuffix: true,
+                            locale: ptBR,
+                          })}
                         </div>
                       </CardContent>
                     </Card>
@@ -347,26 +413,38 @@ export default function Conferencia() {
             ) : (
               <div className="space-y-4">
                 <DivergenciaStats totalItens={divergencias.length} {...stats} />
-                
+
                 {itensNaoContados.length > 0 && (
                   <Card className="bg-amber-50 border-amber-300">
                     <CardHeader className="pb-3">
-                      <CardTitle 
+                      <CardTitle
                         className="text-base flex items-center justify-between cursor-pointer"
                         onClick={() => setShowItensNaoContados(!showItensNaoContados)}
                       >
-                        <span className="flex items-center gap-2 text-amber-800"><PackageX size={18} /> {itensNaoContados.length} Itens Não Contados</span>
+                        <span className="flex items-center gap-2 text-amber-800">
+                          <PackageX size={18} /> {itensNaoContados.length} Itens Não Contados
+                        </span>
                         {showItensNaoContados ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                       </CardTitle>
                     </CardHeader>
                     {showItensNaoContados && (
                       <CardContent>
-                        <p className="text-sm text-amber-700 mb-3">Estes itens possuem estoque teórico mas não foram contados.</p>
+                        <p className="text-sm text-amber-700 mb-3">
+                          Estes itens possuem estoque teórico mas não foram contados.
+                        </p>
                         <div className="max-h-40 overflow-y-auto space-y-1">
                           {itensNaoContados.map((item) => (
-                            <div key={item.codigo_auxiliar} className="flex justify-between items-center text-sm bg-amber-100 p-2 rounded">
-                              <span><span className="font-mono font-bold">{item.codigo_auxiliar}</span> - {item.nome_produto}</span>
-                              <Badge className="bg-amber-600">Teórico: {item.estoque_teorico}</Badge>
+                            <div
+                              key={item.codigo_auxiliar}
+                              className="flex justify-between items-center text-sm bg-amber-100 p-2 rounded"
+                            >
+                              <span>
+                                <span className="font-mono font-bold">{item.codigo_auxiliar}</span>{' '}
+                                - {item.nome_produto}
+                              </span>
+                              <Badge className="bg-amber-600">
+                                Teórico: {item.estoque_teorico}
+                              </Badge>
                             </div>
                           ))}
                         </div>
@@ -378,9 +456,15 @@ export default function Conferencia() {
                 <Card>
                   <CardHeader>
                     <div className="flex flex-col md:flex-row gap-3">
-                      <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
+                      <SearchFilter
+                        value={searchTerm}
+                        onChange={setSearchTerm}
+                        placeholder="Buscar produto..."
+                      />
                       <Select value={filterTipo} onValueChange={setFilterTipo}>
-                        <SelectTrigger className="w-full md:w-48"><SelectValue /></SelectTrigger>
+                        <SelectTrigger className="w-full md:w-48">
+                          <SelectValue />
+                        </SelectTrigger>
                         <SelectContent>
                           <SelectItem value="todos">Todos os Itens</SelectItem>
                           <SelectItem value="ok">Apenas OK</SelectItem>
@@ -388,9 +472,9 @@ export default function Conferencia() {
                           <SelectItem value="falta">Apenas Faltas</SelectItem>
                         </SelectContent>
                       </Select>
-                      <Button 
-                        variant="outline" 
-                        size="sm" 
+                      <Button
+                        variant="outline"
+                        size="sm"
                         onClick={handleExportExcel}
                         disabled={divergencias.length === 0}
                         className="ml-auto"
@@ -412,56 +496,105 @@ export default function Conferencia() {
                           </TableRow>
                         </TableHeader>
                         <TableBody>
-                          {paginatedDivergencias.length > 0 ? paginatedDivergencias.map((item) => (
-                            <TableRow key={item.codigo_auxiliar} className={item.tipo !== 'ok' ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5` : ''}>
-                              <TableCell>
-                                <p className="font-medium truncate">{item.nome_produto}</p>
-                                <p className="font-mono text-xs text-muted-foreground">{item.codigo_auxiliar}</p>
-                              </TableCell>
-                              <TableCell className="text-center font-medium">{item.estoque_teorico}</TableCell>
-                              <TableCell className="text-center">
-                                <Input
-                                  id={`edit-${item.codigo_auxiliar}`}
-                                  name={`quantidade_${item.codigo_auxiliar}`}
-                                  type="text"
-                                  value={editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica}
-                                  onChange={(e) => handleEditValue(item.codigo_auxiliar, e.target.value)}
-                                  className="w-20 h-8 text-center font-bold border-2 mx-auto"
-                                />
-                              </TableCell>
-                              <TableCell className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}>
-                                {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                          {paginatedDivergencias.length > 0 ? (
+                            paginatedDivergencias.map((item) => (
+                              <TableRow
+                                key={item.codigo_auxiliar}
+                                className={
+                                  item.tipo !== 'ok'
+                                    ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5`
+                                    : ''
+                                }
+                              >
+                                <TableCell>
+                                  <p className="font-medium truncate">{item.nome_produto}</p>
+                                  <p className="font-mono text-xs text-muted-foreground">
+                                    {item.codigo_auxiliar}
+                                  </p>
+                                </TableCell>
+                                <TableCell className="text-center font-medium">
+                                  {item.estoque_teorico}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Input
+                                    id={`edit-${item.codigo_auxiliar}`}
+                                    name={`quantidade_${item.codigo_auxiliar}`}
+                                    type="text"
+                                    value={
+                                      editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica
+                                    }
+                                    onChange={(e) =>
+                                      handleEditValue(item.codigo_auxiliar, e.target.value)
+                                    }
+                                    className="w-20 h-8 text-center font-bold border-2 mx-auto"
+                                  />
+                                </TableCell>
+                                <TableCell
+                                  className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}
+                                >
+                                  {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          ) : (
+                            <TableRow>
+                              <TableCell colSpan={4} className="h-24 text-center">
+                                Nenhum item corresponde ao filtro.
                               </TableCell>
                             </TableRow>
-                          )) : (
-                            <TableRow><TableCell colSpan={4} className="h-24 text-center">Nenhum item corresponde ao filtro.</TableCell></TableRow>
                           )}
                         </TableBody>
                       </Table>
                     </div>
                     {paginationProps.totalPages > 1 && (
-                      <div className="pt-4"><Pagination {...paginationProps} /></div>
+                      <div className="pt-4">
+                        <Pagination {...paginationProps} />
+                      </div>
                     )}
                   </CardContent>
                 </Card>
 
                 <div className="space-y-2">
-                  <label htmlFor="observacoes-gerente" className="font-medium">Observações para o Vendedor (opcional)</label>
-                  <Textarea id="observacoes-gerente" name="observacoes" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Se não aprovar, explique o motivo aqui..." />
+                  <label htmlFor="observacoes-gerente" className="font-medium">
+                    Observações para o Vendedor (opcional)
+                  </label>
+                  <Textarea
+                    id="observacoes-gerente"
+                    name="observacoes"
+                    value={observacoes}
+                    onChange={(e) => setObservacoes(e.target.value)}
+                    placeholder="Se não aprovar, explique o motivo aqui..."
+                  />
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
                   {hasEdits && (
-                    <Button onClick={handleSaveEdits} disabled={saving} className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700">
-                      <Save size={16} className="mr-2" />{saving ? 'Salvando...' : 'Salvar Alterações'}
+                    <Button
+                      onClick={handleSaveEdits}
+                      disabled={saving}
+                      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+                    >
+                      <Save size={16} className="mr-2" />
+                      {saving ? 'Salvando...' : 'Salvar Alterações'}
                     </Button>
                   )}
                   <div className="flex-1" />
-                  <Button onClick={() => handleManagerAction('revisao')} disabled={saving} variant="destructive" className="w-full sm:w-auto">
-                    <XCircle size={16} className="mr-2" />Não Aprovar
+                  <Button
+                    onClick={() => handleManagerAction('revisao')}
+                    disabled={saving}
+                    variant="destructive"
+                    className="w-full sm:w-auto"
+                  >
+                    <XCircle size={16} className="mr-2" />
+                    Não Aprovar
                   </Button>
-                  <Button onClick={() => handleManagerAction('aprovar')} disabled={saving} className="w-full sm:w-auto bg-green-600 hover:bg-green-700">
-                    <CheckCircle size={16} className="mr-2" />{saving ? 'Processando...' : 'Aprovar e Ajustar'}
+                  <Button
+                    onClick={() => handleManagerAction('aprovar')}
+                    disabled={saving}
+                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                  >
+                    <CheckCircle size={16} className="mr-2" />
+                    {saving ? 'Processando...' : 'Aprovar e Ajustar'}
                   </Button>
                 </div>
               </div>

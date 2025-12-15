@@ -56,12 +56,12 @@ export const useHistoricoEstoqueRealQuery = (
 
       // Group by data_atualizacao + codigo_vendedor
       const grouped = new Map<string, HistoricoGroup>();
-      
+
       for (const item of (data || []) as EstoqueRealItem[]) {
         const key = `${item.data_atualizacao}_${item.codigo_vendedor}`;
-        
+
         if (!grouped.has(key)) {
-          const vendedor = vendedores.find(v => v.codigo_vendedor === item.codigo_vendedor);
+          const vendedor = vendedores.find((v) => v.codigo_vendedor === item.codigo_vendedor);
           grouped.set(key, {
             data_atualizacao: item.data_atualizacao,
             codigo_vendedor: item.codigo_vendedor,

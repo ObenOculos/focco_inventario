@@ -15,10 +15,12 @@ export const useInventariosQuery = (codigoVendedor?: string | null) => {
 
       const { data, error } = await supabase
         .from('inventarios')
-        .select(`
+        .select(
+          `
           *,
           itens_inventario (*)
-        `)
+        `
+        )
         .eq('codigo_vendedor', codigoVendedor)
         .order('created_at', { ascending: false });
 
@@ -29,13 +31,14 @@ export const useInventariosQuery = (codigoVendedor?: string | null) => {
   });
 };
 
-export const useInventariosCountQuery = (codigoVendedor?: string | null, status?: InventoryStatus) => {
+export const useInventariosCountQuery = (
+  codigoVendedor?: string | null,
+  status?: InventoryStatus
+) => {
   return useQuery({
     queryKey: ['inventarios-count', codigoVendedor, status],
     queryFn: async () => {
-      let query = supabase
-        .from('inventarios')
-        .select('id', { count: 'exact' });
+      let query = supabase.from('inventarios').select('id', { count: 'exact' });
 
       if (status) {
         query = query.eq('status', status);

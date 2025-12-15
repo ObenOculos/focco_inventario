@@ -39,13 +39,12 @@ export function ImportBlocker() {
         <AlertDialogHeader>
           <AlertDialogTitle>Importação em Andamento</AlertDialogTitle>
           <AlertDialogDescription>
-            Uma importação está sendo processada. Aguarde a conclusão antes de navegar para outra página.
+            Uma importação está sendo processada. Aguarde a conclusão antes de navegar para outra
+            página.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <Button onClick={() => navigate('/importar')}>
-            Voltar para Importação
-          </Button>
+          <Button onClick={() => navigate('/importar')}>Voltar para Importação</Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -9,7 +9,13 @@ import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import {
   Table,
   TableBody,
@@ -17,7 +23,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from "@/components/ui/table";
+} from '@/components/ui/table';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 import { EstoqueTeoricSkeleton } from '@/components/skeletons/PageSkeleton';
@@ -34,43 +40,40 @@ export default function EstoqueTeorico() {
   const isGerente = profile?.role === 'gerente';
 
   const { data: vendedores = [] } = useVendedoresQuery(isGerente);
-  const { data: dados = [], isLoading: loading, isFetching } = useEstoqueTeoricoQuery(
-    isGerente,
-    selectedVendor,
-    profile?.codigo_vendedor
-  );
+  const {
+    data: dados = [],
+    isLoading: loading,
+    isFetching,
+  } = useEstoqueTeoricoQuery(isGerente, selectedVendor, profile?.codigo_vendedor);
 
-  const produtosNegativos = useMemo(
-    () => dados.filter(e => e.estoque_teorico < 0),
-    [dados]
-  );
+  const produtosNegativos = useMemo(() => dados.filter((e) => e.estoque_teorico < 0), [dados]);
 
   const dadosFiltrados = useMemo(() => {
     let filtered = dados;
 
     // Filtro de estoque real
     if (estoqueRealFilter === 'com_real') {
-      filtered = filtered.filter(e => e.data_atualizacao_real !== null);
+      filtered = filtered.filter((e) => e.data_atualizacao_real !== null);
     } else if (estoqueRealFilter === 'sem_real') {
-      filtered = filtered.filter(e => e.data_atualizacao_real === null);
+      filtered = filtered.filter((e) => e.data_atualizacao_real === null);
     }
 
     // Filtro de saldo/divergência
     switch (saldoFilter) {
       case 'ok':
-        filtered = filtered.filter(e => e.diferenca === 0);
+        filtered = filtered.filter((e) => e.diferenca === 0);
         break;
       case 'divergente':
-        filtered = filtered.filter(e => e.diferenca !== 0);
+        filtered = filtered.filter((e) => e.diferenca !== 0);
         break;
       case 'falta':
-        filtered = filtered.filter(e => e.diferenca < 0);
+        filtered = filtered.filter((e) => e.diferenca < 0);
         break;
       case 'sobra':
-        filtered = filtered.filter(e => e.diferenca > 0);
+        filtered = filtered.filter((e) => e.diferenca > 0);
         break;
       case 'negativo':
-        filtered = filtered.filter(e => e.estoque_teorico < 0);
+        filtered = filtered.filter((e) => e.estoque_teorico < 0);
         break;
     }
 
@@ -93,36 +96,36 @@ export default function EstoqueTeorico() {
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
 
-
   const totalEstoqueTeorico = dados.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalEstoqueReal = dados.reduce((acc, item) => acc + item.estoque_real, 0);
   const totalDivergencia = dados.reduce((acc, item) => acc + item.diferenca, 0);
-  const totalModelos = new Set(dados.map(e => e.codigo_auxiliar.split(' ')[0])).size;
+  const totalModelos = new Set(dados.map((e) => e.codigo_auxiliar.split(' ')[0])).size;
 
   const handleExportExcel = () => {
     if (dadosFiltrados.length === 0) {
-      toast.warning("Sem dados para exportar");
+      toast.warning('Sem dados para exportar');
       return;
     }
 
-    const exportData = dadosFiltrados.map(item => ({
+    const exportData = dadosFiltrados.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
       'Nome Produto': item.nome_produto,
       'Estoque Teórico': item.estoque_teorico,
       'Estoque Real': item.estoque_real,
-      'Divergência': item.diferenca,
-      'Data Atualização Real': item.data_atualizacao_real 
+      Divergência: item.diferenca,
+      'Data Atualização Real': item.data_atualizacao_real
         ? new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')
-        : '-'
+        : '-',
     }));
 
     const ws = XLSX.utils.json_to_sheet(exportData);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Estoque Teórico x Real');
 
-    const vendorName = selectedVendor !== 'todos' 
-      ? vendedores.find(v => v.codigo_vendedor === selectedVendor)?.nome || selectedVendor
-      : 'consolidado';
+    const vendorName =
+      selectedVendor !== 'todos'
+        ? vendedores.find((v) => v.codigo_vendedor === selectedVendor)?.nome || selectedVendor
+        : 'consolidado';
     const dateStr = new Date().toISOString().split('T')[0];
     const fileName = `estoque_teorico_real_${vendorName}_${dateStr}.xlsx`;
 
@@ -137,8 +140,8 @@ export default function EstoqueTeorico() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Estoque (Teórico x Real)</h1>
             <p className="text-muted-foreground">
-              {isGerente 
-                ? 'Compare o estoque teórico com o real de todos os vendedores' 
+              {isGerente
+                ? 'Compare o estoque teórico com o real de todos os vendedores'
                 : 'Compare seu estoque teórico com o real baseado em inventários'}
             </p>
           </div>
@@ -152,12 +155,12 @@ export default function EstoqueTeorico() {
               <p className="font-semibold text-destructive">
                 {produtosNegativos.length} produto(s) com estoque teórico negativo
               </p>
-              <p className="text-sm text-muted-foreground">
-                Verifique divergências de inventário
-              </p>
+              <p className="text-sm text-muted-foreground">Verifique divergências de inventário</p>
             </div>
             <Link to="/pedidos">
-              <Button variant="outline" size="sm">Ver detalhes</Button>
+              <Button variant="outline" size="sm">
+                Ver detalhes
+              </Button>
             </Link>
           </div>
         )}
@@ -186,7 +189,7 @@ export default function EstoqueTeorico() {
               <p className="text-3xl font-bold text-purple-600">{totalEstoqueReal}</p>
             </CardContent>
           </Card>
-          
+
           <Card className="border-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -202,12 +205,17 @@ export default function EstoqueTeorico() {
           <Card className="border-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ArrowDownCircle size={16} className={totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'} />
+                <ArrowDownCircle
+                  size={16}
+                  className={totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'}
+                />
                 Divergência Total
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className={`text-3xl font-bold ${totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}>
+              <p
+                className={`text-3xl font-bold ${totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
+              >
                 {totalDivergencia > 0 ? `+${totalDivergencia}` : totalDivergencia}
               </p>
             </CardContent>
@@ -225,9 +233,9 @@ export default function EstoqueTeorico() {
                 <Badge variant="secondary" className="text-lg px-3 py-1">
                   {totalItems} produtos
                 </Badge>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleExportExcel}
                   disabled={dadosFiltrados.length === 0}
                 >
@@ -290,7 +298,9 @@ export default function EstoqueTeorico() {
               <div className="text-center py-8">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
                 <p className="text-muted-foreground">
-                  {searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto com estoque real registrado'}
+                  {searchTerm
+                    ? 'Nenhum produto encontrado'
+                    : 'Nenhum produto com estoque real registrado'}
                 </p>
               </div>
             ) : (
@@ -307,7 +317,7 @@ export default function EstoqueTeorico() {
                     </TableHeader>
                     <TableBody>
                       {paginatedData.map((item) => (
-                        <TableRow 
+                        <TableRow
                           key={item.codigo_auxiliar}
                           className={item.diferenca !== 0 ? 'bg-destructive/5' : ''}
                         >
@@ -327,14 +337,14 @@ export default function EstoqueTeorico() {
                             </div>
                           </TableCell>
                           <TableCell className="text-center">
-                            <p className={`font-bold text-lg ${item.estoque_teorico < 0 ? 'text-destructive' : 'text-foreground'}`}>
+                            <p
+                              className={`font-bold text-lg ${item.estoque_teorico < 0 ? 'text-destructive' : 'text-foreground'}`}
+                            >
                               {item.estoque_teorico}
                             </p>
                           </TableCell>
                           <TableCell className="text-center">
-                            <p className="font-bold text-lg text-purple-600">
-                              {item.estoque_real}
-                            </p>
+                            <p className="font-bold text-lg text-purple-600">{item.estoque_real}</p>
                             {item.data_atualizacao_real && (
                               <p className="text-xs text-muted-foreground">
                                 {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')}
@@ -343,15 +353,18 @@ export default function EstoqueTeorico() {
                           </TableCell>
                           <TableCell className="text-center">
                             {item.diferenca === 0 ? (
-                              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30">
+                              <Badge
+                                variant="outline"
+                                className="bg-green-500/10 text-green-600 border-green-500/30"
+                              >
                                 OK
                               </Badge>
                             ) : (
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className={`font-bold ${
-                                  item.diferenca > 0 
-                                    ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30' 
+                                  item.diferenca > 0
+                                    ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30'
                                     : 'bg-destructive/10 text-destructive border-destructive/30'
                                 }`}
                               >

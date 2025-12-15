@@ -6,10 +6,7 @@ export const useProdutosQuery = () => {
   return useQuery<Produto[], Error>({
     queryKey: ['produtos'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('produtos')
-        .select('*')
-        .order('codigo_auxiliar');
+      const { data, error } = await supabase.from('produtos').select('*').order('codigo_auxiliar');
 
       if (error) {
         console.error('Erro ao buscar produtos:', error);
