@@ -1,208 +1,166 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
-import { supabase } from '@/integrations/supabase/client';
-import { AlertTriangle, List, Package, FileDown } from 'lucide-react';
+import { AlertTriangle, Users, Package, TrendingUp, TrendingDown, Clock, CheckCircle, FileDown, ArrowUpDown } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { usePagination } from '@/hooks/usePagination';
-import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import { useVendedoresDesempenhoQuery, VendedorDesempenho } from '@/hooks/useVendedoresDesempenhoQuery';
+import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
+import { StatsCardsSkeleton } from '@/components/skeletons/CardSkeleton';
 import * as XLSX from 'xlsx';
-import { TableWithFiltersSkeleton } from '@/components/skeletons/TableSkeleton';
+import { subDays } from 'date-fns';
 
-interface Movimentacao {
-  id: string;
-  nome_vendedor: string;
-  codigo_vendedor: string;
-  codigo_tipo: number;
-  codigo_auxiliar: string;
-  quantidade: number;
-  data_emissao: string;
-  numero_pedido: string | null;
-  numero_nota_fiscal: string | null;
-}
-
-interface Vendedor {
-    codigo_vendedor: string;
-    nome: string;
-}
+type SortField = 'nome' | 'estoque_total' | 'total_vendas' | 'acuracidade' | 'dias_sem_inventario';
+type SortDirection = 'asc' | 'desc';
 
 export default function ControleVendedores() {
   const { profile } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([]);
-  const [vendedores, setVendedores] = useState<Vendedor[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedVendedor, setSelectedVendedor] = useState('todos');
-  const [selectedTipo, setSelectedTipo] = useState('todos');
+  const [periodo, setPeriodo] = useState('30');
+  const [sortField, setSortField] = useState<SortField>('nome');
+  const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  // Aplicar filtros
-  const filteredMovimentacoes = useMemo(() => {
-    return movimentacoes.filter(item => {
-      const vendedorMatch = selectedVendedor === 'todos' || item.codigo_vendedor === selectedVendedor;
+  // Calcular datas do período
+  const periodoOptions = useMemo(() => {
+    const hoje = new Date();
+    if (periodo === 'todos') return {};
+    const dias = parseInt(periodo);
+    return {
+      periodoInicio: subDays(hoje, dias),
+      periodoFim: hoje
+    };
+  }, [periodo]);
+
+  const { data: vendedores, isLoading } = useVendedoresDesempenhoQuery(periodoOptions);
+
+  // Filtrar e ordenar vendedores
+  const vendedoresFiltrados = useMemo(() => {
+    if (!vendedores) return [];
+
+    let resultado = vendedores.filter(v => 
+      v.nome.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      v.codigo_vendedor.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    // Ordenar
+    resultado.sort((a, b) => {
+      let comparison = 0;
       
-      let tipoMatch = true;
-      if (selectedTipo === 'remessa') {
-        tipoMatch = [7, 99].includes(item.codigo_tipo);
-      } else if (selectedTipo === 'venda') {
-        tipoMatch = item.codigo_tipo === 2;
+      switch (sortField) {
+        case 'nome':
+          comparison = a.nome.localeCompare(b.nome);
+          break;
+        case 'estoque_total':
+          comparison = a.estoque_total - b.estoque_total;
+          break;
+        case 'total_vendas':
+          comparison = a.total_vendas - b.total_vendas;
+          break;
+        case 'acuracidade':
+          const acuA = a.ultimo_inventario?.acuracidade ?? -1;
+          const acuB = b.ultimo_inventario?.acuracidade ?? -1;
+          comparison = acuA - acuB;
+          break;
+        case 'dias_sem_inventario':
+          const diasA = a.dias_sem_inventario ?? 999;
+          const diasB = b.dias_sem_inventario ?? 999;
+          comparison = diasA - diasB;
+          break;
       }
 
-      return vendedorMatch && tipoMatch;
+      return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [movimentacoes, selectedVendedor, selectedTipo]);
 
-  const {
-    currentPage,
-    totalPages,
-    itemsPerPage,
-    startIndex,
-    endIndex,
-    paginatedData,
-    totalItems,
-    onPageChange,
-    onItemsPerPageChange,
-  } = usePagination({
-    data: filteredMovimentacoes,
-    searchTerm,
-    searchFields: ['nome_vendedor', 'codigo_auxiliar', 'numero_pedido', 'numero_nota_fiscal'],
-  });
+    return resultado;
+  }, [vendedores, searchTerm, sortField, sortDirection]);
 
-  useEffect(() => {
-    if (profile?.role === 'gerente') {
-      fetchMovimentacoes();
-      fetchVendedores();
-    }
-  }, [profile]);
+  // Métricas agregadas
+  const metricas = useMemo(() => {
+    if (!vendedores) return null;
 
-  const fetchVendedores = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('codigo_vendedor, nome')
-      .eq('role', 'vendedor')
-      .not('codigo_vendedor', 'is', null)
-      .order('nome');
+    const ativos = vendedores.filter(v => v.ativo);
+    const comInventarioRecente = vendedores.filter(v => 
+      v.dias_sem_inventario !== null && v.dias_sem_inventario <= 30
+    );
+    const semInventario = vendedores.filter(v => v.dias_sem_inventario === null || v.dias_sem_inventario > 30);
+    const baixaAcuracidade = vendedores.filter(v => 
+      v.ultimo_inventario?.acuracidade !== undefined && v.ultimo_inventario.acuracidade < 80
+    );
 
-    if (error) {
-        console.error('Erro ao buscar vendedores:', error);
+    return {
+      totalVendedores: vendedores.length,
+      vendedoresAtivos: ativos.length,
+      comInventarioRecente: comInventarioRecente.length,
+      semInventario: semInventario.length,
+      baixaAcuracidade: baixaAcuracidade.length,
+      estoqueTotal: vendedores.reduce((sum, v) => sum + v.estoque_total, 0),
+      vendasTotal: vendedores.reduce((sum, v) => sum + v.total_vendas, 0)
+    };
+  }, [vendedores]);
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-        setVendedores(data);
+      setSortField(field);
+      setSortDirection('asc');
     }
-  }
-
-  const fetchMovimentacoes = async () => {
-    setLoading(true);
-    let allData: any[] = [];
-    let page = 0;
-    const pageSize = 1000;
-    let hasMore = true;
-
-    while (hasMore) {
-        const { data, error } = await supabase
-            .from('itens_pedido')
-            .select(`
-                id,
-                quantidade,
-                codigo_auxiliar,
-                pedidos (
-                    codigo_tipo,
-                    nome_vendedor,
-                    codigo_vendedor,
-                    data_emissao,
-                    numero_pedido,
-                    numero_nota_fiscal
-                )
-            `)
-            .order('data_emissao', { referencedTable: 'pedidos', ascending: false })
-            .range(page * pageSize, (page + 1) * pageSize - 1);
-
-        if (error) {
-            console.error('Erro ao buscar movimentações:', error);
-            hasMore = false;
-            setMovimentacoes([]);
-            setLoading(false);
-            return;
-        }
-
-        if (data) {
-            allData = [...allData, ...data];
-        }
-
-        if (!data || data.length < pageSize) {
-            hasMore = false;
-        }
-        else {
-            page++;
-        }
-    }
-
-    const flattenedData = allData.map(item => ({
-        id: item.id,
-        quantidade: item.quantidade,
-        codigo_auxiliar: item.codigo_auxiliar,
-        // @ts-ignore
-        codigo_tipo: item.pedidos?.codigo_tipo,
-        // @ts-ignore
-        nome_vendedor: item.pedidos?.nome_vendedor,
-        // @ts-ignore
-        codigo_vendedor: item.pedidos?.codigo_vendedor,
-        // @ts-ignore
-        data_emissao: item.pedidos?.data_emissao,
-        // @ts-ignore
-        numero_pedido: item.pedidos?.numero_pedido || null,
-        // @ts-ignore
-        numero_nota_fiscal: item.pedidos?.numero_nota_fiscal || null,
-    }));
-
-    // Aggregate data
-    const aggregatedMap = new Map<string, Movimentacao>();
-
-    flattenedData.forEach(item => {
-        if (!item.codigo_vendedor || !item.data_emissao) return;
-
-        const dateKey = new Date(item.data_emissao).toISOString().split('T')[0];
-        const key = `${item.codigo_vendedor}-${item.codigo_tipo}-${item.codigo_auxiliar}-${dateKey}-${item.numero_pedido || ''}-${item.numero_nota_fiscal || ''}`;
-        
-        const existing = aggregatedMap.get(key);
-        
-        if (existing) {
-            existing.quantidade += item.quantidade;
-        } else {
-            aggregatedMap.set(key, { ...item, id: key });
-        }
-    });
-
-    const aggregatedData = Array.from(aggregatedMap.values());
-
-    setMovimentacoes(aggregatedData);
-    setLoading(false);
   };
 
-  // Calculate the sum of quantities
-  const sumOfQuantities = useMemo(() => {
-    return filteredMovimentacoes.reduce((sum, mov) => sum + mov.quantidade, 0);
-  }, [filteredMovimentacoes]);
-
   const handleExport = () => {
-    const dataToExport = filteredMovimentacoes.map(item => ({
-      'Vendedor': item.nome_vendedor,
-      'Cód. Tipo': item.codigo_tipo,
-      'Num. Pedido': item.numero_pedido || '-',
-      'Nota Fiscal': item.numero_nota_fiscal || '-',
-      'Produto (Cód. Aux.)': item.codigo_auxiliar,
-      'Quantidade': item.quantidade,
-      'Data': new Date(item.data_emissao).toLocaleDateString('pt-BR'),
+    if (!vendedoresFiltrados) return;
+
+    const dataToExport = vendedoresFiltrados.map(v => ({
+      'Vendedor': v.nome,
+      'Código': v.codigo_vendedor,
+      'Status': v.ativo ? 'Ativo' : 'Inativo',
+      'Estoque Total': v.estoque_total,
+      'Remessas (período)': v.total_remessas,
+      'Vendas (período)': v.total_vendas,
+      'Último Inventário': v.ultimo_inventario 
+        ? new Date(v.ultimo_inventario.data).toLocaleDateString('pt-BR') 
+        : 'Nunca',
+      'Status Inventário': v.ultimo_inventario?.status || '-',
+      'Acuracidade (%)': v.ultimo_inventario?.acuracidade ?? '-',
+      'Dias sem Inventário': v.dias_sem_inventario ?? 'N/A'
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Movimentacoes');
-    XLSX.writeFile(workbook, 'movimentacoes_vendedores.xlsx');
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Desempenho');
+    XLSX.writeFile(workbook, `painel_vendedores_${periodo}dias.xlsx`);
+  };
+
+  const getStatusBadge = (status: string | undefined) => {
+    if (!status) return null;
+    
+    switch (status) {
+      case 'aprovado':
+        return <Badge className="bg-green-500/20 text-green-700 border-green-500/30">Aprovado</Badge>;
+      case 'pendente':
+        return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">Pendente</Badge>;
+      case 'revisao':
+        return <Badge className="bg-orange-500/20 text-orange-700 border-orange-500/30">Revisão</Badge>;
+      default:
+        return null;
+    }
+  };
+
+  const getAcuracidadeBadge = (acuracidade: number | undefined) => {
+    if (acuracidade === undefined) return <span className="text-muted-foreground">-</span>;
+    
+    if (acuracidade >= 95) {
+      return <Badge className="bg-green-500/20 text-green-700 border-green-500/30">{acuracidade}%</Badge>;
+    } else if (acuracidade >= 80) {
+      return <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">{acuracidade}%</Badge>;
+    } else {
+      return <Badge className="bg-destructive/20 text-destructive border-destructive/30">{acuracidade}%</Badge>;
+    }
   };
 
   if (profile?.role !== 'gerente') {
@@ -210,194 +168,244 @@ export default function ControleVendedores() {
       <AppLayout>
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            Acesso restrito a gerentes.
-          </AlertDescription>
+          <AlertDescription>Acesso restrito a gerentes.</AlertDescription>
         </Alert>
       </AppLayout>
     );
   }
-  
-          // Removed getTipoLabel as it's no longer used for display
-  
-    
-  
-          return (
-  
-            <AppLayout>
-  
-              <div className="space-y-6">
-  
-                <div>
-  
-                  <h1 className="text-2xl font-bold tracking-tight">Controle de Vendedores</h1>
-  
-                  <p className="text-muted-foreground">
-  
-                    Listagem de todas as movimentações de produtos por vendedor.
-  
-                  </p>
-  
-                </div>
-  
-    
-  
-                <Card className="border-2">
-  
-                  <CardHeader>
-  
-                    <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-  
-                        <span className="flex items-center gap-2">
-  
-                            <List size={20} />
-  
-                            Movimentações
-  
-                        </span>
-  
-                        <Badge variant="secondary" className="text-lg px-3 py-1">
-  
-                            {sumOfQuantities}
-  
-                        </Badge>
-  
-                    </CardTitle>
-  
-                  </CardHeader>
-  
-                  <CardContent className="space-y-4">
-  
-                    <div className="flex flex-col md:flex-row gap-4">
-  
-                        <SearchFilter
-  
-                        value={searchTerm}
-  
-                        onChange={setSearchTerm}
-  
-                        placeholder="Buscar por vendedor ou produto..."
-  
-                        />
-  
-                        <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-  
-                            <SelectTrigger className="w-full md:w-48">
-  
-                                <SelectValue placeholder="Filtrar por vendedor" />
-  
-                            </SelectTrigger>
-  
-                            <SelectContent>
-  
-                                <SelectItem value="todos">Todos os Vendedores</SelectItem>
-  
-                                {vendedores.map(v => (
-  
-                                    <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>{v.nome}</SelectItem>
-  
-                                ))}
-  
-                            </SelectContent>
-  
-                        </Select>
-  
-                        <Select value={selectedTipo} onValueChange={setSelectedTipo}>
-  
-                            <SelectTrigger className="w-full md:w-48">
-  
-                                <SelectValue placeholder="Filtrar por tipo" />
-  
-                            </SelectTrigger>
-  
-                            <SelectContent>
-  
-                                <SelectItem value="todos">Todos os Tipos</SelectItem>
-  
-                                <SelectItem value="remessa">Remessa</SelectItem>
-  
-                                <SelectItem value="venda">Venda</SelectItem>
-  
-                            </SelectContent>
-  
-                        </Select>
-  
-                        <Button onClick={handleExport} className="w-full md:w-auto flex items-center gap-2">
-                            <FileDown size={16} />
-                            Exportar
-                        </Button>
-                    </div>
-  
-    
-  
-                    {loading ? (
-                      <TableWithFiltersSkeleton columns={7} rows={8} />
-                    ) : sumOfQuantities === 0 ? (
-  
-                      <div className="text-center py-8">
-  
-                        <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
-  
-                        <p className="text-muted-foreground">
-  
-                            {searchTerm || selectedVendedor !== 'todos' || selectedTipo !== 'todos'
-  
-                                ? 'Nenhuma movimentação encontrada para os filtros aplicados.'
-  
-                                : 'Nenhuma movimentação encontrada.'
-  
-                            }
-  
-                        </p>
-  
-                      </div>
-  
-                    ) : (
-  
-                      <>
-  
-                        <div className="border rounded-lg overflow-hidden">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Vendedor</TableHead>
-                        <TableHead>Cód. Tipo</TableHead>
-                        <TableHead>Num. Pedido</TableHead>
-                        <TableHead>Nota Fiscal</TableHead>
-                        <TableHead>Produto (Cód. Aux.)</TableHead>
-                        <TableHead className="text-center">Quantidade</TableHead>
-                        <TableHead className="text-right">Data</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {paginatedData.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell className="font-medium">{item.nome_vendedor}</TableCell>
-                          <TableCell>{item.codigo_tipo}</TableCell>
-                          <TableCell>{item.numero_pedido || '-'}</TableCell>
-                          <TableCell>{item.numero_nota_fiscal || '-'}</TableCell>
-                          <TableCell>{item.codigo_auxiliar}</TableCell>
-                          <TableCell className="text-center font-bold">{item.quantidade}</TableCell>
-                          <TableCell className="text-right text-muted-foreground">
-                            {new Date(item.data_emissao).toLocaleDateString('pt-BR')}
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </div>
 
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  itemsPerPage={itemsPerPage}
-                  totalItems={totalItems}
-                  startIndex={startIndex}
-                  endIndex={endIndex}
-                  onPageChange={onPageChange}
-                  onItemsPerPageChange={onItemsPerPageChange}
-                />
-              </>
+  return (
+    <AppLayout>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Painel de Vendedores</h1>
+          <p className="text-muted-foreground">
+            Visão geral do desempenho e inventário dos vendedores.
+          </p>
+        </div>
+
+        {/* Cards de métricas */}
+        {isLoading ? (
+          <StatsCardsSkeleton count={4} />
+        ) : metricas && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-primary/10">
+                    <Users className="h-5 w-5 text-primary" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{metricas.vendedoresAtivos}</p>
+                    <p className="text-xs text-muted-foreground">Vendedores Ativos</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-green-500/10">
+                    <CheckCircle className="h-5 w-5 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{metricas.comInventarioRecente}</p>
+                    <p className="text-xs text-muted-foreground">Inventário em dia</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-yellow-500/10">
+                    <Clock className="h-5 w-5 text-yellow-600" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{metricas.semInventario}</p>
+                    <p className="text-xs text-muted-foreground">Sem inventário recente</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 rounded-full bg-destructive/10">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold">{metricas.baixaAcuracidade}</p>
+                    <p className="text-xs text-muted-foreground">Baixa acuracidade</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Alertas */}
+        {vendedores && vendedores.filter(v => v.dias_sem_inventario === null || v.dias_sem_inventario > 60).length > 0 && (
+          <Alert className="border-yellow-500/50 bg-yellow-500/10">
+            <Clock className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-700">
+              <strong>{vendedores.filter(v => v.dias_sem_inventario === null || v.dias_sem_inventario > 60).length}</strong> vendedor(es) sem inventário há mais de 60 dias.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Tabela */}
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <span className="flex items-center gap-2">
+                <Users size={20} />
+                Desempenho por Vendedor
+              </span>
+              <div className="flex flex-wrap gap-2">
+                <div className="w-full sm:w-48">
+                  <SearchFilter
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder="Buscar vendedor..."
+                  />
+                </div>
+                <Select value={periodo} onValueChange={setPeriodo}>
+                  <SelectTrigger className="w-full sm:w-36">
+                    <SelectValue placeholder="Período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="7">Últimos 7 dias</SelectItem>
+                    <SelectItem value="30">Últimos 30 dias</SelectItem>
+                    <SelectItem value="90">Últimos 90 dias</SelectItem>
+                    <SelectItem value="todos">Todo período</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Button onClick={handleExport} variant="outline" className="flex items-center gap-2">
+                  <FileDown size={16} />
+                  Exportar
+                </Button>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {isLoading ? (
+              <TableSkeleton columns={7} rows={6} />
+            ) : vendedoresFiltrados.length === 0 ? (
+              <div className="text-center py-8">
+                <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
+                <p className="text-muted-foreground">
+                  {searchTerm ? 'Nenhum vendedor encontrado para a busca.' : 'Nenhum vendedor cadastrado.'}
+                </p>
+              </div>
+            ) : (
+              <div className="border rounded-lg overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-muted/50"
+                        onClick={() => handleSort('nome')}
+                      >
+                        <span className="flex items-center gap-1">
+                          Vendedor
+                          <ArrowUpDown size={14} className="text-muted-foreground" />
+                        </span>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        onClick={() => handleSort('estoque_total')}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          Estoque
+                          <ArrowUpDown size={14} className="text-muted-foreground" />
+                        </span>
+                      </TableHead>
+                      <TableHead className="text-center">
+                        <span className="flex items-center justify-center gap-1">
+                          <TrendingUp size={14} className="text-blue-500" />
+                          Remessas
+                        </span>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        onClick={() => handleSort('total_vendas')}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          <TrendingDown size={14} className="text-green-500" />
+                          Vendas
+                          <ArrowUpDown size={14} className="text-muted-foreground" />
+                        </span>
+                      </TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        onClick={() => handleSort('dias_sem_inventario')}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          Último Inventário
+                          <ArrowUpDown size={14} className="text-muted-foreground" />
+                        </span>
+                      </TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead 
+                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        onClick={() => handleSort('acuracidade')}
+                      >
+                        <span className="flex items-center justify-center gap-1">
+                          Acuracidade
+                          <ArrowUpDown size={14} className="text-muted-foreground" />
+                        </span>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {vendedoresFiltrados.map((vendedor) => (
+                      <TableRow key={vendedor.codigo_vendedor} className={!vendedor.ativo ? 'opacity-50' : ''}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{vendedor.nome}</p>
+                            <p className="text-xs text-muted-foreground">{vendedor.codigo_vendedor}</p>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center font-bold">
+                          {vendedor.estoque_total}
+                        </TableCell>
+                        <TableCell className="text-center text-blue-600 font-medium">
+                          +{vendedor.total_remessas}
+                        </TableCell>
+                        <TableCell className="text-center text-green-600 font-medium">
+                          -{vendedor.total_vendas}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {vendedor.ultimo_inventario ? (
+                            <div>
+                              <p className="text-sm">
+                                {new Date(vendedor.ultimo_inventario.data).toLocaleDateString('pt-BR')}
+                              </p>
+                              {vendedor.dias_sem_inventario !== null && vendedor.dias_sem_inventario > 30 && (
+                                <p className="text-xs text-yellow-600">
+                                  ({vendedor.dias_sem_inventario} dias)
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">Nunca</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {getStatusBadge(vendedor.ultimo_inventario?.status)}
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {getAcuracidadeBadge(vendedor.ultimo_inventario?.acuracidade)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
           </CardContent>
         </Card>
