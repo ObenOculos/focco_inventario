@@ -3,7 +3,7 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Package, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Download } from 'lucide-react';
+import { Package, AlertTriangle, TrendingUp, TrendingDown, Download, Filter } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks/usePagination';
@@ -33,8 +33,9 @@ import { RefetchIndicator } from '@/components/RefetchIndicator';
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [saldoFilter, setSaldoFilter] = useState<string>('todos');
-  const [estoqueRealFilter, setEstoqueRealFilter] = useState<string>('todos');
+  const [teoricoFilter, setTeoricoFilter] = useState<string>('todos');
+  const [realFilter, setRealFilter] = useState<string>('todos');
+  const [divergenciaFilter, setDivergenciaFilter] = useState<string>('todos');
   const [selectedVendor, setSelectedVendor] = useState<string>('todos');
 
   const isGerente = profile?.role === 'gerente';
@@ -51,15 +52,40 @@ export default function EstoqueTeorico() {
   const dadosFiltrados = useMemo(() => {
     let filtered = dados;
 
-    // Filtro de estoque real
-    if (estoqueRealFilter === 'com_real') {
-      filtered = filtered.filter((e) => e.data_atualizacao_real !== null);
-    } else if (estoqueRealFilter === 'sem_real') {
-      filtered = filtered.filter((e) => e.data_atualizacao_real === null);
+    // Filtro de estoque teórico
+    switch (teoricoFilter) {
+      case 'positivo':
+        filtered = filtered.filter((e) => e.estoque_teorico > 0);
+        break;
+      case 'zero':
+        filtered = filtered.filter((e) => e.estoque_teorico === 0);
+        break;
+      case 'negativo':
+        filtered = filtered.filter((e) => e.estoque_teorico < 0);
+        break;
     }
 
-    // Filtro de saldo/divergência
-    switch (saldoFilter) {
+    // Filtro de estoque real
+    switch (realFilter) {
+      case 'com_real':
+        filtered = filtered.filter((e) => e.data_atualizacao_real !== null);
+        break;
+      case 'sem_real':
+        filtered = filtered.filter((e) => e.data_atualizacao_real === null);
+        break;
+      case 'positivo':
+        filtered = filtered.filter((e) => e.estoque_real > 0);
+        break;
+      case 'zero':
+        filtered = filtered.filter((e) => e.estoque_real === 0);
+        break;
+      case 'negativo':
+        filtered = filtered.filter((e) => e.estoque_real < 0);
+        break;
+    }
+
+    // Filtro de divergência
+    switch (divergenciaFilter) {
       case 'ok':
         filtered = filtered.filter((e) => e.diferenca === 0);
         break;
@@ -72,13 +98,10 @@ export default function EstoqueTeorico() {
       case 'sobra':
         filtered = filtered.filter((e) => e.diferenca > 0);
         break;
-      case 'negativo':
-        filtered = filtered.filter((e) => e.estoque_teorico < 0);
-        break;
     }
 
     return filtered;
-  }, [dados, saldoFilter, estoqueRealFilter]);
+  }, [dados, teoricoFilter, realFilter, divergenciaFilter]);
 
   const {
     currentPage,
@@ -96,10 +119,17 @@ export default function EstoqueTeorico() {
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
 
-  const totalEstoqueTeorico = dados.reduce((acc, item) => acc + item.estoque_teorico, 0);
-  const totalEstoqueReal = dados.reduce((acc, item) => acc + item.estoque_real, 0);
-  const totalDivergencia = dados.reduce((acc, item) => acc + item.diferenca, 0);
-  const totalModelos = new Set(dados.map((e) => e.codigo_auxiliar.split(' ')[0])).size;
+  // Totais gerais (dados completos)
+  const totalGeralProdutos = dados.length;
+
+  // Totais filtrados (baseados nos dados após filtros)
+  const totalFiltradoTeorico = dadosFiltrados.reduce((acc, item) => acc + item.estoque_teorico, 0);
+  const totalFiltradoReal = dadosFiltrados.reduce((acc, item) => acc + item.estoque_real, 0);
+  const totalFiltradoDivergencia = dadosFiltrados.reduce((acc, item) => acc + item.diferenca, 0);
+  const totalFiltradoProdutos = dadosFiltrados.length;
+
+  // Verificar se há filtros ativos
+  const hasActiveFilters = teoricoFilter !== 'todos' || realFilter !== 'todos' || divergenciaFilter !== 'todos';
 
   const handleExportExcel = () => {
     if (dadosFiltrados.length === 0) {
@@ -170,54 +200,66 @@ export default function EstoqueTeorico() {
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                 <Package size={16} />
-                Estoque Teórico
+                Produtos
+                {hasActiveFilters && <Filter size={12} className="text-primary" />}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{totalEstoqueTeorico}</p>
+              <p className="text-3xl font-bold">{totalFiltradoProdutos}</p>
+              {hasActiveFilters && (
+                <p className="text-xs text-muted-foreground">de {totalGeralProdutos} total</p>
+              )}
             </CardContent>
           </Card>
 
           <Card className="border-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Package size={16} />
-                Estoque Real
+                <TrendingUp size={16} className={totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'} />
+                Est. Teórico
+                {hasActiveFilters && <Filter size={12} className="text-primary" />}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold text-purple-600">{totalEstoqueReal}</p>
+              <p className={`text-3xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}>
+                {totalFiltradoTeorico}
+              </p>
+              <p className="text-xs text-muted-foreground">unidades</p>
             </CardContent>
           </Card>
 
           <Card className="border-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ArrowUpCircle size={16} className="text-green-600" />
-                Modelos Diferentes
+                <Package size={16} className="text-purple-600" />
+                Est. Real
+                {hasActiveFilters && <Filter size={12} className="text-primary" />}
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{totalModelos}</p>
+              <p className="text-3xl font-bold text-purple-600">{totalFiltradoReal}</p>
+              <p className="text-xs text-muted-foreground">unidades</p>
             </CardContent>
           </Card>
 
           <Card className="border-2">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <ArrowDownCircle
+                <TrendingDown
                   size={16}
-                  className={totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'}
+                  className={totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}
                 />
-                Divergência Total
+                Divergência
+                {hasActiveFilters && <Filter size={12} className="text-primary" />}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <p
-                className={`text-3xl font-bold ${totalDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
+                className={`text-3xl font-bold ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
               >
-                {totalDivergencia > 0 ? `+${totalDivergencia}` : totalDivergencia}
+                {totalFiltradoDivergencia > 0 ? `+${totalFiltradoDivergencia}` : totalFiltradoDivergencia}
               </p>
+              <p className="text-xs text-muted-foreground">unidades</p>
             </CardContent>
           </Card>
         </div>
@@ -246,7 +288,7 @@ export default function EstoqueTeorico() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="flex flex-col md:flex-row gap-4">
+            <div className="flex flex-col md:flex-row gap-4 flex-wrap">
               <SearchFilter
                 value={searchTerm}
                 onChange={setSearchTerm}
@@ -267,27 +309,40 @@ export default function EstoqueTeorico() {
                   </SelectContent>
                 </Select>
               )}
-              <Select value={estoqueRealFilter} onValueChange={setEstoqueRealFilter}>
+              <Select value={teoricoFilter} onValueChange={setTeoricoFilter}>
+                <SelectTrigger className="w-full md:w-40">
+                  <SelectValue placeholder="Est. Teórico" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Teórico: Todos</SelectItem>
+                  <SelectItem value="positivo">Teórico: Positivo</SelectItem>
+                  <SelectItem value="zero">Teórico: Zero</SelectItem>
+                  <SelectItem value="negativo">Teórico: Negativo</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={realFilter} onValueChange={setRealFilter}>
                 <SelectTrigger className="w-full md:w-40">
                   <SelectValue placeholder="Est. Real" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="todos">Real: Todos</SelectItem>
                   <SelectItem value="com_real">Com Est. Real</SelectItem>
                   <SelectItem value="sem_real">Sem Est. Real</SelectItem>
+                  <SelectItem value="positivo">Real: Positivo</SelectItem>
+                  <SelectItem value="zero">Real: Zero</SelectItem>
+                  <SelectItem value="negativo">Real: Negativo</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={saldoFilter} onValueChange={setSaldoFilter}>
+              <Select value={divergenciaFilter} onValueChange={setDivergenciaFilter}>
                 <SelectTrigger className="w-full md:w-44">
                   <SelectValue placeholder="Divergência" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="todos">Divergência: Todas</SelectItem>
                   <SelectItem value="ok">Sem Divergência</SelectItem>
                   <SelectItem value="divergente">Com Divergência</SelectItem>
                   <SelectItem value="falta">Falta (Real &lt; Teórico)</SelectItem>
                   <SelectItem value="sobra">Sobra (Real &gt; Teórico)</SelectItem>
-                  <SelectItem value="negativo">Teórico Negativo</SelectItem>
                 </SelectContent>
               </Select>
             </div>
