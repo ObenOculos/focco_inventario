@@ -32,10 +32,10 @@ const Toaster = ({ ...props }: ToasterProps) => {
           actionButton: "bg-primary text-primary-foreground border-2 border-border",
           cancelButton: "bg-muted text-muted-foreground border-2 border-border",
           closeButton: "border-2 border-border bg-background hover:bg-muted",
-          success: "!bg-[hsl(173,58%,39%)] !text-white !border-2 !border-[hsl(173,58%,30%)]",
-          error: "!bg-[hsl(var(--destructive))] !text-white !border-2 !border-[hsl(0,84%,50%)]",
-          warning: "!bg-[hsl(43,74%,66%)] !text-black !border-2 !border-[hsl(43,74%,50%)]",
-          info: "!bg-[hsl(217,91%,60%)] !text-white !border-2 !border-[hsl(217,91%,50%)]",
+          success: "!bg-background !text-[hsl(143,70%,35%)] !border-2 !border-[hsl(143,70%,35%)] [&>svg]:!text-[hsl(143,70%,35%)]",
+          error: "!bg-background !text-destructive !border-2 !border-destructive [&>svg]:!text-destructive",
+          warning: "!bg-background !text-[hsl(38,92%,40%)] !border-2 !border-[hsl(38,92%,40%)] [&>svg]:!text-[hsl(38,92%,40%)]",
+          info: "!bg-background !text-[hsl(217,91%,50%)] !border-2 !border-[hsl(217,91%,50%)] [&>svg]:!text-[hsl(217,91%,50%)]",
         },
       }}
       {...props}
