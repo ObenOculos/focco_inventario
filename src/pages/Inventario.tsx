@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -42,6 +43,7 @@ export default function Inventario() {
   const { profile, user } = useAuth();
   const { inventarioId } = useParams<{ inventarioId: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [items, setItems] = useState<InventarioItem[]>([]);
   const [scanning, setScanning] = useState(false);
   const [manualCode, setManualCode] = useState('');
@@ -330,6 +332,9 @@ export default function Inventario() {
 
         toast.success('Inventário enviado para conferência!');
       }
+
+      // Invalidar cache para atualizar lista de inventários
+      await queryClient.invalidateQueries({ queryKey: ['inventarios'] });
 
       // Limpar estado apenas se não estiver editando
       if (!editingInventarioId) {
