@@ -1,7 +1,6 @@
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { ImportProvider } from "@/contexts/ImportContext";
@@ -24,8 +23,6 @@ import AnaliseInventario from "./pages/AnaliseInventario";
 import HistoricoEstoqueReal from "./pages/HistoricoEstoqueReal";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
-
 const HomeRedirect = () => {
   const { profile } = useAuth();
   const redirectPath = profile?.role === 'vendedor' ? '/inventario' : '/dashboard';
@@ -33,15 +30,14 @@ const HomeRedirect = () => {
 };
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <ImportProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
-          <ImportProgress />
-          <BrowserRouter>
-            <ImportBlocker />
+  <AuthProvider>
+    <ImportProvider>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <ImportProgress />
+        <BrowserRouter>
+          <ImportBlocker />
           <Routes>
             <Route path="/" element={<HomeRedirect />} />
             <Route path="/auth" element={<Auth />} />
@@ -119,11 +115,9 @@ const App = () => (
             
             <Route path="*" element={<NotFound />} />
           </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
-      </ImportProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </ImportProvider>
+  </AuthProvider>
 );
-
 export default App;
