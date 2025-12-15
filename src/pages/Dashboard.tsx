@@ -5,14 +5,18 @@ import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
 import { useAcuracidadeMetricsQuery } from '@/hooks/useDashboardMetricsQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Package, TrendingUp, TrendingDown, ClipboardList, AlertTriangle, ArrowRight, Clock, CheckCircle2, XCircle, Target, Users, BarChart3 } from 'lucide-react';
+import { Package, TrendingUp, TrendingDown, ClipboardList, AlertTriangle, ArrowRight, Clock, CheckCircle2, XCircle, Target, Users, BarChart3, RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { DashboardSkeleton } from '@/components/skeletons/PageSkeleton';
+import { useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
 
 export default function Dashboard() {
   const { profile } = useAuth();
   const isGerente = profile?.role === 'gerente';
+  const queryClient = useQueryClient();
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   const {
     data: estoqueArray = [],
@@ -45,6 +49,12 @@ export default function Dashboard() {
 
   const isLoading = loadingEstoque || loadingMovimentacao;
 
+  const handleRefresh = async () => {
+    setIsRefreshing(true);
+    await queryClient.invalidateQueries();
+    setIsRefreshing(false);
+  };
+
   if (isLoading) {
     return <AppLayout><DashboardSkeleton /></AppLayout>;
   }
@@ -52,11 +62,23 @@ export default function Dashboard() {
   return (
     <AppLayout>
       <div className="space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground text-base">
-            {isGerente ? 'Visão geral do sistema - Últimos 30 dias' : 'Seu resumo de atividades - Últimos 30 dias'}
-          </p>
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+            <p className="text-muted-foreground text-base">
+              {isGerente ? 'Visão geral do sistema - Últimos 30 dias' : 'Seu resumo de atividades - Últimos 30 dias'}
+            </p>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRefresh}
+            disabled={isRefreshing}
+            className="gap-2"
+          >
+            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {isRefreshing ? 'Atualizando...' : 'Atualizar'}
+          </Button>
         </div>
 
         {/* Alertas - apenas para problemas críticos */}
