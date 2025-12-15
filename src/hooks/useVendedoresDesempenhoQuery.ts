@@ -68,7 +68,7 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
 
           // Buscar estoque teórico
           const { data: estoque } = await supabase
-            .rpc('calcular_estoque_teorico_pos_inventario', { p_codigo_vendedor: codigoVendedor });
+            .rpc('calcular_estoque_vendedor', { p_codigo_vendedor: codigoVendedor });
           
           const estoqueTotal = estoque?.reduce((sum: number, item: any) => sum + (item.estoque_teorico || 0), 0) || 0;
 
