@@ -131,7 +131,18 @@ export default function AnaliseInventario() {
   );
   
   const totalDivergencias = comparativo.filter(item => item.divergencia !== 0).length;
+  const totalFiltrado = filteredComparativo.length;
   const showApprovalButton = isGerente && selectedInventarioInfo && ['pendente', 'revisao'].includes(selectedInventarioInfo.status);
+
+  const getFilterLabel = () => {
+    switch (divergenceFilter) {
+      case 'com_divergencia': return 'Itens com Divergência';
+      case 'sem_divergencia': return 'Itens sem Divergência';
+      case 'positiva': return 'Divergência Positiva (Sobra)';
+      case 'negativa': return 'Divergência Negativa (Falta)';
+      default: return 'Total de Itens';
+    }
+  };
 
   const handleExportDivergencias = () => {
     if (!selectedInventarioInfo || filteredComparativo.length === 0) {
@@ -269,12 +280,12 @@ export default function AnaliseInventario() {
                   <Card>
                     <CardHeader className="pb-2">
                       <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        {totalDivergencias > 0 ? <AlertTriangle size={16} className="text-amber-500" /> : <CheckCircle size={16} className="text-green-600" />}
-                        Itens com Divergência
+                        {totalFiltrado > 0 && divergenceFilter !== 'sem_divergencia' ? <AlertTriangle size={16} className="text-amber-500" /> : <CheckCircle size={16} className="text-green-600" />}
+                        {getFilterLabel()}
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className={`text-3xl font-bold ${totalDivergencias > 0 ? 'text-amber-500' : 'text-green-600'}`}>{totalDivergencias}</p>
+                      <p className={`text-3xl font-bold ${totalFiltrado > 0 && divergenceFilter !== 'sem_divergencia' ? 'text-amber-500' : 'text-green-600'}`}>{totalFiltrado}</p>
                     </CardContent>
                   </Card>
                   {showApprovalButton && (
