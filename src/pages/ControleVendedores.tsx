@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { AlertTriangle, Users, Package, TrendingUp, TrendingDown, Clock, CheckCircle, FileDown, ArrowUpDown } from 'lucide-react';
+import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -36,7 +37,7 @@ export default function ControleVendedores() {
     };
   }, [periodo]);
 
-  const { data: vendedores, isLoading } = useVendedoresDesempenhoQuery(periodoOptions);
+  const { data: vendedores, isLoading, isFetching } = useVendedoresDesempenhoQuery(periodoOptions);
 
   // Filtrar e ordenar vendedores
   const vendedoresFiltrados = useMemo(() => {
@@ -177,11 +178,14 @@ export default function ControleVendedores() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Painel de Vendedores</h1>
-          <p className="text-muted-foreground">
-            Visão geral do desempenho e inventário dos vendedores.
-          </p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">Painel de Vendedores</h1>
+            <p className="text-muted-foreground">
+              Visão geral do desempenho e inventário dos vendedores.
+            </p>
+          </div>
+          <RefetchIndicator isFetching={isFetching && !isLoading} />
         </div>
 
         {/* Cards de métricas */}
