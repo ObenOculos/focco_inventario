@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
-import { AlertTriangle, PackageSearch, CheckCircle, Loader2 } from 'lucide-react';
+import { AlertTriangle, PackageSearch, CheckCircle, Loader2, Download, User, Calendar, Hash } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
@@ -25,12 +25,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
+import * as XLSX from 'xlsx';
 
 interface InventarioInfo {
   id: string;
   data_inventario: string;
   status: string;
+  codigo_vendedor: string;
+  vendedor_nome?: string;
 }
 
 interface ComparativoItem {
@@ -95,7 +97,7 @@ export default function AnaliseInventario() {
 
       let query = supabase
         .from('inventarios')
-        .select('id, data_inventario, status')
+        .select('id, data_inventario, status, codigo_vendedor')
         .order('data_inventario', { ascending: false });
       
       // Gerentes podem ver todos, vendedores apenas os seus
@@ -111,15 +113,25 @@ export default function AnaliseInventario() {
         console.error("Erro ao buscar inventários:", error);
         setError("Não foi possível carregar os inventários.");
       } else {
-        setInventarios(data);
-        if (data.length > 0 && !selectedInventario) {
-          setSelectedInventario(data[0].id);
+        // Enrich inventories with seller names
+        const enrichedData = await Promise.all(
+          (data || []).map(async (inv) => {
+            const vendedor = vendedores.find(v => v.codigo_vendedor === inv.codigo_vendedor);
+            return {
+              ...inv,
+              vendedor_nome: vendedor?.nome || inv.codigo_vendedor,
+            };
+          })
+        );
+        setInventarios(enrichedData);
+        if (enrichedData.length > 0 && !selectedInventario) {
+          setSelectedInventario(enrichedData[0].id);
         }
       }
     };
 
     fetchInventarios();
-  }, [profile, isGerente, selectedInventario, selectedVendedor]);
+  }, [profile, isGerente, selectedInventario, selectedVendedor, vendedores]);
 
   useEffect(() => {
     const fetchVendedores = async () => {
@@ -216,6 +228,32 @@ export default function AnaliseInventario() {
   const totalDivergencias = comparativo.filter(item => item.divergencia !== 0).length;
   const showApprovalButton = isGerente && selectedInventarioInfo && ['pendente', 'revisao'].includes(selectedInventarioInfo.status);
 
+  const handleExportDivergencias = () => {
+    if (!selectedInventarioInfo || filteredComparativo.length === 0) {
+      toast.error("Não há dados para exportar.");
+      return;
+    }
+
+    const dataExport = filteredComparativo.map(item => ({
+      'Código Auxiliar': item.codigo_auxiliar,
+      'Produto': item.nome_produto,
+      'Estoque Teórico': item.estoque_teorico,
+      'Estoque Físico': item.quantidade_fisica,
+      'Divergência': item.divergencia,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Divergências');
+
+    const vendedorNome = selectedInventarioInfo.vendedor_nome || selectedInventarioInfo.codigo_vendedor;
+    const dataInventario = new Date(selectedInventarioInfo.data_inventario).toLocaleDateString('pt-BR', { timeZone: 'UTC' }).replace(/\//g, '-');
+    const fileName = `divergencias_${vendedorNome}_${dataInventario}.xlsx`;
+    
+    XLSX.writeFile(wb, fileName);
+    toast.success("Arquivo exportado com sucesso!");
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -235,13 +273,13 @@ export default function AnaliseInventario() {
                 onValueChange={setSelectedInventario}
                 disabled={inventarios.length === 0}
               >
-                <SelectTrigger className="w-full sm:w-72">
+                <SelectTrigger className="w-full sm:w-[400px]">
                   <SelectValue placeholder="Selecione uma data de inventário" />
                 </SelectTrigger>
                 <SelectContent>
-                  {inventarios.map((inv) => (
+                  {inventarios.map((inv, index) => (
                     <SelectItem key={inv.id} value={inv.id}>
-                      {new Date(inv.data_inventario).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} - <span className="capitalize">{inv.status}</span>
+                      <span className="font-medium">#{inventarios.length - index}</span> - {new Date(inv.data_inventario).toLocaleDateString('pt-BR', { timeZone: 'UTC' })} - {inv.vendedor_nome} - <span className="capitalize">{inv.status}</span>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -285,6 +323,40 @@ export default function AnaliseInventario() {
               </div>
             ) : (
               <div className="space-y-4">
+                {/* Inventory Identification Card */}
+                {selectedInventarioInfo && (
+                  <Card className="bg-muted/30 border-2">
+                    <CardContent className="pt-4">
+                      <div className="flex flex-wrap gap-4 text-sm">
+                        <div className="flex items-center gap-2">
+                          <Hash size={16} className="text-muted-foreground" />
+                          <span className="text-muted-foreground">Inventário:</span>
+                          <span className="font-semibold">#{inventarios.findIndex(inv => inv.id === selectedInventario) >= 0 ? inventarios.length - inventarios.findIndex(inv => inv.id === selectedInventario) : '-'}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <User size={16} className="text-muted-foreground" />
+                          <span className="text-muted-foreground">Vendedor:</span>
+                          <span className="font-semibold">{selectedInventarioInfo.vendedor_nome} ({selectedInventarioInfo.codigo_vendedor})</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Calendar size={16} className="text-muted-foreground" />
+                          <span className="text-muted-foreground">Data:</span>
+                          <span className="font-semibold">{new Date(selectedInventarioInfo.data_inventario).toLocaleDateString('pt-BR', { timeZone: 'UTC' })}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
+                            selectedInventarioInfo.status === 'aprovado' ? 'bg-green-500/20 text-green-700' :
+                            selectedInventarioInfo.status === 'pendente' ? 'bg-amber-500/20 text-amber-700' :
+                            'bg-red-500/20 text-red-700'
+                          }`}>
+                            {selectedInventarioInfo.status}
+                          </span>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                   <Card>
                     <CardHeader className="pb-2">
@@ -316,24 +388,35 @@ export default function AnaliseInventario() {
                 </div>
                 
                 <div className="border-2 rounded-lg overflow-hidden">
-                    <div className="p-4 border-b-2 flex flex-col md:flex-row gap-4">
-                        <SearchFilter
-                            value={searchTerm}
-                            onChange={setSearchTerm}
-                            placeholder="Buscar por código ou produto..."
-                        />
-                        <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
-                          <SelectTrigger className="w-full md:w-52">
-                            <SelectValue placeholder="Filtrar por divergência" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="todos">Todas as divergências</SelectItem>
-                            <SelectItem value="com_divergencia">Com divergência</SelectItem>
-                            <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
-                            <SelectItem value="positiva">Divergência positiva</SelectItem>
-                            <SelectItem value="negativa">Divergência negativa</SelectItem>
-                          </SelectContent>
-                        </Select>
+                    <div className="p-4 border-b-2 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
+                        <div className="flex flex-col md:flex-row gap-4 flex-1">
+                          <SearchFilter
+                              value={searchTerm}
+                              onChange={setSearchTerm}
+                              placeholder="Buscar por código ou produto..."
+                          />
+                          <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
+                            <SelectTrigger className="w-full md:w-52">
+                              <SelectValue placeholder="Filtrar por divergência" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="todos">Todas as divergências</SelectItem>
+                              <SelectItem value="com_divergencia">Com divergência</SelectItem>
+                              <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
+                              <SelectItem value="positiva">Divergência positiva</SelectItem>
+                              <SelectItem value="negativa">Divergência negativa</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          onClick={handleExportDivergencias}
+                          disabled={filteredComparativo.length === 0}
+                          className="flex items-center gap-2"
+                        >
+                          <Download size={16} />
+                          Exportar
+                        </Button>
                     </div>
                     <Table>
                       <TableHeader>
