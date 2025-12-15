@@ -421,6 +421,8 @@ export default function Conferencia() {
                               <TableCell className="text-center font-medium">{item.estoque_teorico}</TableCell>
                               <TableCell className="text-center">
                                 <Input
+                                  id={`edit-${item.codigo_auxiliar}`}
+                                  name={`quantidade_${item.codigo_auxiliar}`}
                                   type="text"
                                   value={editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica}
                                   onChange={(e) => handleEditValue(item.codigo_auxiliar, e.target.value)}
@@ -444,8 +446,8 @@ export default function Conferencia() {
                 </Card>
 
                 <div className="space-y-2">
-                  <label className="font-medium">Observações para o Vendedor (opcional)</label>
-                  <Textarea value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Se não aprovar, explique o motivo aqui..." />
+                  <label htmlFor="observacoes-gerente" className="font-medium">Observações para o Vendedor (opcional)</label>
+                  <Textarea id="observacoes-gerente" name="observacoes" value={observacoes} onChange={(e) => setObservacoes(e.target.value)} placeholder="Se não aprovar, explique o motivo aqui..." />
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3">
