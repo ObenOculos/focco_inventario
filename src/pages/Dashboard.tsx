@@ -5,6 +5,7 @@ import {
   useMovimentacaoResumoQuery,
   useDivergenciasQuery,
 } from '@/hooks/useDashboardQuery';
+import { useEstoqueTeoricoQuery } from '@/hooks/useEstoqueTeoricoQuery';
 import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
 import { useAcuracidadeMetricsQuery } from '@/hooks/useDashboardMetricsQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,6 +78,12 @@ export default function Dashboard() {
   ).length;
   const totalItens = estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalModelos = new Set(estoqueArray.map((e) => e.modelo)).size;
+
+  // Usar o mesmo cálculo de itens da página "Estoque (Teórico x Real)" para garantir
+  // que contamos todos os códigos auxiliares (incluindo estoques zero)
+  const vendorParam = isGerente ? 'todos' : profile?.codigo_vendedor ?? '';
+  const { data: comparacaoDados = [] } = useEstoqueTeoricoQuery(isGerente, vendorParam, profile?.codigo_vendedor);
+  const totalProdutos = comparacaoDados.length;
 
   const isLoading = loadingEstoque || loadingMovimentacao;
 
@@ -211,7 +218,7 @@ export default function Dashboard() {
         {isGerente ? (
           <>
             {/* Métricas Principais - Grid Consolidado */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
               <Card className="border-2">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -221,7 +228,7 @@ export default function Dashboard() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-3xl font-bold">{totalItens.toLocaleString('pt-BR')}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{totalModelos} modelos</p>
+                  <p className="text-xs text-muted-foreground mt-1">{totalProdutos} itens</p>
                 </CardContent>
               </Card>
 
@@ -267,7 +274,7 @@ export default function Dashboard() {
                 </CardContent>
               </Card>
 
-              <Card className="border-2 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
+              <Card className="border-2 bg-orange-50 dark:bg-orange-900/20 border-orange-500 rounded-lg">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
                     <AlertTriangle size={18} />
@@ -282,9 +289,24 @@ export default function Dashboard() {
                       <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
                         {acuracidadeMetrics?.totalDivergencias || 0}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">itens com diferença</p>
+                      <p className="text-xs text-muted-foreground mt-1">unid. (soma)</p>
                     </>
                   )}
+                </CardContent>
+              </Card>
+
+              <Card className="border-2 bg-orange-50 dark:bg-orange-900/20 border-orange-500 rounded-lg">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                    <AlertTriangle size={18} />
+                    Itens Divergentes
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+                    {comparacaoDados.filter((d) => d.diferenca !== 0).length}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">itens</p>
                 </CardContent>
               </Card>
 
@@ -520,7 +542,7 @@ export default function Dashboard() {
                 <CardTitle className="flex items-center justify-between text-lg">
                   <span className="flex items-center gap-2">
                     <Package className="text-primary" size={22} />
-                    Estoque Teórico
+                    Estoque ERP
                   </span>
                   <Link to="/estoque-teorico">
                     <Button variant="ghost" size="sm">

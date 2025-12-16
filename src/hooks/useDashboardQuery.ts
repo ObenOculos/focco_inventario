@@ -22,20 +22,23 @@ export const useEstoqueQuery = (codigoVendedor?: string | null, isGerente?: bool
 
       const allEstoque = new Map<string, EstoqueItem>();
 
-      for (const p of profiles || []) {
-        if (p.codigo_vendedor) {
-          const vendedorEstoque = await calcularEstoqueTeorico(p.codigo_vendedor);
+      // Deduplicate vendor codes to avoid double-processing the same seller
+      const vendedorCodigos = Array.from(
+        new Set((profiles || []).map((p) => p.codigo_vendedor).filter(Boolean))
+      );
 
-          // Consolidar estoques
-          for (const [key, item] of vendedorEstoque) {
-            const existing = allEstoque.get(key);
-            if (existing) {
-              existing.quantidade_remessa += item.quantidade_remessa;
-              existing.quantidade_venda += item.quantidade_venda;
-              existing.estoque_teorico += item.estoque_teorico;
-            } else {
-              allEstoque.set(key, { ...item });
-            }
+      for (const codigo of vendedorCodigos) {
+        const vendedorEstoque = await calcularEstoqueTeorico(codigo as string);
+
+        // Consolidar estoques
+        for (const [key, item] of vendedorEstoque) {
+          const existing = allEstoque.get(key);
+          if (existing) {
+            existing.quantidade_remessa += item.quantidade_remessa;
+            existing.quantidade_venda += item.quantidade_venda;
+            existing.estoque_teorico += item.estoque_teorico;
+          } else {
+            allEstoque.set(key, { ...item });
           }
         }
       }

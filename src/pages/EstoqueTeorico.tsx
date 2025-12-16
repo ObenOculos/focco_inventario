@@ -128,6 +128,10 @@ export default function EstoqueTeorico() {
   const totalFiltradoDivergencia = dadosFiltrados.reduce((acc, item) => acc + item.diferenca, 0);
   const totalFiltradoProdutos = dadosFiltrados.length;
 
+  // Contagem de itens com divergência
+  const itensDivergentesTotal = dados.filter((d) => d.diferenca !== 0).length;
+  const itensDivergentesFiltrados = dadosFiltrados.filter((d) => d.diferenca !== 0).length;
+
   // Verificar se há filtros ativos
   const hasActiveFilters = teoricoFilter !== 'todos' || realFilter !== 'todos' || divergenciaFilter !== 'todos';
 
@@ -204,7 +208,7 @@ export default function EstoqueTeorico() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-4">
           <Card className="border-2">
             <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
@@ -227,7 +231,7 @@ export default function EstoqueTeorico() {
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <TrendingUp size={14} className={`hidden sm:block ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`} />
                 <TrendingUp size={12} className={`sm:hidden ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`} />
-                Teórico
+                Estoque ERP
                 {hasActiveFilters && <Filter size={10} className="text-primary" />}
               </CardTitle>
             </CardHeader>
@@ -244,7 +248,7 @@ export default function EstoqueTeorico() {
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <Package size={14} className="text-purple-600 hidden sm:block" />
                 <Package size={12} className="text-purple-600 sm:hidden" />
-                Real
+                Inventário
                 {hasActiveFilters && <Filter size={10} className="text-primary" />}
               </CardTitle>
             </CardHeader>
@@ -276,6 +280,33 @@ export default function EstoqueTeorico() {
                 {totalFiltradoDivergencia > 0 ? `+${totalFiltradoDivergencia}` : totalFiltradoDivergencia}
               </p>
               <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
+            </CardContent>
+          </Card>
+
+          <Card className="border-2">
+            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
+              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
+                <TrendingDown
+                  size={14}
+                  className={`hidden sm:block ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}
+                />
+                <TrendingDown
+                  size={12}
+                  className={`sm:hidden ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}
+                />
+                Itens Divergentes
+                {hasActiveFilters && <Filter size={10} className="text-primary" />}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
+              <p className={`text-xl md:text-3xl font-bold ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}>
+                {itensDivergentesFiltrados}
+              </p>
+              {hasActiveFilters ? (
+                <p className="text-[10px] md:text-xs text-muted-foreground">de {itensDivergentesTotal}</p>
+              ) : (
+                <p className="text-[10px] md:text-xs text-muted-foreground mt-1">itens</p>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -340,10 +371,10 @@ export default function EstoqueTeorico() {
                 )}
                 <Select value={teoricoFilter} onValueChange={setTeoricoFilter}>
                   <SelectTrigger className="w-full md:w-36 text-xs md:text-sm h-9">
-                    <SelectValue placeholder="Teórico" />
+                    <SelectValue placeholder="Estoque ERP" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Teórico: Todos</SelectItem>
+                    <SelectItem value="todos">Estoque ERP: Todos</SelectItem>
                     <SelectItem value="positivo">Positivo</SelectItem>
                     <SelectItem value="zero">Zero</SelectItem>
                     <SelectItem value="negativo">Negativo</SelectItem>
@@ -351,12 +382,12 @@ export default function EstoqueTeorico() {
                 </Select>
                 <Select value={realFilter} onValueChange={setRealFilter}>
                   <SelectTrigger className="w-full md:w-36 text-xs md:text-sm h-9">
-                    <SelectValue placeholder="Real" />
+                    <SelectValue placeholder="Inventário" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Real: Todos</SelectItem>
-                    <SelectItem value="com_real">Com Real</SelectItem>
-                    <SelectItem value="sem_real">Sem Real</SelectItem>
+                    <SelectItem value="todos">Inventário: Todos</SelectItem>
+                    <SelectItem value="com_real">Com Inventário</SelectItem>
+                    <SelectItem value="sem_real">Sem Inventário</SelectItem>
                     <SelectItem value="positivo">Positivo</SelectItem>
                     <SelectItem value="zero">Zero</SelectItem>
                     <SelectItem value="negativo">Negativo</SelectItem>
@@ -438,13 +469,13 @@ export default function EstoqueTeorico() {
                       </div>
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
-                          <p className="text-[10px] text-muted-foreground">Teórico</p>
+                          <p className="text-[10px] text-muted-foreground">Estoque ERP</p>
                           <p className={`font-bold text-sm ${item.estoque_teorico < 0 ? 'text-destructive' : ''}`}>
                             {item.estoque_teorico}
                           </p>
                         </div>
                         <div>
-                          <p className="text-[10px] text-muted-foreground">Real</p>
+                          <p className="text-[10px] text-muted-foreground">Inventário</p>
                           <p className="font-bold text-sm text-purple-600">{item.estoque_real}</p>
                         </div>
                         <div>
@@ -469,8 +500,8 @@ export default function EstoqueTeorico() {
                     <TableHeader>
                       <TableRow>
                         <TableHead className="w-[40%]">Produto</TableHead>
-                        <TableHead className="text-center">Est. Teórico</TableHead>
-                        <TableHead className="text-center">Est. Real</TableHead>
+                        <TableHead className="text-center">Estoque ERP</TableHead>
+                        <TableHead className="text-center">Inventário</TableHead>
                         <TableHead className="text-center">Divergência</TableHead>
                       </TableRow>
                     </TableHeader>
