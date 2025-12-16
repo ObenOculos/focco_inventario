@@ -355,11 +355,11 @@ export type Database = {
         Args: { p_inventario_id: string; p_limit?: number; p_offset?: number }
         Returns: {
           codigo_auxiliar: string
-          diferenca: number
+          divergencia: number
+          estoque_teorico: number
           foi_contado: boolean
           nome_produto: string
-          quantidade_contada: number
-          quantidade_inventario: number
+          quantidade_fisica: number
         }[]
       }
       comparar_estoque_teorico_vs_real: {
