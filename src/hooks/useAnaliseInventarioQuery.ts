@@ -88,7 +88,15 @@ export const useComparativoInventarioQuery = (inventarioId: string | null) => {
           }
 
           if (data && data.length > 0) {
-            allData.push(...(data as ComparativoItem[]));
+            // Mapeia os campos retornados pela função SQL para a interface esperada
+            const mappedData = (data as any[]).map((item) => ({
+              codigo_auxiliar: item.codigo_auxiliar,
+              nome_produto: item.nome_produto,
+              estoque_teorico: Number(item.estoque_teorico ?? item.quantidade_inventario ?? 0),
+              quantidade_fisica: Number(item.quantidade_fisica ?? item.quantidade_contada ?? 0),
+              divergencia: Number(item.divergencia ?? item.diferenca ?? 0),
+            }));
+            allData.push(...mappedData);
             offset += batchSize;
             hasMore = data.length === batchSize;
           } else {
