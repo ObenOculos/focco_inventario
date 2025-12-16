@@ -35,30 +35,52 @@ export const useHistoricoEstoqueRealQuery = (
   return useQuery<HistoricoGroup[], Error>({
     queryKey: ['historicoEstoqueReal', selectedVendor, userVendorCode, vendedores.length],
     queryFn: async () => {
-      let query = supabase
-        .from('estoque_real')
-        .select('*')
-        .order('data_atualizacao', { ascending: false })
-        .order('codigo_auxiliar', { ascending: true })
-        .limit(10000);
+      // Função para buscar dados em lotes
+      const fetchHistoricoInBatches = async (): Promise<EstoqueRealItem[]> => {
+        const allData: EstoqueRealItem[] = [];
+        let offset = 0;
+        const batchSize = 500;
+        let hasMore = true;
 
-      if (!isGerente && userVendorCode) {
-        query = query.eq('codigo_vendedor', userVendorCode);
-      } else if (isGerente && selectedVendor !== 'todos') {
-        query = query.eq('codigo_vendedor', selectedVendor);
-      }
+        while (hasMore) {
+          let query = supabase
+            .from('estoque_real')
+            .select('*')
+            .order('data_atualizacao', { ascending: false })
+            .order('codigo_auxiliar', { ascending: true })
+            .range(offset, offset + batchSize - 1);
 
-      const { data, error } = await query;
+          if (!isGerente && userVendorCode) {
+            query = query.eq('codigo_vendedor', userVendorCode);
+          } else if (isGerente && selectedVendor !== 'todos') {
+            query = query.eq('codigo_vendedor', selectedVendor);
+          }
 
-      if (error) {
-        console.error('Erro ao buscar histórico:', error);
-        return [];
-      }
+          const { data, error } = await query;
+
+          if (error) {
+            console.error(`Erro ao buscar histórico (offset ${offset}):`, error);
+            throw error;
+          }
+
+          if (data && data.length > 0) {
+            allData.push(...(data as EstoqueRealItem[]));
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        return allData;
+      };
+
+      const historicoData = await fetchHistoricoInBatches();
 
       // Group by data_atualizacao + codigo_vendedor
       const grouped = new Map<string, HistoricoGroup>();
 
-      for (const item of (data || []) as EstoqueRealItem[]) {
+      for (const item of historicoData) {
         const key = `${item.data_atualizacao}_${item.codigo_vendedor}`;
 
         if (!grouped.has(key)) {

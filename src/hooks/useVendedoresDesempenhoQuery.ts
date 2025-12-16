@@ -121,11 +121,38 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
             // Calcular acuracidade se aprovado
             let acuracidade: number | undefined;
             if (ultimoInv.status === 'aprovado') {
-              const { data: comparacao } = await supabase
-                .rpc('comparar_estoque_inventario', {
-                  p_inventario_id: ultimoInv.id,
-                })
-                .limit(10000);
+              // Função para buscar dados em lotes
+              const fetchComparacaoInBatches = async (): Promise<any[]> => {
+                const allData: any[] = [];
+                let offset = 0;
+                const batchSize = 500;
+                let hasMore = true;
+
+                while (hasMore) {
+                  const { data, error } = await supabase.rpc('comparar_estoque_inventario_paginado', {
+                    p_inventario_id: ultimoInv.id,
+                    p_limit: batchSize,
+                    p_offset: offset,
+                  });
+
+                  if (error) {
+                    console.error(`Erro ao buscar comparação (offset ${offset}):`, error);
+                    throw error;
+                  }
+
+                  if (data && data.length > 0) {
+                    allData.push(...data);
+                    offset += batchSize;
+                    hasMore = data.length === batchSize;
+                  } else {
+                    hasMore = false;
+                  }
+                }
+
+                return allData;
+              };
+
+              const comparacao = await fetchComparacaoInBatches();
 
               if (comparacao && comparacao.length > 0) {
                 const itensCorretos = comparacao.filter(

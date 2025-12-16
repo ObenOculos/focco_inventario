@@ -109,8 +109,10 @@ export default function Conferencia() {
       setEditedValues({});
       setShowItensNaoContados(false);
 
-      const { data: comparativo, error } = await supabase.rpc('comparar_estoque_inventario', {
+      const { data: comparativo, error } = await supabase.rpc('comparar_estoque_inventario_paginado', {
         p_inventario_id: inventario.id,
+        p_limit: 10000, // Buscar todos os itens do inventário
+        p_offset: 0,
       });
 
       if (error) {

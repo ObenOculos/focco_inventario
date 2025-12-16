@@ -68,18 +68,38 @@ export const useComparativoInventarioQuery = (inventarioId: string | null) => {
     queryFn: async () => {
       if (!inventarioId) return [];
 
-      const { data, error } = await supabase
-        .rpc('comparar_estoque_inventario', {
-          p_inventario_id: inventarioId,
-        })
-        .limit(10000);
+      // Função para buscar dados em lotes
+      const fetchComparativoInBatches = async (): Promise<ComparativoItem[]> => {
+        const allData: ComparativoItem[] = [];
+        let offset = 0;
+        const batchSize = 500;
+        let hasMore = true;
 
-      if (error) {
-        console.error('Erro ao buscar comparativo:', error);
-        throw error;
-      }
+        while (hasMore) {
+          const { data, error } = await supabase.rpc('comparar_estoque_inventario_paginado', {
+            p_inventario_id: inventarioId,
+            p_limit: batchSize,
+            p_offset: offset,
+          });
 
-      return data || [];
+          if (error) {
+            console.error(`Erro ao buscar comparativo (offset ${offset}):`, error);
+            throw error;
+          }
+
+          if (data && data.length > 0) {
+            allData.push(...(data as ComparativoItem[]));
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        return allData;
+      };
+
+      return fetchComparativoInBatches();
     },
     enabled: !!inventarioId,
   });

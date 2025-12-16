@@ -339,6 +339,21 @@ export type Database = {
           quantidade_fisica: number
         }[]
       }
+      comparar_estoque_inventario_paginado: {
+        Args: {
+          p_inventario_id: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          codigo_auxiliar: string
+          divergencia: number
+          estoque_teorico: number
+          foi_contado: boolean
+          nome_produto: string
+          quantidade_fisica: number
+        }[]
+      }
       comparar_estoque_teorico_vs_real: {
         Args: { p_codigo_vendedor: string }
         Returns: {
@@ -377,6 +392,21 @@ export type Database = {
           quantidade: number
         }[]
       }
+      get_entradas_pedidos_paginado: {
+        Args: {
+          p_codigo_vendedor: string
+          p_data_inicio: string
+          p_data_fim?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          codigo_auxiliar: string
+          quantidade: number
+          data_pedido: string
+          numero_pedido: string
+        }[]
+      }
       get_estoque_real_vendedor: {
         Args: { p_codigo_vendedor: string }
         Returns: {
@@ -396,6 +426,21 @@ export type Database = {
           codigo_auxiliar: string
           nome_produto: string
           quantidade: number
+        }[]
+      }
+      get_saidas_pedidos_paginado: {
+        Args: {
+          p_codigo_vendedor: string
+          p_data_inicio: string
+          p_data_fim?: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          codigo_auxiliar: string
+          quantidade: number
+          data_pedido: string
+          numero_pedido: string
         }[]
       }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }
