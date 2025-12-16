@@ -328,6 +328,14 @@ export type Database = {
           nome_produto: string
         }[]
       }
+      calcular_estoque_vendedor_paginado: {
+        Args: { p_codigo_vendedor: string; p_limit?: number; p_offset?: number }
+        Returns: {
+          codigo_auxiliar: string
+          estoque_teorico: number
+          nome_produto: string
+        }[]
+      }
       comparar_estoque_inventario: {
         Args: { p_inventario_id: string }
         Returns: {
@@ -340,18 +348,14 @@ export type Database = {
         }[]
       }
       comparar_estoque_inventario_paginado: {
-        Args: {
-          p_inventario_id: string
-          p_limit?: number
-          p_offset?: number
-        }
+        Args: { p_inventario_id: string; p_limit?: number; p_offset?: number }
         Returns: {
           codigo_auxiliar: string
-          divergencia: number
-          estoque_teorico: number
+          diferenca: number
           foi_contado: boolean
           nome_produto: string
-          quantidade_fisica: number
+          quantidade_contada: number
+          quantidade_inventario: number
         }[]
       }
       comparar_estoque_teorico_vs_real: {
@@ -366,11 +370,7 @@ export type Database = {
         }[]
       }
       comparar_estoque_teorico_vs_real_paginado: {
-        Args: {
-          p_codigo_vendedor: string
-          p_limit?: number
-          p_offset?: number
-        }
+        Args: { p_codigo_vendedor: string; p_limit?: number; p_offset?: number }
         Returns: {
           codigo_auxiliar: string
           data_atualizacao_real: string
@@ -395,16 +395,16 @@ export type Database = {
       get_entradas_pedidos_paginado: {
         Args: {
           p_codigo_vendedor: string
-          p_data_inicio: string
           p_data_fim?: string
+          p_data_inicio: string
           p_limit?: number
           p_offset?: number
         }
         Returns: {
           codigo_auxiliar: string
-          quantidade: number
           data_pedido: string
           numero_pedido: string
+          quantidade: number
         }[]
       }
       get_estoque_real_vendedor: {
@@ -431,16 +431,16 @@ export type Database = {
       get_saidas_pedidos_paginado: {
         Args: {
           p_codigo_vendedor: string
-          p_data_inicio: string
           p_data_fim?: string
+          p_data_inicio: string
           p_limit?: number
           p_offset?: number
         }
         Returns: {
           codigo_auxiliar: string
-          quantidade: number
           data_pedido: string
           numero_pedido: string
+          quantidade: number
         }[]
       }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }
