@@ -153,12 +153,16 @@ export default function Conferencia() {
         const item = {
           codigo_auxiliar: rawItem.codigo_auxiliar,
           nome_produto: rawItem.nome_produto,
-          estoque_teorico: Number((rawItem as any).estoque_teorico ?? (rawItem as any).quantidade_inventario ?? 0),
-          quantidade_fisica: Number((rawItem as any).quantidade_fisica ?? (rawItem as any).quantidade_contada ?? 0),
+          estoque_teorico: Number(
+            (rawItem as any).estoque_teorico ?? (rawItem as any).quantidade_inventario ?? 0
+          ),
+          quantidade_fisica: Number(
+            (rawItem as any).quantidade_fisica ?? (rawItem as any).quantidade_contada ?? 0
+          ),
           divergencia: Number((rawItem as any).divergencia ?? (rawItem as any).diferenca ?? 0),
           foi_contado: rawItem.foi_contado,
         };
-        
+
         const diferenca = item.quantidade_fisica - item.estoque_teorico;
         const percentual =
           item.estoque_teorico !== 0

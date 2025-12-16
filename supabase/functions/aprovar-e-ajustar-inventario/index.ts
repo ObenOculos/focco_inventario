@@ -193,12 +193,12 @@ serve(async (req: Request) => {
       }
 
       insertedCount += batch.length;
-      console.log(`[INFO] Inseridos ${insertedCount}/${estoqueRealData.length} itens no estoque_real`);
+      console.log(
+        `[INFO] Inseridos ${insertedCount}/${estoqueRealData.length} itens no estoque_real`
+      );
     }
 
-    console.log(
-      `[INFO] Estoque real registrado: ${insertedCount} itens (histórico mantido)`
-    );
+    console.log(`[INFO] Estoque real registrado: ${insertedCount} itens (histórico mantido)`);
 
     const mensagem =
       divergencias.length > 0

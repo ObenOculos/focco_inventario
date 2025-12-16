@@ -2,17 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Database } from '@/integrations/supabase/types';
 
 type TableName = keyof Database['public']['Tables'];
-type FilterOperator =
-  | 'eq'
-  | 'neq'
-  | 'gt'
-  | 'gte'
-  | 'lt'
-  | 'lte'
-  | 'like'
-  | 'ilike'
-  | 'is'
-  | 'in';
+type FilterOperator = 'eq' | 'neq' | 'gt' | 'gte' | 'lt' | 'lte' | 'like' | 'ilike' | 'is' | 'in';
 
 interface SimpleFilter {
   column: string;
@@ -46,7 +36,7 @@ export async function fetchAllInBatches<T>(
   batchSize: number = 500
 ): Promise<T[]> {
   const { select = '*', orderBy, ascending = true, filters = [] } = options;
-  
+
   let allData: T[] = [];
   let offset = 0;
   let hasMore = true;
@@ -63,15 +53,15 @@ export async function fetchAllInBatches<T>(
 
     // Apply filters
     for (const filter of filters) {
-        if (filter.operator === 'not') {
-            const f = filter as NotFilter;
-            query = query.not(f.column, f.inner_operator, f.value);
-        } else {
-            const f = filter as SimpleFilter;
-            // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-            // @ts-ignore
-            query = query[f.operator](f.column, f.value);
-        }
+      if (filter.operator === 'not') {
+        const f = filter as NotFilter;
+        query = query.not(f.column, f.inner_operator, f.value);
+      } else {
+        const f = filter as SimpleFilter;
+        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        // @ts-ignore
+        query = query[f.operator](f.column, f.value);
+      }
     }
 
     const { data, error } = await query;

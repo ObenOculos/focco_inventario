@@ -133,7 +133,8 @@ export default function EstoqueTeorico() {
   const itensDivergentesFiltrados = dadosFiltrados.filter((d) => d.diferenca !== 0).length;
 
   // Verificar se há filtros ativos
-  const hasActiveFilters = teoricoFilter !== 'todos' || realFilter !== 'todos' || divergenciaFilter !== 'todos';
+  const hasActiveFilters =
+    teoricoFilter !== 'todos' || realFilter !== 'todos' || divergenciaFilter !== 'todos';
 
   const clearAllFilters = () => {
     setTeoricoFilter('todos');
@@ -179,7 +180,9 @@ export default function EstoqueTeorico() {
       <div className="space-y-4 md:space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">Estoque (Teórico x Real)</h1>
+            <h1 className="text-xl md:text-2xl font-bold tracking-tight">
+              Estoque (Teórico x Real)
+            </h1>
             <p className="text-sm text-muted-foreground">
               {isGerente
                 ? 'Compare o estoque teórico com o real'
@@ -197,7 +200,9 @@ export default function EstoqueTeorico() {
                 <p className="font-semibold text-destructive text-sm md:text-base">
                   {produtosNegativos.length} produto(s) com estoque negativo
                 </p>
-                <p className="text-xs text-muted-foreground hidden sm:block">Verifique divergências</p>
+                <p className="text-xs text-muted-foreground hidden sm:block">
+                  Verifique divergências
+                </p>
               </div>
             </div>
             <Link to="/pedidos">
@@ -221,7 +226,9 @@ export default function EstoqueTeorico() {
             <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
               <p className="text-xl md:text-3xl font-bold">{totalFiltradoProdutos}</p>
               {hasActiveFilters && (
-                <p className="text-[10px] md:text-xs text-muted-foreground">de {totalGeralProdutos}</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">
+                  de {totalGeralProdutos}
+                </p>
               )}
             </CardContent>
           </Card>
@@ -229,14 +236,22 @@ export default function EstoqueTeorico() {
           <Card className="flex-1 basis-36 border-2">
             <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
-                <TrendingUp size={14} className={`hidden sm:block ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`} />
-                <TrendingUp size={12} className={`sm:hidden ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`} />
+                <TrendingUp
+                  size={14}
+                  className={`hidden sm:block ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`}
+                />
+                <TrendingUp
+                  size={12}
+                  className={`sm:hidden ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`}
+                />
                 Estoque ERP
                 {hasActiveFilters && <Filter size={10} className="text-primary" />}
               </CardTitle>
             </CardHeader>
             <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
-              <p className={`text-xl md:text-3xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}>
+              <p
+                className={`text-xl md:text-3xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}
+              >
                 {totalFiltradoTeorico}
               </p>
               <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
@@ -277,7 +292,9 @@ export default function EstoqueTeorico() {
               <p
                 className={`text-xl md:text-3xl font-bold ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
               >
-                {totalFiltradoDivergencia > 0 ? `+${totalFiltradoDivergencia}` : totalFiltradoDivergencia}
+                {totalFiltradoDivergencia > 0
+                  ? `+${totalFiltradoDivergencia}`
+                  : totalFiltradoDivergencia}
               </p>
               <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
             </CardContent>
@@ -299,11 +316,15 @@ export default function EstoqueTeorico() {
               </CardTitle>
             </CardHeader>
             <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
-              <p className={`text-xl md:text-3xl font-bold ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}>
+              <p
+                className={`text-xl md:text-3xl font-bold ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}
+              >
                 {itensDivergentesFiltrados}
               </p>
               {hasActiveFilters ? (
-                <p className="text-[10px] md:text-xs text-muted-foreground">de {itensDivergentesTotal}</p>
+                <p className="text-[10px] md:text-xs text-muted-foreground">
+                  de {itensDivergentesTotal}
+                </p>
               ) : (
                 <p className="text-[10px] md:text-xs text-muted-foreground mt-1">itens</p>
               )}
@@ -320,7 +341,10 @@ export default function EstoqueTeorico() {
                   Comparação
                 </span>
                 <div className="flex items-center gap-2">
-                  <Badge variant="secondary" className="text-sm md:text-lg px-2 md:px-3 py-0.5 md:py-1">
+                  <Badge
+                    variant="secondary"
+                    className="text-sm md:text-lg px-2 md:px-3 py-0.5 md:py-1"
+                  >
                     {totalItems}
                   </Badge>
                   <Button
@@ -407,7 +431,12 @@ export default function EstoqueTeorico() {
                 </Select>
               </div>
               {hasActiveFilters && (
-                <Button variant="ghost" size="sm" onClick={clearAllFilters} className="text-muted-foreground text-xs h-8 w-full md:w-auto">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearAllFilters}
+                  className="text-muted-foreground text-xs h-8 w-full md:w-auto"
+                >
                   Limpar filtros
                 </Button>
               )}
@@ -470,7 +499,9 @@ export default function EstoqueTeorico() {
                       <div className="grid grid-cols-3 gap-2 text-center">
                         <div>
                           <p className="text-[10px] text-muted-foreground">Estoque ERP</p>
-                          <p className={`font-bold text-sm ${item.estoque_teorico < 0 ? 'text-destructive' : ''}`}>
+                          <p
+                            className={`font-bold text-sm ${item.estoque_teorico < 0 ? 'text-destructive' : ''}`}
+                          >
                             {item.estoque_teorico}
                           </p>
                         </div>
@@ -480,14 +511,17 @@ export default function EstoqueTeorico() {
                         </div>
                         <div>
                           <p className="text-[10px] text-muted-foreground">Diverg.</p>
-                          <p className={`font-bold text-sm ${item.diferenca === 0 ? 'text-green-600' : item.diferenca > 0 ? 'text-yellow-600' : 'text-destructive'}`}>
+                          <p
+                            className={`font-bold text-sm ${item.diferenca === 0 ? 'text-green-600' : item.diferenca > 0 ? 'text-yellow-600' : 'text-destructive'}`}
+                          >
                             {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
                           </p>
                         </div>
                       </div>
                       {item.data_atualizacao_real && (
                         <p className="text-[10px] text-muted-foreground text-center mt-1">
-                          Atualizado: {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')}
+                          Atualizado:{' '}
+                          {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')}
                         </p>
                       )}
                     </div>

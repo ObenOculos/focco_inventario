@@ -63,16 +63,13 @@ const fetchComparacaoInBatches = async (vendorCode: string): Promise<ComparacaoI
 };
 
 const fetchAllComparacao = async (): Promise<ComparacaoItem[]> => {
-  const profiles = await fetchAllInBatches<{ codigo_vendedor: string }>(
-    'profiles',
-    {
-      select: 'codigo_vendedor',
-      filters: [
-        { column: 'role', operator: 'eq', value: 'vendedor' },
-        { column: 'codigo_vendedor', operator: 'not', inner_operator: 'is', value: null },
-      ],
-    }
-  );
+  const profiles = await fetchAllInBatches<{ codigo_vendedor: string }>('profiles', {
+    select: 'codigo_vendedor',
+    filters: [
+      { column: 'role', operator: 'eq', value: 'vendedor' },
+      { column: 'codigo_vendedor', operator: 'not', inner_operator: 'is', value: null },
+    ],
+  });
 
   const vendorCodes = profiles
     .map((p) => p.codigo_vendedor)
@@ -126,9 +123,9 @@ export const useVendedoresQuery = (enabled: boolean) => {
       const data = await fetchAllInBatches<VendedorProfile>('profiles', {
         select: 'id, nome, codigo_vendedor',
         filters: [
-            { column: 'role', operator: 'eq', value: 'vendedor' },
-            { column: 'codigo_vendedor', operator: 'not', inner_operator: 'is', value: null }
-        ]
+          { column: 'role', operator: 'eq', value: 'vendedor' },
+          { column: 'codigo_vendedor', operator: 'not', inner_operator: 'is', value: null },
+        ],
       });
 
       return data;

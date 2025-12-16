@@ -48,11 +48,11 @@ export default function Produtos() {
     };
   }, [searchTerm]);
 
-  const { data, isLoading: loading, isFetching } = useProdutosQuery(
-    currentPage,
-    itemsPerPage,
-    debouncedSearchTerm
-  );
+  const {
+    data,
+    isLoading: loading,
+    isFetching,
+  } = useProdutosQuery(currentPage, itemsPerPage, debouncedSearchTerm);
   const invalidateProdutos = useInvalidateProdutos();
 
   const produtos = data?.data ?? [];

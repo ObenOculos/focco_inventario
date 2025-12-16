@@ -151,3 +151,11 @@
     -moz-osx-font-smoothing: grayscale;
   }
 }
+
+@layer utilities {
+  @media (max-width: 767px) {
+    .h-10 {
+      height: 2rem;
+    }
+  }
+}

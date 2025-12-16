@@ -81,8 +81,12 @@ export default function Dashboard() {
 
   // Usar o mesmo cálculo de itens da página "Estoque (Teórico x Real)" para garantir
   // que contamos todos os códigos auxiliares (incluindo estoques zero)
-  const vendorParam = isGerente ? 'todos' : profile?.codigo_vendedor ?? '';
-  const { data: comparacaoDados = [] } = useEstoqueTeoricoQuery(isGerente, vendorParam, profile?.codigo_vendedor);
+  const vendorParam = isGerente ? 'todos' : (profile?.codigo_vendedor ?? '');
+  const { data: comparacaoDados = [] } = useEstoqueTeoricoQuery(
+    isGerente,
+    vendorParam,
+    profile?.codigo_vendedor
+  );
   const totalProdutos = comparacaoDados.length;
 
   const isLoading = loadingEstoque || loadingMovimentacao;
@@ -248,8 +252,8 @@ export default function Dashboard() {
                             (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 95
                               ? 'text-green-600'
                               : (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 85
-                              ? 'text-yellow-600'
-                              : 'text-destructive'
+                                ? 'text-yellow-600'
+                                : 'text-destructive'
                           }`}
                         >
                           {(acuracidadeMetrics?.taxaAcuracidadeGeral || 0).toFixed(1)}%
@@ -265,7 +269,9 @@ export default function Dashboard() {
                       Negativos
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-destructive">{produtosNegativos.length}</p>
+                      <p className="text-3xl font-bold text-destructive">
+                        {produtosNegativos.length}
+                      </p>
                       <p className="text-xs text-muted-foreground mt-1">produtos</p>
                     </div>
                   </div>
@@ -313,7 +319,9 @@ export default function Dashboard() {
                       <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">
                         {inventariosPendentes}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">inventários para conferir</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        inventários para conferir
+                      </p>
                     </div>
                   </div>
 
@@ -353,7 +361,7 @@ export default function Dashboard() {
                 acuracidadeMetrics.vendedoresBaixaAcuracidade > 0) && (
                 <Card className="border-2">
                   <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-2 text-lg">                      
+                    <CardTitle className="flex items-center gap-2 text-lg">
                       Alertas de Vendedores
                     </CardTitle>
                   </CardHeader>
@@ -404,7 +412,7 @@ export default function Dashboard() {
                           <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
                         </div>
                         <div>
-                          <p className="font-medium text-base">Importar Pedidos</p>
+                          <p className="font-medium text-sm md:text-base">Importar Pedidos</p>
                           <p className="text-xs text-muted-foreground mt-0.5">Remessas e vendas</p>
                         </div>
                       </div>
@@ -422,7 +430,7 @@ export default function Dashboard() {
                           />
                         </div>
                         <div>
-                          <p className="font-medium text-base">Conferir Inventários</p>
+                          <p className="font-medium text-sm md:text-base">Conferir Inventários</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {inventariosPendentes + inventariosRevisao} aguardando
                           </p>
@@ -439,7 +447,7 @@ export default function Dashboard() {
                           <BarChart3 className="text-purple-600 dark:text-purple-400" size={20} />
                         </div>
                         <div>
-                          <p className="font-medium text-base">Painel Vendedores</p>
+                          <p className="font-medium text-sm md:text-base">Painel Vendedores</p>
                           <p className="text-xs text-muted-foreground mt-0.5">Desempenho geral</p>
                         </div>
                       </div>
@@ -454,7 +462,7 @@ export default function Dashboard() {
                           <Users className="text-green-600 dark:text-green-400" size={20} />
                         </div>
                         <div>
-                          <p className="font-medium text-base">Gerenciar Vendedores</p>
+                          <p className="font-medium text-sm md:text-base">Gerenciar Vendedores</p>
                           <p className="text-xs text-muted-foreground mt-0.5">Cadastros</p>
                         </div>
                       </div>

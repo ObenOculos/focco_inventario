@@ -129,11 +129,14 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
                 let hasMore = true;
 
                 while (hasMore) {
-                  const { data, error } = await supabase.rpc('comparar_estoque_inventario_paginado', {
-                    p_inventario_id: ultimoInv.id,
-                    p_limit: batchSize,
-                    p_offset: offset,
-                  });
+                  const { data, error } = await supabase.rpc(
+                    'comparar_estoque_inventario_paginado',
+                    {
+                      p_inventario_id: ultimoInv.id,
+                      p_limit: batchSize,
+                      p_offset: offset,
+                    }
+                  );
 
                   if (error) {
                     console.error(`Erro ao buscar comparação (offset ${offset}):`, error);

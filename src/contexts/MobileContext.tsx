@@ -10,11 +10,7 @@ const MobileContext = createContext<MobileContextType | undefined>(undefined);
 export const MobileProvider = ({ children }: { children: ReactNode }) => {
   const isMobile = useIsMobile();
 
-  return (
-    <MobileContext.Provider value={{ isMobile }}>
-      {children}
-    </MobileContext.Provider>
-  );
+  return <MobileContext.Provider value={{ isMobile }}>{children}</MobileContext.Provider>;
 };
 
 export const useMobile = () => {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -15,6 +16,7 @@ import { ptBR } from 'date-fns/locale';
 import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination } from '@/components/Pagination';
 
 interface InventarioItem {
@@ -47,14 +49,40 @@ export default function Inventario() {
   // Estado para edição de inventário existente
   const [editingInventarioId, setEditingInventarioId] = useState<string | null>(null);
   const [observacoesGerente, setObservacoesGerente] = useState<string>('');
+  const [brandFilter, setBrandFilter] = useState<'all' | 'oben' | 'power' | 'outros'>('all');
+
+  const filteredItemsByBrand = useMemo(() => {
+    if (brandFilter === 'all') {
+      return items;
+    }
+    return items.filter((item) => {
+      const code = item.codigo_auxiliar.toUpperCase();
+      if (brandFilter === 'oben') {
+        return code.startsWith('OB');
+      }
+      if (brandFilter === 'power') {
+        return code.startsWith('PW');
+      }
+      if (brandFilter === 'outros') {
+        return !code.startsWith('OB') && !code.startsWith('PW');
+      }
+      return true; // Should not happen
+    });
+  }, [items, brandFilter]);
 
   // Filtrar e paginar itens
-  const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
-    data: items,
+  const {
+    paginatedData: paginatedItems,
+    totalItems,
+    ...paginationProps
+  } = usePagination({
+    data: filteredItemsByBrand,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
     itemsPerPage: 10,
   });
+
+  const isMobile = useIsMobile();
 
   const startScanner = async () => {
     try {
@@ -159,7 +187,6 @@ export default function Inventario() {
       return updatedItems;
     });
   };
-
 
   const resumeScanner = () => {
     if (scannerRef.current && scanning) {
@@ -380,7 +407,7 @@ export default function Inventario() {
               : 'Use o scanner ou a adição manual para começar a montar seu inventário.'}
           </p>
           {inventarioInfo && (
-            <div className="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
               <h3 className="font-medium text-blue-800">
                 Editando Inventário de{' '}
                 {format(new Date(inventarioInfo.data_inventario), "dd/MM/yyyy 'às' HH:mm", {
@@ -396,55 +423,129 @@ export default function Inventario() {
         </div>
 
         {/* Scanner */}
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Camera size={20} />
-              Scanner e Adição Manual
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div
-              id="qr-reader"
-              className={`w-full aspect-square max-w-sm mx-auto bg-secondary ${!scanning ? 'hidden' : ''}`}
-            />
+        <Card className="border-2 overflow-hidden">
+          <CardContent className="p-6">
+            {isMobile ? (
+              <Tabs defaultValue="scanner" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="scanner">
+                    <Camera className="mr-2 h-4 w-4" />
+                    Scanner
+                  </TabsTrigger>
+                  <TabsTrigger value="manual">
+                    <Plus className="mr-2 h-4 w-4" />
+                    Manual
+                  </TabsTrigger>
+                </TabsList>
+                <TabsContent value="scanner">
+                  <div className="text-center pt-4">
+                    <p className="text-sm text-muted-foreground mb-4">
+                      Aponte a câmera para o código de barras ou QR code.
+                    </p>
+                    {scanning ? (
+                      <Button variant="destructive" onClick={stopScanner} className="w-full">
+                        Parar Scanner
+                      </Button>
+                    ) : (
+                      <Button onClick={startScanner} className="w-full">
+                        <Camera className="mr-2 h-4 w-4" />
+                        Iniciar Scanner
+                      </Button>
+                    )}
+                    <div
+                      id="qr-reader"
+                      className={`w-full aspect-square max-w-sm mx-auto bg-secondary mt-4 rounded-lg ${
+                        !scanning ? 'hidden' : ''
+                      }`}
+                    />
+                  </div>
+                </TabsContent>
+                <TabsContent value="manual">
+                  <div className="pt-4">
+                    <p className="text-sm text-muted-foreground mb-4 text-center">
+                      Digite o código do produto manualmente.
+                    </p>
+                    <div className="flex w-full items-center gap-2">
+                      <Input
+                        id="manual-code"
+                        name="manual_code"
+                        placeholder="Digite o código aqui..."
+                        value={manualCode}
+                        onChange={(e) => setManualCode(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                        className="border-2 font-mono"
+                      />
+                      <Button onClick={handleManualAdd}>
+                        <Plus size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <>
+                <div className="grid md:grid-cols-2 gap-6 items-start">
+                  {/* Camera Scanner Section */}
+                  <div className="flex flex-col items-center text-center h-full">
+                    <div className="flex-1">
+                      <Camera size={40} className="text-primary mb-3 mx-auto" />
+                      <h3 className="font-semibold text-lg mb-1">Scanner pela Câmera</h3>
+                      <p className="text-muted-foreground text-sm mb-4">
+                        Use a câmera para ler códigos de forma automática e rápida.
+                      </p>
+                    </div>
+                    {scanning ? (
+                      <Button variant="destructive" onClick={stopScanner} className="w-full">
+                        Parar Scanner
+                      </Button>
+                    ) : (
+                      <Button onClick={startScanner} className="w-full">
+                        <Camera className="mr-2" size={16} />
+                        Iniciar Scanner
+                      </Button>
+                    )}
+                  </div>
 
-            <div className="flex justify-center">
-              {scanning ? (
-                <Button variant="destructive" onClick={stopScanner}>
-                  Parar Scanner
-                </Button>
-              ) : (
-                <Button onClick={startScanner}>
-                  <Camera className="mr-2" size={16} />
-                  Iniciar Scanner
-                </Button>
-              )}
-            </div>
-
-            <div className="border-t-2 border-border pt-4">
-              <div className="flex gap-2">
-                <Input
-                  id="manual-code"
-                  name="manual_code"
-                  placeholder="Ou digite o código aqui..."
-                  value={manualCode}
-                  onChange={(e) => setManualCode(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
-                  className="border-2 font-mono"
+                  {/* Manual Add Section */}
+                  <div className="flex flex-col items-center text-center h-full md:border-l-2 md:pl-6">
+                    <div className="flex-1">
+                      <Plus size={40} className="text-primary mb-3 mx-auto" />
+                      <h3 className="font-semibold text-lg mb-1">Adição Manual</h3>
+                      <p className="text-muted-foreground text-sm mb-4">
+                        Digite o código do produto se a câmera não funcionar.
+                      </p>
+                    </div>
+                    <div className="flex gap-2 w-full">
+                      <Input
+                        id="manual-code"
+                        name="manual_code"
+                        placeholder="Digite o código aqui..."
+                        value={manualCode}
+                        onChange={(e) => setManualCode(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
+                        className="border-2 font-mono"
+                      />
+                      <Button onClick={handleManualAdd}>
+                        <Plus size={16} />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+                <div
+                  id="qr-reader"
+                  className={`w-full aspect-square max-w-sm mx-auto bg-secondary mt-6 rounded-lg ${
+                    !scanning ? 'hidden' : ''
+                  }`}
                 />
-                <Button onClick={handleManualAdd}>
-                  <Plus size={16} />
-                </Button>
-              </div>
-            </div>
+              </>
+            )}
           </CardContent>
         </Card>
 
         {/* Items */}
         <Card className="border-2">
           <CardHeader>
-            <CardTitle>Itens do Inventário ({items.length})</CardTitle>
+            <CardTitle>Itens do Inventário ({totalItems})</CardTitle>
             <div className="relative mt-2">
               <Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -459,6 +560,36 @@ export default function Inventario() {
                 className="pl-9 border-2"
               />
             </div>
+            <div className="flex gap-2 mt-4">
+              <Button
+                variant={brandFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => setBrandFilter('all')}
+                size={isMobile ? 'sm' : 'default'}
+              >
+                Todos
+              </Button>
+              <Button
+                variant={brandFilter === 'oben' ? 'default' : 'outline'}
+                onClick={() => setBrandFilter('oben')}
+                size={isMobile ? 'sm' : 'default'}
+              >
+                Oben
+              </Button>
+              <Button
+                variant={brandFilter === 'power' ? 'default' : 'outline'}
+                onClick={() => setBrandFilter('power')}
+                size={isMobile ? 'sm' : 'default'}
+              >
+                Power
+              </Button>
+              <Button
+                variant={brandFilter === 'outros' ? 'default' : 'outline'}
+                onClick={() => setBrandFilter('outros')}
+                size={isMobile ? 'sm' : 'default'}
+              >
+                Outros
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {paginatedItems.length === 0 ? (
@@ -468,49 +599,56 @@ export default function Inventario() {
                   : 'Nenhum item adicionado ainda.'}
               </div>
             ) : (
-              <div className="space-y-2">
-                {paginatedItems.map((item) => (
-                  <div
-                    key={item.codigo_auxiliar}
-                    className="border-2 rounded-lg p-3 flex items-center gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
-                      <p className="text-xs text-muted-foreground truncate">{item.nome_produto}</p>
-                    </div>
-                    <Input
-                      id={`qty-${item.codigo_auxiliar}`}
-                      name={`quantidade_${item.codigo_auxiliar}`}
-                      type="number"
-                      min="0"
-                      value={item.quantidade_fisica}
-                      onChange={(e) =>
-                        updateQuantidade(item.codigo_auxiliar, parseInt(e.target.value) || 0)
-                      }
-                      className="w-16 border-2 text-center shrink-0"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => removeItem(item.codigo_auxiliar)}
-                      className="text-destructive hover:bg-destructive/10 shrink-0"
-                    >
-                      <Trash2 size={16} />
-                    </Button>
-                  </div>
-                ))}
+              <div className="space-y-0">
+                <table className="w-full">
+                  <tbody>
+                    {paginatedItems.map((item) => (
+                      <tr key={item.codigo_auxiliar} className="border-b">
+                        <td className="py-3 pr-2 align-middle">
+                          <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
+                        </td>
+                        <td className="py-3 pl-2 text-right">
+                          <div className="flex items-center justify-end gap-3">
+                            <Input
+                              id={`qty-${item.codigo_auxiliar}`}
+                              name={`quantidade_${item.codigo_auxiliar}`}
+                              type="number"
+                              min="0"
+                              value={item.quantidade_fisica}
+                              onChange={(e) =>
+                                updateQuantidade(
+                                  item.codigo_auxiliar,
+                                  parseInt(e.target.value) || 0
+                                )
+                              }
+                              className="w-20 border-2 text-center shrink-0 font-mono"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeItem(item.codigo_auxiliar)}
+                              className="text-destructive hover:bg-destructive/10 shrink-0"
+                            >
+                              <Trash2 size={16} />
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             )}
 
             {paginationProps.totalPages > 1 && (
               <div className="mt-4">
-                <Pagination {...paginationProps} />
+                <Pagination {...paginationProps} totalItems={totalItems} />
               </div>
             )}
 
             <div className="mt-6 pt-6 border-t-2">
               {observacoesGerente && (
-                <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div className="mb-4 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
                   <Label className="font-medium text-yellow-800">Observações do Gerente</Label>
                   <p className="text-yellow-700 mt-1">{observacoesGerente}</p>
                 </div>
@@ -539,7 +677,6 @@ export default function Inventario() {
           </CardContent>
         </Card>
       </div>
-
     </AppLayout>
   );
 }
