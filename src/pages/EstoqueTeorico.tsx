@@ -208,8 +208,8 @@ export default function EstoqueTeorico() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-2 md:gap-4">
-          <Card className="border-2">
+        <div className="flex flex-wrap gap-4">
+          <Card className="flex-1 basis-36 border-2">
             <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <Package size={14} className="hidden sm:block" />
@@ -226,7 +226,7 @@ export default function EstoqueTeorico() {
             </CardContent>
           </Card>
 
-          <Card className="border-2">
+          <Card className="flex-1 basis-36 border-2">
             <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <TrendingUp size={14} className={`hidden sm:block ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`} />
@@ -243,7 +243,7 @@ export default function EstoqueTeorico() {
             </CardContent>
           </Card>
 
-          <Card className="border-2">
+          <Card className="flex-1 basis-36 border-2">
             <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <Package size={14} className="text-purple-600 hidden sm:block" />
@@ -258,7 +258,7 @@ export default function EstoqueTeorico() {
             </CardContent>
           </Card>
 
-          <Card className="border-2">
+          <Card className="flex-1 basis-36 border-2">
             <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <TrendingDown
@@ -283,7 +283,7 @@ export default function EstoqueTeorico() {
             </CardContent>
           </Card>
 
-          <Card className="border-2">
+          <Card className="flex-1 basis-36 border-2">
             <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
               <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
                 <TrendingDown

@@ -174,203 +174,177 @@ export default function Dashboard() {
         )}
 
         {/* Resumo de Movimentações */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-          <Card className="border-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                <TrendingUp size={18} />
-                {isGerente ? 'Remessas Enviadas' : 'Remessas Recebidas'}
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <p className="text-3xl font-bold text-blue-800 dark:text-blue-200">
-                  {movimentacao.unidadesRemessa.toLocaleString('pt-BR')}
-                </p>
-                <p className="text-xs text-blue-600 dark:text-blue-400">
-                  unidades em {movimentacao.totalRemessas} remessa(s)
-                </p>
+        <Card className="border-2">
+          <CardHeader>
+            <CardTitle className="text-lg">Resumo de Movimentações</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col md:flex-row gap-4">
+              <div className="flex-1 rounded-lg bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-800 p-4 space-y-2">
+                <div className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                  <TrendingUp size={18} />
+                  {isGerente ? 'Remessas Enviadas' : 'Remessas Recebidas'}
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-blue-800 dark:text-blue-200">
+                    {movimentacao.unidadesRemessa.toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                    unidades em {movimentacao.totalRemessas} remessa(s)
+                  </p>
+                </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card className="border-2 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
-                <TrendingDown size={18} />
-                Vendas Realizadas
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <p className="text-3xl font-bold text-green-800 dark:text-green-200">
-                  {movimentacao.unidadesVenda.toLocaleString('pt-BR')}
-                </p>
-                <p className="text-xs text-green-600 dark:text-green-400">
-                  unidades em {movimentacao.totalVendas} venda(s)
-                </p>
+              <div className="flex-1 rounded-lg bg-green-50 dark:bg-green-950/20 border-2 border-green-200 dark:border-green-800 p-4 space-y-2">
+                <div className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
+                  <TrendingDown size={18} />
+                  Vendas Realizadas
+                </div>
+                <div>
+                  <p className="text-3xl font-bold text-green-800 dark:text-green-200">
+                    {movimentacao.unidadesVenda.toLocaleString('pt-BR')}
+                  </p>
+                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                    unidades em {movimentacao.totalVendas} venda(s)
+                  </p>
+                </div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Dashboard do Gerente */}
         {isGerente ? (
           <>
-            {/* Métricas Principais - Grid Consolidado */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-5">
-              <Card className="border-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Package size={18} />
-                    Estoque Total
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{totalItens.toLocaleString('pt-BR')}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{totalProdutos} itens</p>
-                </CardContent>
-              </Card>
+            {/* Métricas Principais */}
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="text-lg">Métricas Principais</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-wrap gap-4">
+                  <div className="flex-1 basis-44 rounded-lg border-2 p-4 space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Package size={18} />
+                      Estoque Total
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold">{totalItens.toLocaleString('pt-BR')}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{totalProdutos} itens</p>
+                    </div>
+                  </div>
 
-              <Card className="border-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Target size={18} />
-                    Acuracidade Geral
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingAcuracidade ? (
-                    <div className="h-10 bg-muted animate-pulse rounded" />
-                  ) : (
-                    <>
-                      <p
-                        className={`text-3xl font-bold ${
-                          (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 95
-                            ? 'text-green-600'
-                            : (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 85
+                  <div className="flex-1 basis-44 rounded-lg border-2 p-4 space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <Target size={18} />
+                      Acuracidade Geral
+                    </div>
+                    {loadingAcuracidade ? (
+                      <div className="h-10 bg-muted animate-pulse rounded" />
+                    ) : (
+                      <div>
+                        <p
+                          className={`text-3xl font-bold ${
+                            (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 95
+                              ? 'text-green-600'
+                              : (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 85
                               ? 'text-yellow-600'
                               : 'text-destructive'
-                        }`}
-                      >
-                        {(acuracidadeMetrics?.taxaAcuracidadeGeral || 0).toFixed(1)}%
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">últimos inventários</p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                          }`}
+                        >
+                          {(acuracidadeMetrics?.taxaAcuracidadeGeral || 0).toFixed(1)}%
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1">últimos inventários</p>
+                      </div>
+                    )}
+                  </div>
 
-              <Card className="border-2 bg-destructive/10 border-destructive">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-destructive">
-                    <XCircle size={18} />
-                    Negativos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-destructive">{produtosNegativos.length}</p>
-                  <p className="text-xs text-muted-foreground mt-1">produtos</p>
-                </CardContent>
-              </Card>
+                  <div className="flex-1 basis-44 rounded-lg bg-destructive/10 border-2 border-destructive p-4 space-y-2">
+                    <div className="text-sm font-medium flex items-center gap-2 text-destructive">
+                      <XCircle size={18} />
+                      Negativos
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-destructive">{produtosNegativos.length}</p>
+                      <p className="text-xs text-muted-foreground mt-1">produtos</p>
+                    </div>
+                  </div>
 
-              <Card className="border-2 bg-orange-50 dark:bg-orange-900/20 border-orange-500 rounded-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                    <AlertTriangle size={18} />
-                    Divergências
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {loadingAcuracidade ? (
-                    <div className="h-10 bg-muted animate-pulse rounded" />
-                  ) : (
-                    <>
+                  <div className="flex-1 basis-44 rounded-lg bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-500 p-4 space-y-2">
+                    <div className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                      <AlertTriangle size={18} />
+                      Itens Divergentes
+                    </div>
+                    <div>
                       <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
-                        {acuracidadeMetrics?.totalDivergencias || 0}
+                        {comparacaoDados.filter((d) => d.diferenca !== 0).length}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">unid. (soma)</p>
-                    </>
-                  )}
-                </CardContent>
-              </Card>
+                      <p className="text-xs text-muted-foreground mt-1">itens</p>
+                    </div>
+                  </div>
 
-              <Card className="border-2 bg-orange-50 dark:bg-orange-900/20 border-orange-500 rounded-lg">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                    <AlertTriangle size={18} />
-                    Itens Divergentes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
-                    {comparacaoDados.filter((d) => d.diferenca !== 0).length}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">itens</p>
-                </CardContent>
-              </Card>
+                  <div className="flex-1 basis-44 rounded-lg border-2 p-4 space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                      <AlertTriangle size={18} />
+                      Críticos
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold">{produtosCriticos}</p>
+                      <p className="text-xs text-muted-foreground mt-1">≤ 5 unidades</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-              <Card className="border-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <AlertTriangle size={18} />
-                    Críticos
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{produtosCriticos}</p>
-                  <p className="text-xs text-muted-foreground mt-1">≤ 5 unidades</p>
-                </CardContent>
-              </Card>
-            </div>
+            {/* Status de Inventários */}
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="text-lg">Status de Inventários</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col lg:flex-row gap-4">
+                  <div className="flex-1 rounded-lg bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-800 p-4 space-y-2">
+                    <div className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
+                      <Clock size={18} />
+                      Pendentes
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+                        {inventariosPendentes}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">inventários para conferir</p>
+                    </div>
+                  </div>
 
-            {/* Status de Inventários - Consolidado */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-              <Card className="border-2 bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                    <Clock size={18} />
-                    Pendentes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">
-                    {inventariosPendentes}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">inventários para conferir</p>
-                </CardContent>
-              </Card>
+                  <div className="flex-1 rounded-lg bg-orange-50 dark:bg-orange-950/20 border-2 border-orange-200 dark:border-orange-800 p-4 space-y-2">
+                    <div className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
+                      <AlertTriangle size={18} />
+                      Em Revisão
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+                        {inventariosRevisao}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">aguardando correção</p>
+                    </div>
+                  </div>
 
-              <Card className="border-2 bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                    <AlertTriangle size={18} />
-                    Em Revisão
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
-                    {inventariosRevisao}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">aguardando correção</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-2 bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
-                    <CheckCircle2 size={18} />
-                    Aprovados
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold text-green-700 dark:text-green-300">
-                    {inventariosAprovados}
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">inventários finalizados</p>
-                </CardContent>
-              </Card>
-            </div>
+                  <div className="flex-1 rounded-lg bg-green-50 dark:bg-green-950/20 border-2 border-green-200 dark:border-green-800 p-4 space-y-2">
+                    <div className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
+                      <CheckCircle2 size={18} />
+                      Aprovados
+                    </div>
+                    <div>
+                      <p className="text-3xl font-bold text-green-700 dark:text-green-300">
+                        {inventariosAprovados}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-1">inventários finalizados</p>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
             {/* Alertas de Vendedores */}
             {!loadingAcuracidade &&
@@ -379,8 +353,7 @@ export default function Dashboard() {
                 acuracidadeMetrics.vendedoresBaixaAcuracidade > 0) && (
                 <Card className="border-2">
                   <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <Users className="text-primary" size={22} />
+                    <CardTitle className="flex items-center gap-2 text-lg">                      
                       Alertas de Vendedores
                     </CardTitle>
                   </CardHeader>
@@ -494,77 +467,47 @@ export default function Dashboard() {
           </>
         ) : (
           /* Dashboard do Vendedor */
-          <>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
-              <Card className="border-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+          <Card className="border-2">
+            <CardHeader>
+              <CardTitle className="text-lg">Resumo do Vendedor</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex-1 rounded-lg border-2 p-4 space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
                     <Package size={18} />
                     Total em Estoque
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{totalItens}</p>
-                  <p className="text-xs text-muted-foreground mt-1">unidades</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <TrendingUp size={18} />
-                    Modelos Diferentes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{totalModelos}</p>
-                  <p className="text-xs text-muted-foreground mt-1">modelos</p>
-                </CardContent>
-              </Card>
-
-              <Card className="border-2">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <ClipboardList size={18} />
-                    Inventários Pendentes
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-3xl font-bold">{inventariosPendentes}</p>
-                  <p className="text-xs text-muted-foreground mt-1">aguardando</p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Estoque Teórico Card */}
-            <Card className="border-2">
-              <CardHeader className="pb-4">
-                <CardTitle className="flex items-center justify-between text-lg">
-                  <span className="flex items-center gap-2">
-                    <Package className="text-primary" size={22} />
-                    Estoque ERP
-                  </span>
-                  <Link to="/estoque-teorico">
-                    <Button variant="ghost" size="sm">
-                      Ver completo <ArrowRight size={14} className="ml-1" />
-                    </Button>
-                  </Link>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="p-4 bg-muted/50 rounded-lg">
-                    <p className="text-2xl font-bold">{totalItens}</p>
-                    <p className="text-sm text-muted-foreground">unidades totais</p>
                   </div>
-                  <div className="p-4 bg-muted/50 rounded-lg">
-                    <p className="text-2xl font-bold">{totalModelos}</p>
-                    <p className="text-sm text-muted-foreground">modelos diferentes</p>
+                  <div>
+                    <p className="text-3xl font-bold">{totalItens}</p>
+                    <p className="text-xs text-muted-foreground mt-1">unidades</p>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          </>
+
+                <div className="flex-1 rounded-lg border-2 p-4 space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <TrendingUp size={18} />
+                    Modelos Diferentes
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold">{totalModelos}</p>
+                    <p className="text-xs text-muted-foreground mt-1">modelos</p>
+                  </div>
+                </div>
+
+                <div className="flex-1 rounded-lg border-2 p-4 space-y-2">
+                  <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                    <ClipboardList size={18} />
+                    Inventários Pendentes
+                  </div>
+                  <div>
+                    <p className="text-3xl font-bold">{inventariosPendentes}</p>
+                    <p className="text-xs text-muted-foreground mt-1">aguardando</p>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppLayout>

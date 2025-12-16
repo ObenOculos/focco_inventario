@@ -62,7 +62,7 @@ export function Pagination({
   const visiblePages = getVisiblePages();
 
   return (
-    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 border-2 p-4 bg-card">
+    <div className="flex flex-wrap items-center justify-center gap-4 border-2 p-4 bg-card sm:justify-between">
       <div className="flex items-center gap-2">
         <span className="text-sm text-muted-foreground">Itens por página:</span>
         <Select value={String(itemsPerPage)} onValueChange={onItemsPerPageChange}>
@@ -82,7 +82,8 @@ export function Pagination({
         Mostrando {startIndex + 1} até {displayedEnd} de {totalItems} itens
       </div>
 
-      <div className="flex items-center gap-2">
+      {/* Desktop: Botões de página */}
+      <div className="hidden sm:flex items-center gap-2">
         <Button
           variant="outline"
           size="icon"
@@ -109,7 +110,7 @@ export function Pagination({
                 variant={currentPage === page ? 'default' : 'outline'}
                 size="icon"
                 onClick={() => onPageChange(page as number)}
-                className={`border-2 ${currentPage === page ? '' : ''}`}
+                className="border-2"
               >
                 {page}
               </Button>
@@ -120,6 +121,33 @@ export function Pagination({
         <Button
           variant="outline"
           size="icon"
+          onClick={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages}
+          className="border-2"
+        >
+          <ChevronRight size={16} />
+        </Button>
+      </div>
+
+      {/* Mobile: Navegação simplificada */}
+      <div className="flex sm:hidden items-center gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="border-2"
+        >
+          <ChevronLeft size={16} />
+        </Button>
+
+        <span className="text-sm font-medium min-w-[80px] text-center">
+          {currentPage} / {totalPages}
+        </span>
+
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
           className="border-2"
