@@ -109,18 +109,41 @@ export default function Conferencia() {
       setEditedValues({});
       setShowItensNaoContados(false);
 
-      const { data: comparativo, error } = await supabase.rpc('comparar_estoque_inventario_paginado', {
-        p_inventario_id: inventario.id,
-        p_limit: 10000, // Buscar todos os itens do inventário
-        p_offset: 0,
-      });
+      // Buscar comparativo em lotes para contornar limite de linhas do Supabase
+      const fetchComparativoInBatches = async () => {
+        const allData: any[] = [];
+        let offset = 0;
+        const batchSize = 500;
+        let hasMore = true;
 
-      if (error) {
-        console.error('Erro ao comparar inventário:', error);
-        toast.error('Erro ao carregar divergências');
-        setIsDetailLoading(false);
-        return;
-      }
+        while (hasMore) {
+          const { data, error } = await supabase.rpc('comparar_estoque_inventario_paginado', {
+            p_inventario_id: inventario.id,
+            p_limit: batchSize,
+            p_offset: offset,
+          });
+
+          if (error) {
+            console.error(`Erro ao comparar inventário (offset ${offset}):`, error);
+            toast.error('Erro ao carregar divergências');
+            setIsDetailLoading(false);
+            return null;
+          }
+
+          if (data && data.length > 0) {
+            allData.push(...(data as any[]));
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        return allData;
+      };
+
+      const comparativo = await fetchComparativoInBatches();
+      if (comparativo === null) return;
 
       const divergenciasList: DivergenciaItem[] = [];
       const itensNaoContadosList: ItemNaoContado[] = [];

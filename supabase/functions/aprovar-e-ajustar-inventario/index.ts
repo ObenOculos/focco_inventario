@@ -106,20 +106,37 @@ serve(async (req: Request) => {
       `[INFO] Processando inventário ${inventario_id} do vendedor ${inventario.codigo_vendedor}`
     );
 
-    // Calcula divergências usando a função SQL
-    const { data: comparativo, error: rpcError } = await supabaseAdmin.rpc(
-      'comparar_estoque_inventario',
-      {
-        p_inventario_id: inventario_id,
-      }
-    );
+    // Calcula comparativo usando a função SQL paginada em lotes
+    const comparativo: DivergenciaItem[] = [];
+    let offsetComp = 0;
+    const compBatchSize = 500;
+    let compHasMore = true;
 
-    if (rpcError) {
-      console.error('[ERROR] Erro ao comparar inventário:', rpcError);
-      throw new Error(`Erro ao calcular divergências: ${rpcError.message}`);
+    while (compHasMore) {
+      const { data: compData, error: compError } = await supabaseAdmin.rpc(
+        'comparar_estoque_inventario_paginado',
+        {
+          p_inventario_id: inventario_id,
+          p_limit: compBatchSize,
+          p_offset: offsetComp,
+        }
+      );
+
+      if (compError) {
+        console.error(`[ERROR] Erro ao comparar inventário (offset ${offsetComp}):`, compError);
+        throw new Error(`Erro ao calcular divergências: ${compError.message}`);
+      }
+
+      if (compData && compData.length > 0) {
+        comparativo.push(...(compData as DivergenciaItem[]));
+        offsetComp += compBatchSize;
+        compHasMore = compData.length === compBatchSize;
+      } else {
+        compHasMore = false;
+      }
     }
 
-    console.log(`[INFO] Itens comparados: ${comparativo?.length || 0}`);
+    console.log(`[INFO] Itens comparados (total): ${comparativo.length}`);
 
     const divergencias = (comparativo || []).filter(
       (item: DivergenciaItem) => item.divergencia !== 0
@@ -162,15 +179,25 @@ serve(async (req: Request) => {
 
     // Correção 4: Inserir novos registros SEM deletar os antigos (mantém histórico)
     // Cada inventário aprovado cria um novo snapshot com data_atualizacao e inventario_id únicos
-    const { error: insertError } = await supabaseAdmin.from('estoque_real').insert(estoqueRealData);
+    // Inserir em lotes para contornar limites de tamanho de declaração/parametrização
+    const batchSize = 500;
+    let insertedCount = 0;
 
-    if (insertError) {
-      console.error('[ERROR] Erro ao inserir estoque real:', insertError);
-      throw new Error('Falha ao salvar estoque real.');
+    for (let i = 0; i < estoqueRealData.length; i += batchSize) {
+      const batch = estoqueRealData.slice(i, i + batchSize);
+      const { error: insertError } = await supabaseAdmin.from('estoque_real').insert(batch);
+
+      if (insertError) {
+        console.error(`[ERROR] Erro ao inserir lote (offset ${i}):`, insertError);
+        throw new Error('Falha ao salvar estoque real.');
+      }
+
+      insertedCount += batch.length;
+      console.log(`[INFO] Inseridos ${insertedCount}/${estoqueRealData.length} itens no estoque_real`);
     }
 
     console.log(
-      `[INFO] Estoque real registrado: ${estoqueRealData.length} itens (histórico mantido)`
+      `[INFO] Estoque real registrado: ${insertedCount} itens (histórico mantido)`
     );
 
     const mensagem =

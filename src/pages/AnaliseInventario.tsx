@@ -38,8 +38,8 @@ import * as XLSX from 'xlsx';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import {
   useInventariosAnaliseQuery,
-  useComparativoInventarioQuery,
   useVendedoresSimpleQuery,
+  ComparativoItem,
 } from '@/hooks/useAnaliseInventarioQuery';
 
 export default function AnaliseInventario() {
@@ -60,12 +60,73 @@ export default function AnaliseInventario() {
     selectedVendedor,
     vendedores
   );
-  const {
-    data: comparativo = [],
-    isLoading: loading,
-    isFetching,
-    error,
-  } = useComparativoInventarioQuery(selectedInventario);
+  const [comparativo, setComparativo] = useState<ComparativoItem[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
+  const [isFetching, setIsFetching] = useState(false);
+
+  // Fetch comparison in batches to avoid Supabase RPC row limits
+  useEffect(() => {
+    if (!selectedInventario) {
+      setComparativo([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchComparativoInBatches = async () => {
+      setLoading(true);
+      setIsFetching(true);
+      setError(null);
+
+      const allData: any[] = [];
+      let offset = 0;
+      const batchSize = 500;
+      let hasMore = true;
+
+      try {
+        while (hasMore && !cancelled) {
+          const { data, error } = await supabase.rpc('comparar_estoque_inventario_paginado', {
+            p_inventario_id: selectedInventario,
+            p_limit: batchSize,
+            p_offset: offset,
+          });
+
+          if (error) {
+            console.error(`Erro ao buscar comparativo (offset ${offset}):`, error);
+            setError(error);
+            setLoading(false);
+            setIsFetching(false);
+            return;
+          }
+
+          if (data && data.length > 0) {
+            allData.push(...(data as any[]));
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+          } else {
+            hasMore = false;
+          }
+        }
+
+        if (!cancelled) setComparativo(allData);
+      } catch (err: any) {
+        if (!cancelled) setError(err);
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+          setIsFetching(false);
+        }
+      }
+    };
+
+    fetchComparativoInBatches();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedInventario]);
 
   // Reset selected inventory when seller filter changes
   useEffect(() => {

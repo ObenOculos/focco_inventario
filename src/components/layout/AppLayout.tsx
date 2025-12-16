@@ -65,7 +65,7 @@ export function AppLayout({ children }: AppLayoutProps) {
   };
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="">
       {/* Header */}
       <header className="border-b-2 border-foreground bg-card">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
