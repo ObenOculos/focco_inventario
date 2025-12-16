@@ -332,8 +332,12 @@ export type Database = {
         Args: { p_codigo_vendedor: string; p_limit?: number; p_offset?: number }
         Returns: {
           codigo_auxiliar: string
+          cor: string
           estoque_teorico: number
+          modelo: string
           nome_produto: string
+          quantidade_remessa: number
+          quantidade_venda: number
         }[]
       }
       comparar_estoque_inventario: {
