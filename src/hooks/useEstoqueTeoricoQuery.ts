@@ -32,6 +32,36 @@ const fetchComparacao = async (vendorCode: string): Promise<ComparacaoItem[]> =>
   return (data || []) as ComparacaoItem[];
 };
 
+const fetchComparacaoInBatches = async (vendorCode: string): Promise<ComparacaoItem[]> => {
+  const allData: ComparacaoItem[] = [];
+  let offset = 0;
+  const batchSize = 500;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data, error } = await supabase.rpc('comparar_estoque_teorico_vs_real_paginado', {
+      p_codigo_vendedor: vendorCode,
+      p_limit: batchSize,
+      p_offset: offset,
+    });
+
+    if (error) {
+      console.error(`Erro ao buscar comparação (offset ${offset}):`, error);
+      throw error;
+    }
+
+    if (data && data.length > 0) {
+      allData.push(...(data as ComparacaoItem[]));
+      offset += batchSize;
+      hasMore = data.length === batchSize;
+    } else {
+      hasMore = false;
+    }
+  }
+
+  return allData;
+};
+
 const fetchAllComparacao = async (): Promise<ComparacaoItem[]> => {
   const profiles = await fetchAllInBatches<{ codigo_vendedor: string }>(
     'profiles',
@@ -48,7 +78,7 @@ const fetchAllComparacao = async (): Promise<ComparacaoItem[]> => {
     .map((p) => p.codigo_vendedor)
     .filter((code): code is string => !!code);
 
-  const results = await Promise.all(vendorCodes.map((code) => fetchComparacao(code)));
+  const results = await Promise.all(vendorCodes.map((code) => fetchComparacaoInBatches(code)));
 
   const consolidated = new Map<string, ComparacaoItem>();
 
@@ -81,7 +111,7 @@ export const useEstoqueTeoricoQuery = (
       if (isGerente && vendorCode === 'todos') {
         return fetchAllComparacao();
       } else if (vendorCode) {
-        return fetchComparacao(vendorCode);
+        return fetchComparacaoInBatches(vendorCode);
       }
       return [];
     },

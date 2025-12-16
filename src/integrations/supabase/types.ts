@@ -350,6 +350,21 @@ export type Database = {
           nome_produto: string
         }[]
       }
+      comparar_estoque_teorico_vs_real_paginado: {
+        Args: {
+          p_codigo_vendedor: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          codigo_auxiliar: string
+          data_atualizacao_real: string
+          diferenca: number
+          estoque_real: number
+          estoque_teorico: number
+          nome_produto: string
+        }[]
+      }
       get_entradas_pedidos: {
         Args: {
           p_codigo_vendedor: string
