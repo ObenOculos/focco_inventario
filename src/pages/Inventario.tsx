@@ -16,14 +16,6 @@ import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X } from 'lucide-rea
 import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 
 interface InventarioItem {
   codigo_auxiliar: string;
@@ -44,11 +36,7 @@ export default function Inventario() {
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Estado para modal de confirmação (apenas produtos não cadastrados)
-  const [pendingProduct, setPendingProduct] = useState<{
-    code: string;
-  } | null>(null);
-  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  // Modal de confirmação removido: produtos não cadastrados agora são adicionados automaticamente
 
   // Estado para informações do inventário sendo editado
   const [inventarioInfo, setInventarioInfo] = useState<{
@@ -140,22 +128,17 @@ export default function Inventario() {
       .eq('codigo_auxiliar', code)
       .maybeSingle();
 
-    // Se o produto está cadastrado, adiciona direto
-    if (produtoData) {
-      const newItem: InventarioItem = {
-        codigo_auxiliar: code,
-        nome_produto: produtoData.nome_produto,
-        quantidade_fisica: 1,
-      };
-      setItems((prev) => [newItem, ...prev]);
-      toast.success(`Produto ${code} adicionado`);
-      resumeScanner();
-      return;
-    }
-
-    // Se não está cadastrado, mostra modal de confirmação
-    setPendingProduct({ code });
-    setShowConfirmDialog(true);
+    // Adiciona o produto: usa o nome cadastrado quando existir, caso contrário um rótulo indicando não cadastrado
+    const nomeProduto = produtoData?.nome_produto ?? `Produto não cadastrado (${code})`;
+    const newItem: InventarioItem = {
+      codigo_auxiliar: code,
+      nome_produto: nomeProduto,
+      quantidade_fisica: 1,
+    };
+    setItems((prev) => [newItem, ...prev]);
+    toast.success(`Produto ${code} adicionado`);
+    resumeScanner();
+    return;
   };
 
   const incrementItemQuantity = (codigo_auxiliar: string) => {
@@ -177,28 +160,6 @@ export default function Inventario() {
     });
   };
 
-  const confirmAddProduct = () => {
-    if (!pendingProduct) return;
-
-    const newItem: InventarioItem = {
-      codigo_auxiliar: pendingProduct.code,
-      nome_produto: `Produto não cadastrado (${pendingProduct.code})`,
-      quantidade_fisica: 1,
-    };
-
-    setItems((prev) => [newItem, ...prev]);
-    toast.success(`Produto ${pendingProduct.code} adicionado`);
-
-    setShowConfirmDialog(false);
-    setPendingProduct(null);
-    resumeScanner();
-  };
-
-  const cancelAddProduct = () => {
-    setShowConfirmDialog(false);
-    setPendingProduct(null);
-    resumeScanner();
-  };
 
   const resumeScanner = () => {
     if (scannerRef.current && scanning) {
@@ -579,30 +540,6 @@ export default function Inventario() {
         </Card>
       </div>
 
-      {/* Modal de Confirmação para produtos não cadastrados */}
-      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
-        <DialogContent className="max-w-md shadow-none w-[calc(100%-2rem)]">
-          <DialogHeader>
-            <DialogTitle>Produto não cadastrado</DialogTitle>
-            <DialogDescription>
-              Este código não existe no sistema. Deseja adicioná-lo mesmo assim?
-            </DialogDescription>
-          </DialogHeader>
-          <div className="p-4 bg-secondary rounded-lg">
-            <p className="font-mono font-bold text-lg">{pendingProduct?.code}</p>
-          </div>
-          <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={cancelAddProduct}>
-              <X className="mr-2" size={16} />
-              Cancelar
-            </Button>
-            <Button onClick={confirmAddProduct}>
-              <Check className="mr-2" size={16} />
-              Adicionar mesmo assim
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }
