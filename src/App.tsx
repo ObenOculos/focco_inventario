@@ -23,6 +23,7 @@ const Pedidos = lazy(() => import('./pages/Pedidos'));
 const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
 const AnaliseInventario = lazy(() => import('./pages/AnaliseInventario'));
 const HistoricoEstoqueReal = lazy(() => import('./pages/HistoricoEstoqueReal'));
+const NotaRetorno = lazy(() => import('./pages/NotaRetorno'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const HomeRedirect = () => {
@@ -155,6 +156,14 @@ const App = () => (
                   element={
                     <ProtectedRoute allowedRoles={['gerente']}>
                       <Pedidos />
+                    </ProtectedRoute>
+                  }
+                />
+                <Route
+                  path="/nota-retorno"
+                  element={
+                    <ProtectedRoute allowedRoles={['gerente']}>
+                      <NotaRetorno />
                     </ProtectedRoute>
                   }
                 />
