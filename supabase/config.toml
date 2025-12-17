@@ -1,1 +1,10 @@
 project_id = "evsneoercdzzwxmhuxid"
+
+[functions.aprovar-e-ajustar-inventario]
+verify_jwt = false
+
+[functions.criar-vendedor]
+verify_jwt = false
+
+[functions.criar-nota-retorno]
+verify_jwt = false
