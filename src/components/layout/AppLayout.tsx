@@ -47,12 +47,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
     // Estoque
     { to: '/estoque-teorico', icon: Package, label: 'Estoque ERP' },
-    { to: '/historico-estoque-real', icon: History, label: 'Histórico Est. Real' },
+    { to: '/historico-estoque-real', icon: History, label: 'Hist. de Inventários' },
     // Vendedores
     { to: '/controle-vendedores', icon: ClipboardList, label: 'Painel de Vendedores' },
     { to: '/vendedores', icon: UserCog, label: 'Cadastro de Vendedores' },
     // Dados
-    { to: '/pedidos', icon: FileText, label: 'Pedidos' },
+    { to: '/pedidos', icon: FileText, label: 'Pedidos/Notas' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos' },
     { to: '/importar', icon: Upload, label: 'Importar' },
   ];
