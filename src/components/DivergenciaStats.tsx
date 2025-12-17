@@ -1,89 +1,69 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle, AlertTriangle, TrendingUp, TrendingDown, Target } from 'lucide-react';
+import {
+  CheckCircle,
+  TrendingUp,
+  TrendingDown,
+  PackageSearch,
+} from 'lucide-react';
 
 interface DivergenciaStatsProps {
-  totalItens: number;
   itensCorretos: number;
   itensSobra: number;
   itensFalta: number;
-  valorTotalDivergencia: number;
 }
 
 export function DivergenciaStats({
-  totalItens,
   itensCorretos,
   itensSobra,
   itensFalta,
-  valorTotalDivergencia,
 }: DivergenciaStatsProps) {
-  const acuracidade = totalItens > 0 ? ((itensCorretos / totalItens) * 100).toFixed(1) : '0.0';
+  const totalDivergencias = itensSobra + itensFalta;
 
   return (
-    <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
-      <Card className="border-2">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
-            <Target size={14} />
-            Acuracidade
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold">{acuracidade}%</p>
-          <p className="text-xs text-muted-foreground">
-            {itensCorretos}/{totalItens} corretos
-          </p>
-        </CardContent>
-      </Card>
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
+
 
       <Card className="border-2">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
-            <CheckCircle size={14} />
-            Corretos
+          <CardTitle className="text-lg font-medium flex items-center gap-2">
+            <CheckCircle size={16} />
+            Itens Corretos
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-2xl font-bold text-green-600">{itensCorretos}</p>
+          <p className="text-3xl font-bold text-green-600">{itensCorretos}</p>
           <p className="text-xs text-muted-foreground">sem divergência</p>
         </CardContent>
       </Card>
 
-      <Card className="border-2">
+      <Card className="border-2 md:col-span-2">
         <CardHeader className="pb-2">
-          <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
-            <TrendingUp size={14} />
-            Sobras
+          <CardTitle className="text-lg font-medium flex items-center gap-2">
+            <PackageSearch size={16} />
+            Análise de Divergências
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold text-yellow-600">{itensSobra}</p>
-          <p className="text-xs text-muted-foreground">produtos a mais</p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-2">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
-            <TrendingDown size={14} />
-            Faltas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold text-red-600">{itensFalta}</p>
-          <p className="text-xs text-muted-foreground">produtos a menos</p>
-        </CardContent>
-      </Card>
-
-      <Card className="border-2">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-xs text-muted-foreground flex items-center gap-1">
-            <AlertTriangle size={14} />
-            Divergência
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <p className="text-2xl font-bold">{Math.abs(valorTotalDivergencia)}</p>
-          <p className="text-xs text-muted-foreground">unidades total</p>
+        <CardContent className="grid grid-cols-3 gap-3 items-center pt-1">
+          <div className="col-span-1 flex flex-col items-center justify-center border-r-2 pr-3">
+            <p className="text-3xl font-bold text-destructive">{totalDivergencias}</p>
+            <p className="text-xs text-muted-foreground text-center">Total Divergente</p>
+          </div>
+          <div className="col-span-2 flex flex-col justify-center space-y-2">
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-1.5 text-yellow-600">
+                <TrendingUp size={16} />
+                Sobras
+              </span>
+              <span className="font-bold text-lg">{itensSobra}</span>
+            </div>
+            <div className="flex items-center justify-between text-sm">
+              <span className="flex items-center gap-1.5 text-red-600">
+                <TrendingDown size={16} />
+                Faltas
+              </span>
+              <span className="font-bold text-lg">{itensFalta}</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

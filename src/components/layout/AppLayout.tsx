@@ -46,7 +46,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
     { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
     // Estoque
-    { to: '/estoque-teorico', icon: Package, label: 'Estoque Teórico' },
+    { to: '/estoque-teorico', icon: Package, label: 'Estoque ERP' },
     { to: '/historico-estoque-real', icon: History, label: 'Histórico Est. Real' },
     // Vendedores
     { to: '/controle-vendedores', icon: ClipboardList, label: 'Painel de Vendedores' },

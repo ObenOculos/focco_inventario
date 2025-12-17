@@ -492,7 +492,7 @@ export default function Conferencia() {
                   </Card>
                 )}
 
-                <Card>
+                <Card className="border-2">
                   <CardHeader>
                     <div className="flex flex-col md:flex-row gap-3">
                       <SearchFilter
