@@ -22,6 +22,9 @@ import {
   User,
   Calendar,
   Hash,
+  TrendingUp,
+  TrendingDown,
+  Minus,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -169,7 +172,7 @@ export default function AnaliseInventario() {
   } = usePagination({
     data: filteredComparativo,
     searchTerm,
-    searchFields: ['codigo_auxiliar', 'nome_produto'],
+    searchFields: ['codigo_auxiliar'],
   });
 
   const handleApprove = async () => {
@@ -204,27 +207,21 @@ export default function AnaliseInventario() {
     [inventarios, selectedInventario]
   );
 
-  const totalDivergencias = comparativo.filter((item) => item.divergencia !== 0).length;
-  const totalFiltrado = filteredComparativo.length;
+  // Calculate statistics
+  const stats = useMemo(() => {
+    const total = comparativo.length;
+    const comDivergencia = comparativo.filter((item) => item.divergencia !== 0).length;
+    const semDivergencia = total - comDivergencia;
+    const positivas = comparativo.filter((item) => item.divergencia > 0).length;
+    const negativas = comparativo.filter((item) => item.divergencia < 0).length;
+    
+    return { total, comDivergencia, semDivergencia, positivas, negativas };
+  }, [comparativo]);
+
   const showApprovalButton =
     isGerente &&
     selectedInventarioInfo &&
     ['pendente', 'revisao'].includes(selectedInventarioInfo.status);
-
-  const getFilterLabel = () => {
-    switch (divergenceFilter) {
-      case 'com_divergencia':
-        return 'Itens com Divergência';
-      case 'sem_divergencia':
-        return 'Itens sem Divergência';
-      case 'positiva':
-        return 'Divergência Positiva (Sobra)';
-      case 'negativa':
-        return 'Divergência Negativa (Falta)';
-      default:
-        return 'Total de Itens';
-    }
-  };
 
   const handleExportDivergencias = () => {
     if (!selectedInventarioInfo || filteredComparativo.length === 0) {
@@ -234,7 +231,6 @@ export default function AnaliseInventario() {
 
     const dataExport = filteredComparativo.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
-      Produto: item.nome_produto,
       'Estoque Teórico': item.estoque_teorico,
       'Estoque Físico': item.quantidade_fisica,
       Divergência: item.divergencia,
@@ -258,200 +254,286 @@ export default function AnaliseInventario() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-start justify-between">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Análise de Inventário</h1>
-            <p className="text-muted-foreground">
-              Compare o estoque físico contado com o estoque teórico do sistema.
+            <h1 className="text-3xl font-bold tracking-tight">Análise de Inventário</h1>
+            <p className="text-muted-foreground mt-1">
+              Compare o estoque físico contado com o estoque teórico do sistema
             </p>
           </div>
           <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
 
-        <Card className="border-2">
+        {/* Selection Card */}
+        <Card>
           <CardHeader>
-            <CardTitle>Selecione o Inventário para Análise</CardTitle>
-            <div className="flex flex-col sm:flex-row gap-4 pt-2">
-              <Select
-                value={selectedInventario ?? ''}
-                onValueChange={setSelectedInventario}
-                disabled={inventarios.length === 0}
-              >
-                <SelectTrigger className="w-full sm:w-[400px]">
-                  <SelectValue placeholder="Selecione uma data de inventário" />
-                </SelectTrigger>
-                <SelectContent>
-                  {inventarios.map((inv, index) => (
-                    <SelectItem key={inv.id} value={inv.id}>
-                      <span className="font-medium">#{inventarios.length - index}</span> -{' '}
-                      {new Date(inv.data_inventario).toLocaleDateString('pt-BR', {
-                        timeZone: 'UTC',
-                      })}{' '}
-                      - {inv.vendedor_nome} - <span className="capitalize">{inv.status}</span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {isGerente && (
-                <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-                  <SelectTrigger className="w-full sm:w-72">
-                    <SelectValue placeholder="Filtrar por vendedor" />
+            <CardTitle className="text-lg">Selecione o Inventário</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col lg:flex-row gap-4">
+              <div className="flex-1">
+                <label className="text-sm font-medium mb-2 block">Inventário</label>
+                <Select
+                  value={selectedInventario ?? ''}
+                  onValueChange={setSelectedInventario}
+                  disabled={inventarios.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione uma data de inventário" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="todos">Todos os vendedores</SelectItem>
-                    {vendedores.map((vendedor) => (
-                      <SelectItem key={vendedor.codigo_vendedor} value={vendedor.codigo_vendedor}>
-                        {vendedor.nome} ({vendedor.codigo_vendedor})
+                    {inventarios.map((inv, index) => (
+                      <SelectItem key={inv.id} value={inv.id}>
+                        <span className="font-medium">#{inventarios.length - index}</span> -{' '}
+                        {new Date(inv.data_inventario).toLocaleDateString('pt-BR', {
+                          timeZone: 'UTC',
+                        })}{' '}
+                        - {inv.vendedor_nome} - <span className="capitalize">{inv.status}</span>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+              </div>
+              {isGerente && (
+                <div className="lg:w-80">
+                  <label className="text-sm font-medium mb-2 block">Vendedor</label>
+                  <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Filtrar por vendedor" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os vendedores</SelectItem>
+                      {vendedores.map((vendedor) => (
+                        <SelectItem key={vendedor.codigo_vendedor} value={vendedor.codigo_vendedor}>
+                          {vendedor.nome} ({vendedor.codigo_vendedor})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
             </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center py-12 text-muted-foreground">Analisando dados...</div>
-            ) : error ? (
-              <div className="flex items-center gap-3 p-4 bg-destructive/10 border-2 border-destructive rounded-lg">
-                <AlertTriangle className="text-destructive shrink-0" />
-                <div className="flex-1">
-                  <p className="font-semibold text-destructive">{error.message}</p>
+          </CardContent>
+        </Card>
+
+        {/* Content Area */}
+        {loading ? (
+          <Card>
+            <CardContent className="py-16">
+              <div className="text-center">
+                <Loader2 className="h-12 w-12 animate-spin mx-auto mb-4 text-primary" />
+                <p className="text-lg font-medium">Analisando dados...</p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Carregando comparativo de estoque
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        ) : error ? (
+          <Card className="border-destructive">
+            <CardContent className="py-12">
+              <div className="flex flex-col items-center gap-4">
+                <div className="p-3 bg-destructive/10 rounded-full">
+                  <AlertTriangle className="h-8 w-8 text-destructive" />
+                </div>
+                <div className="text-center">
+                  <p className="font-semibold text-lg mb-1">Erro ao carregar dados</p>
+                  <p className="text-sm text-muted-foreground">{error.message}</p>
                 </div>
               </div>
-            ) : !selectedInventario ? (
-              <div className="text-center py-12">
-                <PackageSearch size={48} className="mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">Nenhum inventário encontrado.</p>
+            </CardContent>
+          </Card>
+        ) : !selectedInventario ? (
+          <Card>
+            <CardContent className="py-16">
+              <div className="text-center">
+                <PackageSearch className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />
+                <p className="text-lg font-medium mb-1">Nenhum inventário selecionado</p>
+                <p className="text-sm text-muted-foreground">
+                  Selecione um inventário acima para visualizar a análise
+                </p>
               </div>
-            ) : (
-              <div className="space-y-4">
-                {/* Inventory Identification Card */}
-                {selectedInventarioInfo && (
-                  <Card className="bg-muted/30 border-2">
-                    <CardContent className="pt-4">
-                      <div className="flex flex-wrap gap-4 text-sm">
-                        <div className="flex items-center gap-2">
-                          <Hash size={16} className="text-muted-foreground" />
-                          <span className="text-muted-foreground">Inventário:</span>
-                          <span className="font-semibold">
-                            #
-                            {inventarios.findIndex((inv) => inv.id === selectedInventario) >= 0
-                              ? inventarios.length -
-                                inventarios.findIndex((inv) => inv.id === selectedInventario)
-                              : '-'}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <User size={16} className="text-muted-foreground" />
-                          <span className="text-muted-foreground">Vendedor:</span>
-                          <span className="font-semibold">
-                            {selectedInventarioInfo.vendedor_nome} (
-                            {selectedInventarioInfo.codigo_vendedor})
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Calendar size={16} className="text-muted-foreground" />
-                          <span className="text-muted-foreground">Data:</span>
-                          <span className="font-semibold">
-                            {new Date(selectedInventarioInfo.data_inventario).toLocaleDateString(
-                              'pt-BR',
-                              { timeZone: 'UTC' }
-                            )}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`px-2 py-0.5 rounded-full text-xs font-medium capitalize ${
-                              selectedInventarioInfo.status === 'aprovado'
-                                ? 'bg-green-500/20 text-green-700'
-                                : selectedInventarioInfo.status === 'pendente'
-                                  ? 'bg-amber-500/20 text-amber-700'
-                                  : 'bg-red-500/20 text-red-700'
-                            }`}
-                          >
-                            {selectedInventarioInfo.status}
-                          </span>
-                        </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            {/* Inventory Info Card */}
+            {selectedInventarioInfo && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-background rounded-lg">
+                        <Hash className="h-5 w-5 text-primary" />
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <Card>
-                    <CardHeader className="pb-2">
-                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                        {totalFiltrado > 0 && divergenceFilter !== 'sem_divergencia' ? (
-                          <AlertTriangle size={16} className="text-amber-500" />
-                        ) : (
-                          <CheckCircle size={16} className="text-green-600" />
-                        )}
-                        {getFilterLabel()}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <p
-                        className={`text-3xl font-bold ${totalFiltrado > 0 && divergenceFilter !== 'sem_divergencia' ? 'text-amber-500' : 'text-green-600'}`}
-                      >
-                        {totalFiltrado}
-                      </p>
-                    </CardContent>
-                  </Card>
-                  {showApprovalButton && (
-                    <Card className="col-span-1 sm:col-span-1 lg:col-span-3 bg-green-500/10 border-green-500/20">
-                      <CardHeader className="pb-2">
-                        <CardTitle className="text-sm font-medium">Aprovar Inventário</CardTitle>
-                      </CardHeader>
-                      <CardContent>
-                        <p className="text-sm text-muted-foreground mb-4">
-                          Ao aprovar, o estoque teórico será atualizado com base neste inventário.
-                          Esta ação não pode ser desfeita.
+                      <div>
+                        <p className="text-xs text-muted-foreground">Inventário</p>
+                        <p className="font-semibold">
+                          #
+                          {inventarios.findIndex((inv) => inv.id === selectedInventario) >= 0
+                            ? inventarios.length -
+                              inventarios.findIndex((inv) => inv.id === selectedInventario)
+                            : '-'}
                         </p>
-                        <Button onClick={handleApprove} disabled={isApproving}>
-                          {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                          {isApproving ? 'Aprovando...' : 'Aprovar e Ajustar Estoque'}
-                        </Button>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-
-                <div className="border-2 rounded-lg overflow-hidden">
-                  <div className="p-4 border-b-2 flex flex-col md:flex-row gap-4 items-start md:items-center justify-between">
-                    <div className="flex flex-col md:flex-row gap-4 flex-1">
-                      <SearchFilter
-                        value={searchTerm}
-                        onChange={setSearchTerm}
-                        placeholder="Buscar por código ou produto..."
-                      />
-                      <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
-                        <SelectTrigger className="w-full md:w-52">
-                          <SelectValue placeholder="Filtrar por divergência" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todas as divergências</SelectItem>
-                          <SelectItem value="com_divergencia">Com divergência</SelectItem>
-                          <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
-                          <SelectItem value="positiva">Divergência positiva</SelectItem>
-                          <SelectItem value="negativa">Divergência negativa</SelectItem>
-                        </SelectContent>
-                      </Select>
+                      </div>
                     </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-background rounded-lg">
+                        <User className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Vendedor</p>
+                        <p className="font-semibold">
+                          {selectedInventarioInfo.vendedor_nome}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-background rounded-lg">
+                        <Calendar className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Data</p>
+                        <p className="font-semibold">
+                          {new Date(selectedInventarioInfo.data_inventario).toLocaleDateString(
+                            'pt-BR',
+                            { timeZone: 'UTC' }
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-background rounded-lg">
+                        <CheckCircle className="h-5 w-5 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Status</p>
+                        <p className="font-semibold capitalize">
+                          {selectedInventarioInfo.status}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Statistics Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card>
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 bg-blue-500/10 rounded-lg">
+                      <PackageSearch className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Total de Itens</p>
+                      <p className="text-2xl font-bold">{stats.total}</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="border-2 md:col-span-2">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-lg font-medium flex items-center gap-2">
+                    <PackageSearch size={16} />
+                    Análise de Divergências
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid grid-cols-3 gap-3 items-center pt-1">
+                  <div className="col-span-1 flex flex-col items-center justify-center border-r-2 pr-3">
+                    <p className="text-3xl font-bold text-destructive">{stats.comDivergencia}</p>
+                    <p className="text-xs text-muted-foreground text-center">Total Divergente</p>
+                  </div>
+                  <div className="col-span-2 flex flex-col justify-center space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1.5 text-yellow-600">
+                        <TrendingUp size={16} />
+                        Sobras
+                      </span>
+                      <span className="font-bold text-lg">{stats.positivas}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="flex items-center gap-1.5 text-red-600">
+                        <TrendingDown size={16} />
+                        Faltas
+                      </span>
+                      <span className="font-bold text-lg">{stats.negativas}</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Approval Button */}
+            {showApprovalButton && (
+              <Card className="border-green-500/30 bg-green-500/5">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold text-lg mb-1">Aprovar Inventário</h3>
+                      <p className="text-sm text-muted-foreground">
+                        O estoque teórico será atualizado com base neste inventário. Esta ação não pode ser desfeita.
+                      </p>
+                    </div>
+                    <Button 
+                      onClick={handleApprove} 
+                      disabled={isApproving}
+                      size="lg"
+                      className="shrink-0"
+                    >
+                      {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                      {isApproving ? 'Aprovando...' : 'Aprovar e Ajustar Estoque'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Data Table */}
+            <Card>
+              <CardHeader>
+                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+                  <CardTitle>Comparativo de Estoque</CardTitle>
+                  <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
+                    <SearchFilter
+                      value={searchTerm}
+                      onChange={setSearchTerm}
+                      placeholder="Buscar por código..."
+                      className="w-full sm:w-64"
+                    />
+                    <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
+                      <SelectTrigger className="w-full sm:w-56">
+                        <SelectValue placeholder="Filtrar" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas as divergências</SelectItem>
+                        <SelectItem value="com_divergencia">Com divergência</SelectItem>
+                        <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
+                        <SelectItem value="positiva">Sobras (+)</SelectItem>
+                        <SelectItem value="negativa">Faltas (-)</SelectItem>
+                      </SelectContent>
+                    </Select>
                     <Button
                       variant="outline"
                       onClick={handleExportDivergencias}
                       disabled={filteredComparativo.length === 0}
-                      className="flex items-center gap-2"
+                      className="shrink-0"
                     >
-                      <Download size={16} />
+                      <Download className="mr-2 h-4 w-4" />
                       Exportar
                     </Button>
                   </div>
+                </div>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="border-t">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[50%]">Produto</TableHead>
+                        <TableHead className="w-[30%]">Código Auxiliar</TableHead>
                         <TableHead className="text-center">Est. Teórico</TableHead>
                         <TableHead className="text-center">Est. Físico</TableHead>
                         <TableHead className="text-center">Divergência</TableHead>
@@ -460,32 +542,61 @@ export default function AnaliseInventario() {
                     <TableBody>
                       {paginatedComparativo.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="h-24 text-center">
-                            Nenhum item encontrado.
+                          <TableCell colSpan={4} className="h-32 text-center">
+                            <div className="flex flex-col items-center gap-2">
+                              <Minus className="h-8 w-8 text-muted-foreground/50" />
+                              <p className="text-sm text-muted-foreground">
+                                Nenhum item encontrado com os filtros aplicados
+                              </p>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ) : (
                         paginatedComparativo.map((item) => (
                           <TableRow
                             key={item.codigo_auxiliar}
-                            className={item.divergencia !== 0 ? 'bg-amber-500/5' : ''}
+                            className={
+                              item.divergencia > 0
+                                ? 'bg-yellow-500/5'
+                                : item.divergencia < 0
+                                  ? 'bg-red-500/5'
+                                  : ''
+                            }
                           >
                             <TableCell>
-                              <p className="font-medium truncate">{item.nome_produto}</p>
-                              <p className="font-mono text-xs text-muted-foreground">
+                              <span className="font-mono text-sm font-medium">
                                 {item.codigo_auxiliar}
-                              </p>
+                              </span>
                             </TableCell>
-                            <TableCell className="text-center font-medium">
-                              {item.estoque_teorico}
+                            <TableCell className="text-center">
+                              <span className="font-semibold">{item.estoque_teorico}</span>
                             </TableCell>
-                            <TableCell className="text-center font-medium">
-                              {item.quantidade_fisica}
+                            <TableCell className="text-center">
+                              <span className="font-semibold">{item.quantidade_fisica}</span>
                             </TableCell>
-                            <TableCell
-                              className={`text-center font-bold ${item.divergencia > 0 ? 'text-yellow-600' : item.divergencia < 0 ? 'text-destructive' : 'text-green-600'}`}
-                            >
-                              {item.divergencia > 0 ? `+${item.divergencia}` : item.divergencia}
+                            <TableCell className="text-center">
+                              <div className="flex items-center justify-center gap-2">
+                                {item.divergencia > 0 ? (
+                                  <TrendingUp className="h-4 w-4 text-yellow-600" />
+                                ) : item.divergencia < 0 ? (
+                                  <TrendingDown className="h-4 w-4 text-red-600" />
+                                ) : (
+                                  <Minus className="h-4 w-4 text-green-600" />
+                                )}
+                                <span
+                                  className={`font-bold ${
+                                    item.divergencia > 0
+                                      ? 'text-yellow-600'
+                                      : item.divergencia < 0
+                                        ? 'text-red-600'
+                                        : 'text-green-600'
+                                  }`}
+                                >
+                                  {item.divergencia > 0
+                                    ? `+${item.divergencia}`
+                                    : item.divergencia}
+                                </span>
+                              </div>
                             </TableCell>
                           </TableRow>
                         ))
@@ -493,23 +604,24 @@ export default function AnaliseInventario() {
                     </TableBody>
                   </Table>
                 </div>
-
                 {totalPages > 1 && (
-                  <Pagination
-                    currentPage={currentPage}
-                    totalPages={totalPages}
-                    itemsPerPage={itemsPerPage}
-                    totalItems={totalItems}
-                    startIndex={startIndex}
-                    endIndex={endIndex}
-                    onPageChange={onPageChange}
-                    onItemsPerPageChange={onItemsPerPageChange}
-                  />
+                  <div className="p-4 border-t">
+                    <Pagination
+                      currentPage={currentPage}
+                      totalPages={totalPages}
+                      itemsPerPage={itemsPerPage}
+                      totalItems={totalItems}
+                      startIndex={startIndex}
+                      endIndex={endIndex}
+                      onPageChange={onPageChange}
+                      onItemsPerPageChange={onItemsPerPageChange}
+                    />
+                  </div>
                 )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </AppLayout>
   );

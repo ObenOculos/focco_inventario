@@ -3,12 +3,11 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Package, AlertTriangle, TrendingUp, TrendingDown, Download, Filter } from 'lucide-react';
+import { Package, AlertTriangle, TrendingUp, TrendingDown, Download, Filter, X, Search } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
-import { SearchFilter } from '@/components/SearchFilter';
 import {
   Select,
   SelectContent,
@@ -29,6 +28,7 @@ import * as XLSX from 'xlsx';
 import { EstoqueTeoricSkeleton } from '@/components/skeletons/PageSkeleton';
 import { useEstoqueTeoricoQuery, useVendedoresQuery } from '@/hooks/useEstoqueTeoricoQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
+import { Input } from '@/components/ui/input';
 
 export default function EstoqueTeorico() {
   const { profile } = useAuth();
@@ -37,6 +37,7 @@ export default function EstoqueTeorico() {
   const [realFilter, setRealFilter] = useState<string>('todos');
   const [divergenciaFilter, setDivergenciaFilter] = useState<string>('todos');
   const [selectedVendor, setSelectedVendor] = useState<string>('todos');
+  const [showFilters, setShowFilters] = useState(false);
 
   const isGerente = profile?.role === 'gerente';
 
@@ -119,18 +120,13 @@ export default function EstoqueTeorico() {
     searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
 
-  // Totais gerais (dados completos)
-  const totalGeralProdutos = dados.length;
-
-  // Totais filtrados (baseados nos dados após filtros)
+  // Totais filtrados
   const totalFiltradoTeorico = dadosFiltrados.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalFiltradoReal = dadosFiltrados.reduce((acc, item) => acc + item.estoque_real, 0);
   const totalFiltradoDivergencia = dadosFiltrados.reduce((acc, item) => acc + item.diferenca, 0);
-  const totalFiltradoProdutos = dadosFiltrados.length;
-
-  // Contagem de itens com divergência
-  const itensDivergentesTotal = dados.filter((d) => d.diferenca !== 0).length;
-  const itensDivergentesFiltrados = dadosFiltrados.filter((d) => d.diferenca !== 0).length;
+  const itensDivergentes = dadosFiltrados.filter((d) => d.diferenca !== 0).length;
+  const itensSobra = dadosFiltrados.filter((d) => d.diferenca > 0).length;
+  const itensFalta = dadosFiltrados.filter((d) => d.diferenca < 0).length;
 
   // Verificar se há filtros ativos
   const hasActiveFilters =
@@ -172,362 +168,260 @@ export default function EstoqueTeorico() {
     const fileName = `estoque_teorico_real_${vendorName}_${dateStr}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
-    toast.success(`Arquivo exportado: ${fileName}`);
+    toast.success(`Arquivo exportado com sucesso!`);
   };
 
   return (
     <AppLayout>
-      <div className="space-y-4 md:space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
           <div>
-            <h1 className="text-xl md:text-2xl font-bold tracking-tight">
-              Estoque (Teórico x Real)
-            </h1>
-            <p className="text-sm text-muted-foreground">
+            <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Estoque (ERP x Inventário)</h1>
+            <p className="text-muted-foreground mt-1">
               {isGerente
-                ? 'Compare o estoque teórico com o real'
-                : 'Compare seu estoque teórico com o real'}
+                ? 'Compare o estoque do ERP com o inventário físico'
+                : 'Compare seu estoque do ERP com o inventário físico'}
             </p>
           </div>
-          <RefetchIndicator isFetching={isFetching && !loading} />
+          <div className="flex items-center gap-2">
+            <RefetchIndicator isFetching={isFetching && !loading} />
+            <Button
+              variant="outline"
+              onClick={handleExportExcel}
+              disabled={dadosFiltrados.length === 0}
+            >
+              <Download className="mr-2 h-4 w-4" />
+              <span className="hidden sm:inline">Exportar</span>
+            </Button>
+          </div>
         </div>
 
+        {/* Alert for Negative Stock */}
         {produtosNegativos.length > 0 && (
-          <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-3 md:p-4 bg-destructive/10 border-2 border-destructive rounded-lg">
-            <div className="flex items-center gap-3 flex-1">
-              <AlertTriangle className="text-destructive shrink-0" size={20} />
-              <div>
-                <p className="font-semibold text-destructive text-sm md:text-base">
-                  {produtosNegativos.length} produto(s) com estoque negativo
-                </p>
-                <p className="text-xs text-muted-foreground hidden sm:block">
-                  Verifique divergências
-                </p>
+          <Card className="border-destructive/30 bg-destructive/5">
+            <CardContent className="pt-6">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-destructive/10 rounded-lg">
+                    <AlertTriangle className="h-5 w-5 text-destructive" />
+                  </div>
+                  <div>
+                    <p className="font-semibold text-destructive">
+                      {produtosNegativos.length} produto(s) com estoque negativo
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Verifique as divergências e ajuste o estoque
+                    </p>
+                  </div>
+                </div>
+                <Link to="/pedidos">
+                  <Button variant="outline" size="sm">
+                    Ver detalhes
+                  </Button>
+                </Link>
               </div>
-            </div>
-            <Link to="/pedidos">
-              <Button variant="outline" size="sm" className="w-full sm:w-auto">
-                Ver detalhes
-              </Button>
-            </Link>
-          </div>
+            </CardContent>
+          </Card>
         )}
 
-        <div className="flex flex-wrap gap-4">
-          <Card className="flex-1 basis-36 border-2">
-            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
-              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
-                <Package size={14} className="hidden sm:block" />
-                <Package size={12} className="sm:hidden" />
-                Produtos
-                {hasActiveFilters && <Filter size={10} className="text-primary" />}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
-              <p className="text-xl md:text-3xl font-bold">{totalFiltradoProdutos}</p>
-              {hasActiveFilters && (
-                <p className="text-[10px] md:text-xs text-muted-foreground">
-                  de {totalGeralProdutos}
-                </p>
-              )}
+        {/* Segmented KPI Cards */}
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
+          {/* Total Produtos */}
+          <Card className="col-span-2 lg:col-span-1">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-blue-500/10 rounded-lg shrink-0">
+                  <Package className="h-5 w-5 text-blue-600" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs text-muted-foreground font-medium">Produtos</p>
+                  <p className="text-2xl font-bold">{totalItems}</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="flex-1 basis-36 border-2">
-            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
-              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
-                <TrendingUp
-                  size={14}
-                  className={`hidden sm:block ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`}
-                />
-                <TrendingUp
-                  size={12}
-                  className={`sm:hidden ${totalFiltradoTeorico >= 0 ? 'text-primary' : 'text-destructive'}`}
-                />
-                Estoque ERP
-                {hasActiveFilters && <Filter size={10} className="text-primary" />}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
-              <p
-                className={`text-xl md:text-3xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}
-              >
+          {/* ERP */}
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Estoque ERP</p>
+              <p className={`text-2xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}>
                 {totalFiltradoTeorico}
               </p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">unidades</p>
             </CardContent>
           </Card>
 
-          <Card className="flex-1 basis-36 border-2">
-            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
-              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
-                <Package size={14} className="text-purple-600 hidden sm:block" />
-                <Package size={12} className="text-purple-600 sm:hidden" />
-                Inventário
-                {hasActiveFilters && <Filter size={10} className="text-primary" />}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
-              <p className="text-xl md:text-3xl font-bold text-purple-600">{totalFiltradoReal}</p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
-            </CardContent>
-          </Card>
-
-          <Card className="flex-1 basis-36 border-2">
-            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
-              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
-                <TrendingDown
-                  size={14}
-                  className={`hidden sm:block ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
-                />
-                <TrendingDown
-                  size={12}
-                  className={`sm:hidden ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
-                />
-                Diverg.
-                {hasActiveFilters && <Filter size={10} className="text-primary" />}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
-              <p
-                className={`text-xl md:text-3xl font-bold ${totalFiltradoDivergencia === 0 ? 'text-green-600' : 'text-destructive'}`}
-              >
-                {totalFiltradoDivergencia > 0
-                  ? `+${totalFiltradoDivergencia}`
-                  : totalFiltradoDivergencia}
+          {/* Inventário */}
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Inventário</p>
+              <p className="text-2xl font-bold text-purple-600">
+                {totalFiltradoReal}
               </p>
-              <p className="text-[10px] md:text-xs text-muted-foreground">unid.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">unidades</p>
             </CardContent>
           </Card>
 
-          <Card className="flex-1 basis-36 border-2">
-            <CardHeader className="pb-1 md:pb-2 px-3 md:px-6 pt-3 md:pt-6">
-              <CardTitle className="text-xs md:text-sm font-medium text-muted-foreground flex items-center gap-1 md:gap-2">
-                <TrendingDown
-                  size={14}
-                  className={`hidden sm:block ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}
-                />
-                <TrendingDown
-                  size={12}
-                  className={`sm:hidden ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}
-                />
-                Itens Divergentes
-                {hasActiveFilters && <Filter size={10} className="text-primary" />}
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="px-3 md:px-6 pb-3 md:pb-6">
-              <p
-                className={`text-xl md:text-3xl font-bold ${itensDivergentesFiltrados === 0 ? 'text-green-600' : 'text-orange-700'}`}
-              >
-                {itensDivergentesFiltrados}
+          {/* Divergência */}
+          <Card>
+            <CardContent className="pt-6">
+              <p className="text-xs text-muted-foreground font-medium mb-1">Divergência Total</p>
+              <p className={`text-2xl font-bold ${totalFiltradoDivergencia === 0 ? 'text-green-600' : totalFiltradoDivergencia > 0 ? 'text-yellow-600' : 'text-destructive'}`}>
+                {totalFiltradoDivergencia > 0 ? `+${totalFiltradoDivergencia}` : totalFiltradoDivergencia}
               </p>
-              {hasActiveFilters ? (
-                <p className="text-[10px] md:text-xs text-muted-foreground">
-                  de {itensDivergentesTotal}
-                </p>
-              ) : (
-                <p className="text-[10px] md:text-xs text-muted-foreground mt-1">itens</p>
-              )}
+              <p className="text-xs text-muted-foreground mt-0.5">unidades</p>
+            </CardContent>
+          </Card>
+
+          {/* Análise de Divergências */}
+          <Card className="col-span-2 lg:col-span-1 border-2 border-destructive/30">
+            <CardContent className="pt-6">
+              <p className="text-xs text-muted-foreground font-medium mb-2.5">Análise</p>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Divergentes:</span>
+                  <span className="text-lg font-bold text-destructive">{itensDivergentes}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-yellow-700 flex items-center gap-1">
+                    <TrendingUp size={12} /> Sobras:
+                  </span>
+                  <span className="text-sm font-semibold">{itensSobra}</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-red-700 flex items-center gap-1">
+                    <TrendingDown size={12} /> Faltas:
+                  </span>
+                  <span className="text-sm font-semibold">{itensFalta}</span>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="border-2">
-          <CardHeader className="px-3 md:px-6 py-3 md:py-6">
-            <CardTitle className="flex flex-col gap-3">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-2 text-base md:text-lg">
-                  <Package size={18} />
-                  Comparação
-                </span>
-                <div className="flex items-center gap-2">
-                  <Badge
-                    variant="secondary"
-                    className="text-sm md:text-lg px-2 md:px-3 py-0.5 md:py-1"
-                  >
-                    {totalItems}
-                  </Badge>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportExcel}
-                    disabled={dadosFiltrados.length === 0}
-                    className="hidden sm:flex"
-                  >
-                    <Download size={16} className="mr-2" />
-                    Exportar
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleExportExcel}
-                    disabled={dadosFiltrados.length === 0}
-                    className="sm:hidden h-8 w-8"
-                  >
-                    <Download size={16} />
-                  </Button>
-                </div>
+        {/* Data Table */}
+        <Card>
+          <CardHeader>
+            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <CardTitle className="flex items-center gap-2">
+                  <Package size={20} />
+                  Comparação Detalhada
+                </CardTitle>
+                <Badge variant="secondary" className="text-lg px-3 py-1">
+                  {totalItems}
+                </Badge>
               </div>
-            </CardTitle>
+              <Button
+                variant={hasActiveFilters ? "default" : "outline"}
+                onClick={() => setShowFilters(!showFilters)}
+                className="gap-2"
+              >
+                <Filter size={16} />
+                Filtros
+                {hasActiveFilters && <span className="ml-1 px-1.5 py-0.5 bg-primary-foreground text-primary text-xs rounded-full">•</span>}
+              </Button>
+            </div>
           </CardHeader>
-          <CardContent className="space-y-3 md:space-y-4 px-3 md:px-6 pb-3 md:pb-6">
-            <div className="space-y-2">
-              <SearchFilter
+          <CardContent className="space-y-4">
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" size={18} />
+              <Input
+                type="text"
                 value={searchTerm}
-                onChange={setSearchTerm}
-                placeholder="Buscar código ou produto..."
+                onChange={(e) => setSearchTerm(e.target.value)}
+                placeholder="Buscar por código ou nome do produto..."
+                className="pl-10"
               />
-              <div className="grid grid-cols-2 md:flex md:flex-row gap-2">
-                {isGerente && (
-                  <Select value={selectedVendor} onValueChange={setSelectedVendor}>
-                    <SelectTrigger className="w-full md:w-40 text-xs md:text-sm h-9">
-                      <SelectValue placeholder="Vendedor" />
+            </div>
+
+            {/* Filters Panel */}
+            {showFilters && (
+              <div className="pt-3 border-t space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                  {isGerente && (
+                    <Select value={selectedVendor} onValueChange={setSelectedVendor}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Vendedor" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos Vendedores</SelectItem>
+                        {vendedores.map((vendor) => (
+                          <SelectItem key={vendor.id} value={vendor.codigo_vendedor}>
+                            {vendor.nome}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Select value={teoricoFilter} onValueChange={setTeoricoFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Estoque ERP" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todos Vendedores</SelectItem>
-                      {vendedores.map((vendor) => (
-                        <SelectItem key={vendor.id} value={vendor.codigo_vendedor}>
-                          {vendor.nome}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="todos">ERP: Todos</SelectItem>
+                      <SelectItem value="positivo">Positivo</SelectItem>
+                      <SelectItem value="zero">Zero</SelectItem>
+                      <SelectItem value="negativo">Negativo</SelectItem>
                     </SelectContent>
                   </Select>
+                  <Select value={realFilter} onValueChange={setRealFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Inventário" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Inventário: Todos</SelectItem>
+                      <SelectItem value="com_real">Com Inventário</SelectItem>
+                      <SelectItem value="sem_real">Sem Inventário</SelectItem>
+                      <SelectItem value="positivo">Positivo</SelectItem>
+                      <SelectItem value="zero">Zero</SelectItem>
+                      <SelectItem value="negativo">Negativo</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={divergenciaFilter} onValueChange={setDivergenciaFilter}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Divergência" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Diverg.: Todas</SelectItem>
+                      <SelectItem value="ok">Sem Divergência</SelectItem>
+                      <SelectItem value="divergente">Com Divergência</SelectItem>
+                      <SelectItem value="falta">Falta</SelectItem>
+                      <SelectItem value="sobra">Sobra</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearAllFilters}
+                    className="gap-1"
+                  >
+                    <X size={14} />
+                    Limpar filtros
+                  </Button>
                 )}
-                <Select value={teoricoFilter} onValueChange={setTeoricoFilter}>
-                  <SelectTrigger className="w-full md:w-36 text-xs md:text-sm h-9">
-                    <SelectValue placeholder="Estoque ERP" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Estoque ERP: Todos</SelectItem>
-                    <SelectItem value="positivo">Positivo</SelectItem>
-                    <SelectItem value="zero">Zero</SelectItem>
-                    <SelectItem value="negativo">Negativo</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={realFilter} onValueChange={setRealFilter}>
-                  <SelectTrigger className="w-full md:w-36 text-xs md:text-sm h-9">
-                    <SelectValue placeholder="Inventário" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Inventário: Todos</SelectItem>
-                    <SelectItem value="com_real">Com Inventário</SelectItem>
-                    <SelectItem value="sem_real">Sem Inventário</SelectItem>
-                    <SelectItem value="positivo">Positivo</SelectItem>
-                    <SelectItem value="zero">Zero</SelectItem>
-                    <SelectItem value="negativo">Negativo</SelectItem>
-                  </SelectContent>
-                </Select>
-                <Select value={divergenciaFilter} onValueChange={setDivergenciaFilter}>
-                  <SelectTrigger className="w-full md:w-40 text-xs md:text-sm h-9">
-                    <SelectValue placeholder="Divergência" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Diverg.: Todas</SelectItem>
-                    <SelectItem value="ok">Sem Divergência</SelectItem>
-                    <SelectItem value="divergente">Com Divergência</SelectItem>
-                    <SelectItem value="falta">Falta</SelectItem>
-                    <SelectItem value="sobra">Sobra</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
-              {hasActiveFilters && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearAllFilters}
-                  className="text-muted-foreground text-xs h-8 w-full md:w-auto"
-                >
-                  Limpar filtros
-                </Button>
-              )}
-            </div>
+            )}
 
             {loading ? (
               <EstoqueTeoricSkeleton />
             ) : totalItems === 0 ? (
-              <div className="text-center py-8">
-                <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground text-sm">
-                  {searchTerm
-                    ? 'Nenhum produto encontrado'
+              <div className="text-center py-16">
+                <Package size={48} className="mx-auto mb-4 text-muted-foreground/50" />
+                <p className="text-lg font-medium mb-1">Nenhum produto encontrado</p>
+                <p className="text-sm text-muted-foreground">
+                  {searchTerm || hasActiveFilters
+                    ? 'Tente ajustar os filtros ou termo de busca'
                     : 'Nenhum produto com estoque real registrado'}
                 </p>
               </div>
             ) : (
               <>
-                {/* Mobile: Card Layout */}
-                <div className="md:hidden space-y-2">
-                  {paginatedData.map((item) => (
-                    <div
-                      key={item.codigo_auxiliar}
-                      className={`border-2 rounded-lg p-3 ${item.diferenca !== 0 ? 'bg-destructive/5 border-destructive/30' : ''}`}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex items-center gap-2 min-w-0">
-                          {item.diferenca !== 0 && (
-                            <AlertTriangle className="text-destructive shrink-0" size={14} />
-                          )}
-                          <div className="min-w-0">
-                            <span className="font-mono font-bold text-sm block">
-                              {item.codigo_auxiliar}
-                            </span>
-                            <p className="text-xs text-muted-foreground truncate">
-                              {item.nome_produto}
-                            </p>
-                          </div>
-                        </div>
-                        {item.diferenca === 0 ? (
-                          <Badge
-                            variant="outline"
-                            className="bg-green-500/10 text-green-600 border-green-500/30 text-xs shrink-0"
-                          >
-                            OK
-                          </Badge>
-                        ) : (
-                          <Badge
-                            variant="outline"
-                            className={`font-bold text-xs shrink-0 ${
-                              item.diferenca > 0
-                                ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30'
-                                : 'bg-destructive/10 text-destructive border-destructive/30'
-                            }`}
-                          >
-                            {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="grid grid-cols-3 gap-2 text-center">
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">Estoque ERP</p>
-                          <p
-                            className={`font-bold text-sm ${item.estoque_teorico < 0 ? 'text-destructive' : ''}`}
-                          >
-                            {item.estoque_teorico}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">Inventário</p>
-                          <p className="font-bold text-sm text-purple-600">{item.estoque_real}</p>
-                        </div>
-                        <div>
-                          <p className="text-[10px] text-muted-foreground">Diverg.</p>
-                          <p
-                            className={`font-bold text-sm ${item.diferenca === 0 ? 'text-green-600' : item.diferenca > 0 ? 'text-yellow-600' : 'text-destructive'}`}
-                          >
-                            {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
-                          </p>
-                        </div>
-                      </div>
-                      {item.data_atualizacao_real && (
-                        <p className="text-[10px] text-muted-foreground text-center mt-1">
-                          Atualizado:{' '}
-                          {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')}
-                        </p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
                 {/* Desktop: Table Layout */}
                 <div className="hidden md:block border-2 rounded-lg overflow-hidden">
                   <Table>
@@ -543,7 +437,13 @@ export default function EstoqueTeorico() {
                       {paginatedData.map((item) => (
                         <TableRow
                           key={item.codigo_auxiliar}
-                          className={item.diferenca !== 0 ? 'bg-destructive/5' : ''}
+                          className={
+                            item.diferenca > 0
+                              ? 'bg-yellow-500/5'
+                              : item.diferenca < 0
+                                ? 'bg-red-500/5'
+                                : ''
+                          }
                         >
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -554,7 +454,7 @@ export default function EstoqueTeorico() {
                                 <span className="font-mono font-bold text-sm">
                                   {item.codigo_auxiliar}
                                 </span>
-                                <p className="text-xs text-muted-foreground truncate">
+                                <p className="text-xs text-muted-foreground line-clamp-1">
                                   {item.nome_produto}
                                 </p>
                               </div>
@@ -602,16 +502,91 @@ export default function EstoqueTeorico() {
                   </Table>
                 </div>
 
-                <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  itemsPerPage={itemsPerPage}
-                  totalItems={totalItems}
-                  startIndex={startIndex}
-                  endIndex={endIndex}
-                  onPageChange={onPageChange}
-                  onItemsPerPageChange={onItemsPerPageChange}
-                />
+                {/* Mobile: Cards Layout */}
+                <div className="md:hidden space-y-3">
+                  {paginatedData.map((item) => (
+                    <Card
+                      key={item.codigo_auxiliar}
+                      className={
+                        item.diferenca > 0
+                          ? 'bg-yellow-500/5 border-yellow-500/30'
+                          : item.diferenca < 0
+                            ? 'bg-red-500/5 border-red-500/30'
+                            : ''
+                      }
+                    >
+                      <CardContent className="pt-4">
+                        <div className="flex items-start justify-between gap-3 mb-3">
+                          <div className="flex items-start gap-2 min-w-0 flex-1">
+                            {item.diferenca !== 0 && (
+                              <AlertTriangle className="text-destructive shrink-0 mt-0.5" size={16} />
+                            )}
+                            <div className="min-w-0">
+                              <span className="font-mono font-bold text-sm block">
+                                {item.codigo_auxiliar}
+                              </span>
+                              <p className="text-xs text-muted-foreground line-clamp-2">
+                                {item.nome_produto}
+                              </p>
+                            </div>
+                          </div>
+                          {item.diferenca === 0 ? (
+                            <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 shrink-0">
+                              OK
+                            </Badge>
+                          ) : (
+                            <Badge
+                              variant="outline"
+                              className={`font-bold shrink-0 ${
+                                item.diferenca > 0
+                                  ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30'
+                                  : 'bg-destructive/10 text-destructive border-destructive/30'
+                              }`}
+                            >
+                              {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="grid grid-cols-3 gap-3 text-center">
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">ERP</p>
+                            <p className={`font-bold text-base ${item.estoque_teorico < 0 ? 'text-destructive' : ''}`}>
+                              {item.estoque_teorico}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Inventário</p>
+                            <p className="font-bold text-base text-purple-600">{item.estoque_real}</p>
+                            {item.data_atualizacao_real && (
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                              </p>
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-xs text-muted-foreground mb-1">Diverg.</p>
+                            <p className={`font-bold text-base ${item.diferenca === 0 ? 'text-green-600' : item.diferenca > 0 ? 'text-yellow-600' : 'text-destructive'}`}>
+                              {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                            </p>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                {totalPages > 1 && (
+                  <Pagination
+                    currentPage={currentPage}
+                    totalPages={totalPages}
+                    itemsPerPage={itemsPerPage}
+                    totalItems={totalItems}
+                    startIndex={startIndex}
+                    endIndex={endIndex}
+                    onPageChange={onPageChange}
+                    onItemsPerPageChange={onItemsPerPageChange}
+                  />
+                )}
               </>
             )}
           </CardContent>

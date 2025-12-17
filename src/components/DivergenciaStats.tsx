@@ -10,12 +10,16 @@ interface DivergenciaStatsProps {
   itensCorretos: number;
   itensSobra: number;
   itensFalta: number;
+  totalItens?: number;
+  valorTotalDivergencia?: number;
 }
 
 export function DivergenciaStats({
   itensCorretos,
   itensSobra,
   itensFalta,
+  totalItens,
+  valorTotalDivergencia,
 }: DivergenciaStatsProps) {
   const totalDivergencias = itensSobra + itensFalta;
 
@@ -33,6 +37,9 @@ export function DivergenciaStats({
         <CardContent>
           <p className="text-3xl font-bold text-green-600">{itensCorretos}</p>
           <p className="text-xs text-muted-foreground">sem divergência</p>
+          {typeof totalItens === 'number' && (
+            <p className="text-[10px] text-muted-foreground mt-1">de {totalItens} itens</p>
+          )}
         </CardContent>
       </Card>
 
@@ -47,6 +54,9 @@ export function DivergenciaStats({
           <div className="col-span-1 flex flex-col items-center justify-center border-r-2 pr-3">
             <p className="text-3xl font-bold text-destructive">{totalDivergencias}</p>
             <p className="text-xs text-muted-foreground text-center">Total Divergente</p>
+            {typeof valorTotalDivergencia === 'number' && (
+              <p className="text-[10px] text-muted-foreground mt-1">Valor total: {valorTotalDivergencia}</p>
+            )}
           </div>
           <div className="col-span-2 flex flex-col justify-center space-y-2">
             <div className="flex items-center justify-between text-sm">

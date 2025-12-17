@@ -5,11 +5,12 @@ interface SearchFilterProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  className?: string;
 }
 
-export function SearchFilter({ value, onChange, placeholder = 'Buscar...' }: SearchFilterProps) {
+export function SearchFilter({ value, onChange, placeholder = 'Buscar...', className = '' }: SearchFilterProps) {
   return (
-    <div className="relative flex-1 max-w-sm">
+    <div className={`relative flex-1 max-w-sm ${className}`}>
       <Search
         className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
         size={18}
