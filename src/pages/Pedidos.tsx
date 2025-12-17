@@ -26,7 +26,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Package, DollarSign, AlertTriangle, FileText } from 'lucide-react';
+import { Package, DollarSign, AlertTriangle, FileText, Undo2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Pagination as PaginationComponent } from '@/components/Pagination';
@@ -124,6 +124,16 @@ export default function Pedidos() {
           Venda
         </Badge>
       );
+    } else if (codigoTipo === 3) {
+      return (
+        <Badge
+          variant="secondary"
+          className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200"
+        >
+          <Undo2 className="w-3 h-3 mr-1" />
+          Retorno
+        </Badge>
+      );
     } else {
       return (
         <Badge
@@ -180,6 +190,7 @@ export default function Pedidos() {
                   <SelectItem value="todos">Todos os tipos</SelectItem>
                   <SelectItem value="7">Remessa</SelectItem>
                   <SelectItem value="2">Venda</SelectItem>
+                  <SelectItem value="3">Retorno</SelectItem>
                 </SelectContent>
               </Select>
               {isGerente && (
@@ -331,7 +342,9 @@ export default function Pedidos() {
                           ? 'Remessa'
                           : selectedPedido.codigo_tipo === 2
                             ? 'Venda'
-                            : `Tipo ${selectedPedido.codigo_tipo}`}
+                            : selectedPedido.codigo_tipo === 3
+                              ? 'Retorno'
+                              : `Tipo ${selectedPedido.codigo_tipo}`}
                       </p>
                     </div>
                     <div>
@@ -352,7 +365,11 @@ export default function Pedidos() {
                   <div>
                     <h4 className="font-semibold mb-3 flex items-center gap-2">
                       <Package className="h-4 w-4" />
-                      {selectedPedido.codigo_tipo === 7 ? 'PRODUTOS ENVIADOS' : 'PRODUTOS VENDIDOS'}
+                      {selectedPedido.codigo_tipo === 7
+                        ? 'PRODUTOS ENVIADOS'
+                        : selectedPedido.codigo_tipo === 3
+                          ? 'PRODUTOS RETORNADOS'
+                          : 'PRODUTOS VENDIDOS'}
                     </h4>
                     <div className="border rounded-lg overflow-hidden">
                       <Table>
