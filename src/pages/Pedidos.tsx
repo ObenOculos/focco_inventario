@@ -433,7 +433,12 @@ export default function Pedidos() {
                         <span className="text-muted-foreground">Valor Total:</span>
                         <p className="font-bold text-lg text-primary">
                           {selectedPedido.itens_pedido
-                            .reduce((acc, item) => acc + Number(item.quantidade) * Number(item.valor_produto), 0)
+                            .reduce(
+                              (acc, item) =>
+                                acc +
+                                Math.abs(Number(item.quantidade)) * Number(item.valor_produto),
+                              0,
+                            )
                             .toLocaleString('pt-BR', {
                               style: 'currency',
                               currency: 'BRL',

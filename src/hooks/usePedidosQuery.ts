@@ -120,10 +120,12 @@ export const usePedidosPaginatedQuery = (filters: PedidosFilters) => {
       return {
         data: (data || []).map((pedido: any) => ({
           ...pedido,
-          valor_total: pedido.itens_pedido?.reduce(
-            (acc: number, item: any) => acc + Number(item.quantidade) * Number(item.valor_produto),
-            0
-          ) || pedido.valor_total,
+          valor_total:
+            pedido.itens_pedido?.reduce(
+              (acc: number, item: any) =>
+                acc + Math.abs(Number(item.quantidade)) * Number(item.valor_produto),
+              0,
+            ) || pedido.valor_total,
         })) as Pedido[],
         totalCount,
         totalPages,
