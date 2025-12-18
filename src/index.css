@@ -159,3 +159,49 @@
     }
   }
 }
+
+@layer utilities {
+  /* Estilos da barra de rolagem */
+  ::-webkit-scrollbar {
+    width: 12px;
+    height: 12px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+    border-left: 1px solid hsl(var(--border));
+  }
+
+  .dark ::-webkit-scrollbar-track {
+    background: hsl(var(--background));
+    border-left: 1px solid hsl(var(--border));
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary));
+  }
+
+  .dark ::-webkit-scrollbar-thumb {
+    background: hsl(var(--foreground));
+    border: 1px solid hsl(var(--border));
+  }
+
+  .dark ::-webkit-scrollbar-thumb:hover {
+    background: hsl(var(--primary));
+  }
+
+  /* Cantos da barra de rolagem */
+  ::-webkit-scrollbar-corner {
+    background: hsl(var(--background));
+  }
+
+  .dark ::-webkit-scrollbar-corner {
+    background: hsl(var(--background));
+  }
+}
+
