@@ -1,0 +1,38 @@
+create table public.itens_inventario (
+  id uuid not null default gen_random_uuid (),
+  inventario_id uuid not null,
+  codigo_auxiliar text not null,
+  nome_produto text null,
+  quantidade_fisica numeric(10, 5) not null default 0,
+  created_at timestamp with time zone not null default now(),
+  constraint itens_inventario_pkey primary key (id),
+  constraint itens_inventario_inventario_id_fkey foreign KEY (inventario_id) references inventarios (id) on delete CASCADE
+) TABLESPACE pg_default;
+
+create table public.movimentacoes_estoque (
+  id uuid not null default gen_random_uuid (),
+  user_id uuid not null,
+  codigo_vendedor text not null,
+  codigo_auxiliar text not null,
+  nome_produto text null,
+  tipo_movimentacao public.movimentacao_tipo not null,
+  quantidade numeric not null,
+  motivo text null,
+  observacoes text null,
+  data_movimentacao timestamp with time zone not null default now(),
+  created_at timestamp with time zone not null default now(),
+  origem_id uuid null,
+  origem_tipo text null,
+  constraint movimentacoes_estoque_pkey primary key (id),
+  constraint movimentacoes_estoque_user_id_fkey foreign KEY (user_id) references auth.users (id),
+  constraint quantidade_must_be_positive check ((quantidade >= (0)::numeric))
+) TABLESPACE pg_default;
+
+create index IF not exists idx_movimentacoes_estoque_vendedor on public.movimentacoes_estoque using btree (codigo_vendedor) TABLESPACE pg_default;
+
+create index IF not exists idx_movimentacoes_estoque_codigo on public.movimentacoes_estoque using btree (codigo_auxiliar) TABLESPACE pg_default;
+
+create index IF not exists idx_movimentacoes_estoque_data on public.movimentacoes_estoque using btree (data_movimentacao) TABLESPACE pg_default;
+
+create index IF not exists idx_movimentacoes_origem on public.movimentacoes_estoque using btree (origem_id, origem_tipo) TABLESPACE pg_default;
+
