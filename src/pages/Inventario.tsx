@@ -47,6 +47,7 @@ export default function Inventario() {
   const [loading, setLoading] = useState(false); // Loading para envio
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Modal de confirmação removido: produtos não cadastrados agora são adicionados automaticamente
 
@@ -101,12 +102,22 @@ export default function Inventario() {
       items.length > 0 && currentLocation.pathname !== nextLocation.pathname && !loading
   );
 
-  const saveDraft = () => {
-    localStorage.setItem('inventario_items_draft', JSON.stringify(items));
-    localStorage.setItem('inventario_observacoes_draft', observacoes);
-    if (editingInventarioId) {
-      localStorage.setItem('inventario_editing_id_draft', editingInventarioId);
+  const persistDraft = (
+    currentItems: InventarioItem[],
+    currentObs: string,
+    currentEditId: string | null
+  ) => {
+    localStorage.setItem('inventario_items_draft', JSON.stringify(currentItems));
+    localStorage.setItem('inventario_observacoes_draft', currentObs);
+    if (currentEditId) {
+      localStorage.setItem('inventario_editing_id_draft', currentEditId);
+    } else {
+      localStorage.removeItem('inventario_editing_id_draft');
     }
+  };
+
+  const saveDraft = () => {
+    persistDraft(items, observacoes, editingInventarioId);
     toast.success('Rascunho salvo localmente.');
   };
 
@@ -137,6 +148,12 @@ export default function Inventario() {
     }
     return false;
   };
+
+  useEffect(() => {
+    if (isLoaded) {
+      persistDraft(items, observacoes, editingInventarioId);
+    }
+  }, [items, observacoes, editingInventarioId, isLoaded]);
 
   const handleBlockerSave = () => {
     saveDraft();
@@ -398,9 +415,10 @@ export default function Inventario() {
   useEffect(() => {
     if (profile?.codigo_vendedor) {
       if (inventarioId) {
-        loadExistingInventario();
+        loadExistingInventario().finally(() => setIsLoaded(true));
       } else {
         loadDraft();
+        setIsLoaded(true);
       }
     }
   }, [profile?.codigo_vendedor, inventarioId]);
