@@ -12,6 +12,16 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
@@ -25,6 +35,7 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
+  Trash2,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -49,6 +60,8 @@ export default function AnaliseInventario() {
   const { profile } = useAuth();
   const [selectedInventario, setSelectedInventario] = useState<string | null>(null);
   const [isApproving, setIsApproving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [divergenceFilter, setDivergenceFilter] = useState('com_divergencia');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
@@ -202,6 +215,29 @@ export default function AnaliseInventario() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!selectedInventario || !isGerente) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.from('inventarios').delete().eq('id', selectedInventario);
+
+      if (error) throw error;
+
+      toast.success('Inventário excluído com sucesso.');
+      setSelectedInventario(null);
+      queryClient.invalidateQueries({ queryKey: ['inventariosAnalise'] });
+      queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    } catch (err: any) {
+      console.error('Erro ao excluir inventário:', err);
+      toast.error('Erro ao excluir inventário');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
   const selectedInventarioInfo = useMemo(
     () => inventarios.find((inv) => inv.id === selectedInventario),
     [inventarios, selectedInventario]
@@ -222,6 +258,8 @@ export default function AnaliseInventario() {
     isGerente &&
     selectedInventarioInfo &&
     ['pendente', 'revisao'].includes(selectedInventarioInfo.status);
+
+  const showDeleteButton = isGerente && selectedInventarioInfo;
 
   const handleExportDivergencias = () => {
     if (!selectedInventarioInfo || filteredComparativo.length === 0) {
@@ -467,26 +505,46 @@ export default function AnaliseInventario() {
               </Card>
             </div>
 
-            {/* Approval Button */}
-            {showApprovalButton && (
-              <Card className="border-green-500/30 bg-green-500/5">
+            {/* Approval and Delete Buttons */}
+            {(showApprovalButton || showDeleteButton) && (
+              <Card className="border-secondary bg-secondary/20">
                 <CardContent className="pt-6">
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
-                      <h3 className="font-semibold text-lg mb-1">Aprovar Inventário</h3>
+                      <h3 className="font-semibold text-lg mb-1">Ações do Gerente</h3>
                       <p className="text-sm text-muted-foreground">
-                        O estoque teórico será atualizado com base neste inventário. Esta ação não pode ser desfeita.
+                        Gerencie este inventário. A aprovação é irreversível.
                       </p>
                     </div>
-                    <Button 
-                      onClick={handleApprove} 
-                      disabled={isApproving}
-                      size="lg"
-                      className="shrink-0"
-                    >
-                      {isApproving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                      {isApproving ? 'Aprovando...' : 'Aprovar e Ajustar Estoque'}
-                    </Button>
+                    <div className="flex gap-2">
+                      {showDeleteButton && (
+                        <Button
+                          variant="destructive"
+                          onClick={() => setShowDeleteDialog(true)}
+                          disabled={isDeleting || isApproving}
+                          size="lg"
+                          className="shrink-0"
+                        >
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Excluir
+                        </Button>
+                      )}
+                      {showApprovalButton && (
+                        <Button
+                          onClick={handleApprove}
+                          disabled={isApproving || isDeleting}
+                          size="lg"
+                          className="shrink-0 bg-green-600 hover:bg-green-700"
+                        >
+                          {isApproving ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : (
+                            <CheckCircle className="mr-2 h-4 w-4" />
+                          )}
+                          {isApproving ? 'Aprovando...' : 'Aprovar Inventário'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -623,6 +681,27 @@ export default function AnaliseInventario() {
           </div>
         )}
       </div>
+
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação não pode ser desfeita. Isso excluirá permanentemente o inventário e todos os seus itens.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Excluindo...' : 'Excluir Inventário'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
