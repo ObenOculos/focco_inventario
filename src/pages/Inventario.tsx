@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -10,6 +10,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -83,6 +93,66 @@ export default function Inventario() {
   });
 
   const isMobile = useIsMobile();
+  
+  const totalQuantity = useMemo(() => items.reduce((acc, item) => acc + item.quantidade_fisica, 0), [items]);
+
+  const blocker = useBlocker(
+    ({ currentLocation, nextLocation }) =>
+      items.length > 0 && currentLocation.pathname !== nextLocation.pathname && !loading
+  );
+
+  const saveDraft = () => {
+    localStorage.setItem('inventario_items_draft', JSON.stringify(items));
+    localStorage.setItem('inventario_observacoes_draft', observacoes);
+    if (editingInventarioId) {
+      localStorage.setItem('inventario_editing_id_draft', editingInventarioId);
+    }
+    toast.success('Rascunho salvo localmente.');
+  };
+
+  const clearDraft = () => {
+    localStorage.removeItem('inventario_items_draft');
+    localStorage.removeItem('inventario_observacoes_draft');
+    localStorage.removeItem('inventario_editing_id_draft');
+  };
+
+  const loadDraft = () => {
+    const savedItems = localStorage.getItem('inventario_items_draft');
+    const savedObs = localStorage.getItem('inventario_observacoes_draft');
+    const savedEditId = localStorage.getItem('inventario_editing_id_draft');
+
+    if (savedItems) {
+      try {
+        const parsedItems = JSON.parse(savedItems);
+        if (parsedItems.length > 0) {
+          setItems(parsedItems);
+          if (savedObs) setObservacoes(savedObs);
+          if (savedEditId) setEditingInventarioId(savedEditId);
+          toast.info('Rascunho carregado automaticamente.');
+          return true;
+        }
+      } catch (e) {
+        console.error('Erro ao carregar rascunho:', e);
+      }
+    }
+    return false;
+  };
+
+  const handleBlockerSave = () => {
+    saveDraft();
+    if (blocker.state === 'blocked') {
+      blocker.proceed();
+    }
+  };
+
+  const handleBlockerDiscard = () => {
+    clearDraft();
+    setItems([]);
+    setObservacoes('');
+    if (blocker.state === 'blocked') {
+      blocker.proceed();
+    }
+  };
 
   const startScanner = async () => {
     try {
@@ -304,17 +374,16 @@ export default function Inventario() {
 
         if (itensError) throw itensError;
 
-        toast.success('Inventário enviado para conferência!');
+        toast.success(editingInventarioId ? 'Inventário atualizado e reenviado!' : 'Inventário enviado para conferência!');
       }
 
       // Invalidar cache para atualizar lista de inventários
       await queryClient.invalidateQueries({ queryKey: ['inventarios'] });
 
-      // Limpar estado apenas se não estiver editando
-      if (!editingInventarioId) {
-        setItems([]);
-        setObservacoes('');
-      }
+      // Limpar estado e rascunho após sucesso
+      clearDraft();
+      setItems([]);
+      setObservacoes('');
       setEditingInventarioId(null);
       setObservacoesGerente('');
       setInventarioInfo(null);
@@ -327,8 +396,12 @@ export default function Inventario() {
   };
 
   useEffect(() => {
-    if (profile?.codigo_vendedor && inventarioId) {
-      loadExistingInventario();
+    if (profile?.codigo_vendedor) {
+      if (inventarioId) {
+        loadExistingInventario();
+      } else {
+        loadDraft();
+      }
     }
   }, [profile?.codigo_vendedor, inventarioId]);
 
@@ -545,7 +618,7 @@ export default function Inventario() {
         {/* Items */}
         <Card className="border-2">
           <CardHeader>
-            <CardTitle>Itens do Inventário ({totalItems})</CardTitle>
+            <CardTitle>Itens do Inventário ({totalQuantity})</CardTitle>
             <div className="relative mt-2">
               <Search
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -677,6 +750,27 @@ export default function Inventario() {
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={blocker.state === 'blocked'}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Inventário em andamento</AlertDialogTitle>
+            <AlertDialogDescription>
+              Você tem itens não salvos. Deseja sair e apagar tudo ou salvar como rascunho?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="flex-col gap-2 sm:gap-0">
+            <AlertDialogCancel onClick={() => blocker.reset?.()}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleBlockerDiscard}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Sair e apagar
+            </AlertDialogAction>
+            <AlertDialogAction onClick={handleBlockerSave}>Salvar como rascunho</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
