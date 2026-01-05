@@ -36,7 +36,11 @@ import {
   Trash2,
   TrendingUp,
   TrendingDown,
+  PackageX,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -66,6 +70,7 @@ export default function AnaliseInventario() {
   const [searchTerm, setSearchTerm] = useState('');
   const [divergenceFilter, setDivergenceFilter] = useState('com_divergencia');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
+  const [showItensNaoContados, setShowItensNaoContados] = useState(false);
 
   const isGerente = profile?.role === 'gerente';
   const queryClient = useQueryClient();
@@ -161,13 +166,18 @@ export default function AnaliseInventario() {
     let filteredData = comparativo;
 
     if (divergenceFilter === 'com_divergencia') {
-      filteredData = filteredData.filter((item) => item.divergencia !== 0);
+      filteredData = filteredData.filter((item) => item.foi_contado && item.divergencia !== 0);
     } else if (divergenceFilter === 'sem_divergencia') {
-      filteredData = filteredData.filter((item) => item.divergencia === 0);
+      filteredData = filteredData.filter((item) => item.foi_contado && item.divergencia === 0);
     } else if (divergenceFilter === 'positiva') {
-      filteredData = filteredData.filter((item) => item.divergencia > 0);
+      filteredData = filteredData.filter((item) => item.foi_contado && item.divergencia > 0);
     } else if (divergenceFilter === 'negativa') {
-      filteredData = filteredData.filter((item) => item.divergencia < 0);
+      filteredData = filteredData.filter((item) => item.foi_contado && item.divergencia < 0);
+    } else if (divergenceFilter === 'nao_contados') {
+      filteredData = filteredData.filter((item) => !item.foi_contado);
+    } else {
+      // "todos" - mostra apenas os contados
+      filteredData = filteredData.filter((item) => item.foi_contado);
     }
 
     return filteredData;
@@ -264,6 +274,18 @@ export default function AnaliseInventario() {
     return { itensCorretos, itensSobra, itensFalta, totalItens, valorTotalDivergencia };
   }, [comparativo]);
 
+  // Itens não contados (com estoque teórico mas não foram contados)
+  const itensNaoContados = useMemo(() => {
+    return comparativo
+      .filter((item) => !item.foi_contado && item.estoque_teorico !== 0)
+      .map((item) => ({
+        codigo_auxiliar: item.codigo_auxiliar,
+        nome_produto: item.nome_produto,
+        estoque_teorico: item.estoque_teorico,
+      }))
+      .sort((a, b) => Math.abs(b.estoque_teorico) - Math.abs(a.estoque_teorico));
+  }, [comparativo]);
+
   const showApprovalButton =
     isGerente &&
     selectedInventarioInfo &&
@@ -272,17 +294,38 @@ export default function AnaliseInventario() {
   const showDeleteButton = isGerente && selectedInventarioInfo;
 
   const handleExportDivergencias = () => {
-    if (!selectedInventarioInfo || filteredComparativo.length === 0) {
+    if (!selectedInventarioInfo || (filteredComparativo.length === 0 && itensNaoContados.length === 0)) {
       toast.error('Não há dados para exportar.');
       return;
     }
 
-    const dataExport = filteredComparativo.map((item) => ({
+    const dataExport: Array<{
+      'Código Auxiliar': string;
+      'Nome Produto': string;
+      'Estoque Teórico': number;
+      'Estoque Físico': number;
+      Divergência: number;
+      Status: string;
+    }> = filteredComparativo.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
+      'Nome Produto': item.nome_produto || '',
       'Estoque Teórico': item.estoque_teorico,
       'Estoque Físico': item.quantidade_fisica,
       Divergência: item.divergencia,
+      Status: item.divergencia === 0 ? 'OK' : item.divergencia > 0 ? 'Sobra' : 'Falta',
     }));
+
+    // Adicionar itens não contados ao export
+    itensNaoContados.forEach((item) => {
+      dataExport.push({
+        'Código Auxiliar': item.codigo_auxiliar,
+        'Nome Produto': item.nome_produto || '',
+        'Estoque Teórico': item.estoque_teorico,
+        'Estoque Físico': 0,
+        Divergência: -item.estoque_teorico,
+        Status: 'Não Contado',
+      });
+    });
 
     const ws = XLSX.utils.json_to_sheet(dataExport);
     const wb = XLSX.utils.book_new();
@@ -476,6 +519,50 @@ export default function AnaliseInventario() {
               valorTotalDivergencia={stats.valorTotalDivergencia}
             />
 
+            {/* Card de Itens Não Contados */}
+            {itensNaoContados.length > 0 && (
+              <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
+                <CardHeader className="pb-3">
+                  <CardTitle
+                    className="text-base flex items-center justify-between cursor-pointer"
+                    onClick={() => setShowItensNaoContados(!showItensNaoContados)}
+                  >
+                    <span className="flex items-center gap-2 text-amber-800 dark:text-amber-400">
+                      <PackageX size={18} /> {itensNaoContados.length} Itens Não Contados
+                    </span>
+                    {showItensNaoContados ? (
+                      <ChevronUp size={18} className="text-amber-700 dark:text-amber-500" />
+                    ) : (
+                      <ChevronDown size={18} className="text-amber-700 dark:text-amber-500" />
+                    )}
+                  </CardTitle>
+                </CardHeader>
+                {showItensNaoContados && (
+                  <CardContent>
+                    <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
+                      Estes itens possuem estoque teórico mas não foram contados pelo vendedor.
+                    </p>
+                    <div className="max-h-60 overflow-y-auto space-y-1">
+                      {itensNaoContados.map((item) => (
+                        <div
+                          key={item.codigo_auxiliar}
+                          className="flex justify-between items-center text-sm bg-amber-100 dark:bg-amber-900/30 p-2 rounded"
+                        >
+                          <span>
+                            <span className="font-mono font-bold">{item.codigo_auxiliar}</span>
+                            {item.nome_produto && ` - ${item.nome_produto}`}
+                          </span>
+                          <Badge className="bg-amber-600 hover:bg-amber-700">
+                            Teórico: {item.estoque_teorico}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            )}
+
             {/* Approval and Delete Buttons */}
             {(showApprovalButton || showDeleteButton) && (
               <Card className="border-secondary bg-secondary/20">
@@ -543,6 +630,7 @@ export default function AnaliseInventario() {
                         <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
                         <SelectItem value="positiva">Sobras (+)</SelectItem>
                         <SelectItem value="negativa">Faltas (-)</SelectItem>
+                        <SelectItem value="nao_contados">Não Contados</SelectItem>
                       </SelectContent>
                     </Select>
                     <Button
