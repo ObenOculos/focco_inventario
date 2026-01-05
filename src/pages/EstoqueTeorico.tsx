@@ -3,7 +3,13 @@ import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Package, AlertTriangle, TrendingUp, TrendingDown, Download, Filter, X, Search } from 'lucide-react';
+import { Package, AlertTriangle, TrendingUp, TrendingDown, Download, Filter, X, Search, ChevronDown } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { usePagination } from '@/hooks/usePagination';
@@ -139,13 +145,15 @@ export default function EstoqueTeorico() {
     setSearchTerm('');
   };
 
-  const handleExportExcel = () => {
-    if (dadosFiltrados.length === 0) {
+  const handleExportExcel = (exportAll: boolean = false) => {
+    const dataToExport = exportAll ? dados : dadosFiltrados;
+    
+    if (dataToExport.length === 0) {
       toast.warning('Sem dados para exportar');
       return;
     }
 
-    const exportData = dadosFiltrados.map((item) => ({
+    const exportData = dataToExport.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
       'Nome Produto': item.nome_produto,
       'Estoque Teórico': item.estoque_teorico,
@@ -165,7 +173,8 @@ export default function EstoqueTeorico() {
         ? vendedores.find((v) => v.codigo_vendedor === selectedVendor)?.nome || selectedVendor
         : 'consolidado';
     const dateStr = new Date().toISOString().split('T')[0];
-    const fileName = `estoque_teorico_real_${vendorName}_${dateStr}.xlsx`;
+    const suffix = exportAll ? '_completo' : '_filtrado';
+    const fileName = `estoque_teorico_real_${vendorName}_${dateStr}${suffix}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
     toast.success(`Arquivo exportado com sucesso!`);
@@ -186,14 +195,23 @@ export default function EstoqueTeorico() {
           </div>
           <div className="flex items-center gap-2">
             <RefetchIndicator isFetching={isFetching && !loading} />
-            <Button
-              variant="outline"
-              onClick={handleExportExcel}
-              disabled={dadosFiltrados.length === 0}
-            >
-              <Download className="mr-2 h-4 w-4" />
-              <span className="hidden sm:inline">Exportar</span>
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" disabled={dados.length === 0}>
+                  <Download className="mr-2 h-4 w-4" />
+                  <span className="hidden sm:inline">Exportar</span>
+                  <ChevronDown className="ml-2 h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={() => handleExportExcel(false)}>
+                  Exportar Filtrado
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleExportExcel(true)}>
+                  Exportar Tudo
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -215,11 +233,16 @@ export default function EstoqueTeorico() {
                     </p>
                   </div>
                 </div>
-                <Link to="/pedidos">
-                  <Button variant="outline" size="sm">
-                    Ver detalhes
-                  </Button>
-                </Link>
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  onClick={() => {
+                    setTeoricoFilter('negativo');
+                    setShowFilters(true);
+                  }}
+                >
+                  Ver detalhes
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -575,7 +598,7 @@ export default function EstoqueTeorico() {
                   ))}
                 </div>
 
-                {totalPages > 1 && (
+                {paginatedData.length > 0 && (
                   <Pagination
                     currentPage={currentPage}
                     totalPages={totalPages}
