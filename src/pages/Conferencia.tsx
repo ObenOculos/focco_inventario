@@ -306,9 +306,12 @@ export default function Conferencia() {
   const hasEdits = Object.keys(editedValues).length > 0;
   const stats = useMemo(
     () => ({
-      itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
+      itensCorretos: divergencias
+        .filter((d) => d.diferenca === 0)
+        .reduce((sum, d) => sum + d.quantidade_fisica, 0),
       itensSobra: divergencias.filter((d) => d.diferenca > 0).length,
       itensFalta: divergencias.filter((d) => d.diferenca < 0).length,
+      totalItens: divergencias.reduce((sum, d) => sum + d.quantidade_fisica, 0),
       valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
     }),
     [divergencias]
@@ -451,7 +454,7 @@ export default function Conferencia() {
               </div>
             ) : (
               <div className="space-y-4">
-                <DivergenciaStats totalItens={divergencias.length} {...stats} />
+                <DivergenciaStats {...stats} />
 
                 {itensNaoContados.length > 0 && (
                   <Card className="bg-amber-50 border-amber-300">
