@@ -256,8 +256,10 @@ export default function AnaliseInventario() {
     const itensSobra = comparativo.filter((item) => item.divergencia > 0).length;
     // Contagem de produtos com falta
     const itensFalta = comparativo.filter((item) => item.divergencia < 0).length;
+    // Soma total das divergências (positivas e negativas)
+    const valorTotalDivergencia = comparativo.reduce((sum, item) => sum + item.divergencia, 0);
 
-    return { itensCorretos, itensSobra, itensFalta, totalItens };
+    return { itensCorretos, itensSobra, itensFalta, totalItens, valorTotalDivergencia };
   }, [comparativo]);
 
   const showApprovalButton =
@@ -469,6 +471,7 @@ export default function AnaliseInventario() {
               itensSobra={stats.itensSobra}
               itensFalta={stats.itensFalta}
               totalItens={stats.totalItens}
+              valorTotalDivergencia={stats.valorTotalDivergencia}
             />
 
             {/* Approval and Delete Buttons */}
