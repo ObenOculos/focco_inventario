@@ -245,12 +245,21 @@ export default function AnaliseInventario() {
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const total = comparativo.length;
-    const comDivergencia = comparativo.filter((item) => item.divergencia !== 0).length;
-    const semDivergencia = total - comDivergencia;
+    // Soma das quantidades físicas totais
+    const total = comparativo.reduce((sum, item) => sum + item.quantidade_fisica, 0);
+    // Soma das quantidades com divergência
+    const comDivergencia = comparativo
+      .filter((item) => item.divergencia !== 0)
+      .reduce((sum, item) => sum + item.quantidade_fisica, 0);
+    // Soma das quantidades sem divergência
+    const semDivergencia = comparativo
+      .filter((item) => item.divergencia === 0)
+      .reduce((sum, item) => sum + item.quantidade_fisica, 0);
+    // Sobras (divergência positiva) - mantém como contagem de produtos
     const positivas = comparativo.filter((item) => item.divergencia > 0).length;
+    // Faltas (divergência negativa) - mantém como contagem de produtos
     const negativas = comparativo.filter((item) => item.divergencia < 0).length;
-    
+
     return { total, comDivergencia, semDivergencia, positivas, negativas };
   }, [comparativo]);
 

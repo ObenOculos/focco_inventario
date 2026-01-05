@@ -96,7 +96,7 @@ export default function Historico() {
                         })}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {inventario.itens_inventario.length} itens •{' '}
+                        {inventario.itens_inventario.reduce((sum, item) => sum + item.quantidade_fisica, 0)} itens •{' '}
                         {format(new Date(inventario.data_inventario), 'HH:mm')}
                       </p>
                     </div>

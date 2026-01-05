@@ -52,7 +52,7 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
           codigo_vendedor,
           data_inventario,
           status,
-          itens_inventario (id)
+          itens_inventario (id, quantidade_fisica)
         `
         )
         .order('data_inventario', { ascending: false });
@@ -169,7 +169,7 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
               id: ultimoInv.id,
               data: ultimoInv.data_inventario,
               status: ultimoInv.status,
-              itens_contados: ultimoInv.itens_inventario?.length || 0,
+              itens_contados: ultimoInv.itens_inventario?.reduce((sum: number, item: any) => sum + (item.quantidade_fisica || 0), 0) || 0,
               acuracidade,
             };
           }
