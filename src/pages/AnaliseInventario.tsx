@@ -196,7 +196,7 @@ export default function AnaliseInventario() {
   } = usePagination({
     data: filteredComparativo,
     searchTerm,
-    searchFields: ['codigo_auxiliar'],
+    searchFields: ['codigo_auxiliar', 'nome_produto'],
   });
 
   const handleApprove = async () => {
