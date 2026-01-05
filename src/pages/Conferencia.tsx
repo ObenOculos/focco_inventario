@@ -94,7 +94,7 @@ export default function Conferencia() {
     data: filteredDivergencias,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
-    itemsPerPage: 20,
+    itemsPerPage: 10,
   });
 
   const handleSelectInventario = useCallback(
@@ -588,7 +588,7 @@ export default function Conferencia() {
                         </TableBody>
                       </Table>
                     </div>
-                    {paginationProps.totalPages > 1 && (
+                    {paginatedDivergencias.length > 0 && (
                       <div className="pt-4">
                         <Pagination {...paginationProps} />
                       </div>
