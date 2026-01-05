@@ -246,18 +246,20 @@ export default function AnaliseInventario() {
 
   // Calculate statistics
   const stats = useMemo(() => {
+    // Filtrar apenas itens que foram contados (igual à Conferência)
+    const itensContados = comparativo.filter((item) => item.foi_contado);
     // Soma das quantidades físicas dos itens corretos (sem divergência)
-    const itensCorretos = comparativo
+    const itensCorretos = itensContados
       .filter((item) => item.divergencia === 0)
       .reduce((sum, item) => sum + item.quantidade_fisica, 0);
     // Total de itens (soma de todas as quantidades físicas)
-    const totalItens = comparativo.reduce((sum, item) => sum + item.quantidade_fisica, 0);
+    const totalItens = itensContados.reduce((sum, item) => sum + item.quantidade_fisica, 0);
     // Contagem de produtos com sobra
-    const itensSobra = comparativo.filter((item) => item.divergencia > 0).length;
+    const itensSobra = itensContados.filter((item) => item.divergencia > 0).length;
     // Contagem de produtos com falta
-    const itensFalta = comparativo.filter((item) => item.divergencia < 0).length;
+    const itensFalta = itensContados.filter((item) => item.divergencia < 0).length;
     // Soma total das divergências (positivas e negativas)
-    const valorTotalDivergencia = comparativo.reduce((sum, item) => sum + item.divergencia, 0);
+    const valorTotalDivergencia = itensContados.reduce((sum, item) => sum + item.divergencia, 0);
 
     return { itensCorretos, itensSobra, itensFalta, totalItens, valorTotalDivergencia };
   }, [comparativo]);

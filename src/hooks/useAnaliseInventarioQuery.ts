@@ -15,6 +15,7 @@ interface ComparativoItem {
   estoque_teorico: number;
   quantidade_fisica: number;
   divergencia: number;
+  foi_contado: boolean;
 }
 
 interface VendedorSimples {
@@ -95,6 +96,7 @@ export const useComparativoInventarioQuery = (inventarioId: string | null) => {
               estoque_teorico: Number(item.estoque_teorico ?? item.quantidade_inventario ?? 0),
               quantidade_fisica: Number(item.quantidade_fisica ?? item.quantidade_contada ?? 0),
               divergencia: Number(item.divergencia ?? item.diferenca ?? 0),
+              foi_contado: item.foi_contado ?? true,
             }));
             allData.push(...mappedData);
             offset += batchSize;
