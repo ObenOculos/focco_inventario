@@ -11,6 +11,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -293,8 +299,10 @@ export default function AnaliseInventario() {
 
   const showDeleteButton = isGerente && selectedInventarioInfo;
 
-  const handleExportDivergencias = () => {
-    if (!selectedInventarioInfo || (filteredComparativo.length === 0 && itensNaoContados.length === 0)) {
+  const handleExportDivergencias = (exportAll: boolean = false) => {
+    const dataToExport = exportAll ? comparativo.filter((item) => item.foi_contado) : filteredComparativo;
+    
+    if (!selectedInventarioInfo || (dataToExport.length === 0 && itensNaoContados.length === 0)) {
       toast.error('Não há dados para exportar.');
       return;
     }
@@ -306,7 +314,7 @@ export default function AnaliseInventario() {
       'Estoque Físico': number;
       Divergência: number;
       Status: string;
-    }> = filteredComparativo.map((item) => ({
+    }> = dataToExport.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
       'Nome Produto': item.nome_produto || '',
       'Estoque Teórico': item.estoque_teorico,
@@ -336,7 +344,8 @@ export default function AnaliseInventario() {
     const dataInventario = new Date(selectedInventarioInfo.data_inventario)
       .toLocaleDateString('pt-BR', { timeZone: 'UTC' })
       .replace(/\//g, '-');
-    const fileName = `divergencias_${vendedorNome}_${dataInventario}.xlsx`;
+    const suffix = exportAll ? '_completo' : '_filtrado';
+    const fileName = `divergencias_${vendedorNome}_${dataInventario}${suffix}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
     toast.success('Arquivo exportado com sucesso!');
@@ -633,15 +642,27 @@ export default function AnaliseInventario() {
                         <SelectItem value="nao_contados">Não Contados</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Button
-                      variant="outline"
-                      onClick={handleExportDivergencias}
-                      disabled={filteredComparativo.length === 0}
-                      className="shrink-0"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Exportar
-                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="outline"
+                          disabled={comparativo.length === 0}
+                          className="shrink-0"
+                        >
+                          <Download className="mr-2 h-4 w-4" />
+                          Exportar
+                          <ChevronDown className="ml-2 h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => handleExportDivergencias(false)}>
+                          Exportar Filtrado
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => handleExportDivergencias(true)}>
+                          Exportar Tudo
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </CardHeader>
