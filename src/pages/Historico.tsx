@@ -5,12 +5,12 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useInventariosQuery } from '@/hooks/useInventariosQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { ClipboardList, ChevronDown, ChevronUp } from 'lucide-react';
+import { ClipboardList, ChevronDown, ChevronUp, FileDown } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
 import { InventoryStatus } from '@/types/app';
+import * as XLSX from 'xlsx';
 
 type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
   itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
@@ -43,6 +43,21 @@ export default function Historico() {
         {labels[status]}
       </span>
     );
+  };
+
+  const handleExportExcel = (inventario: InventarioComItens) => {
+    const dataExport = inventario.itens_inventario.map((item) => ({
+      'Código Auxiliar': item.codigo_auxiliar,
+      'Produto': item.nome_produto || '',
+      'Quantidade Física': item.quantidade_fisica,
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(dataExport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Inventário');
+
+    const dataFormatada = format(new Date(inventario.data_inventario), 'yyyy-MM-dd');
+    XLSX.writeFile(wb, `inventario_${dataFormatada}.xlsx`);
   };
 
   return (
@@ -87,6 +102,17 @@ export default function Historico() {
                     </div>
                     <div className="flex items-center gap-3">
                       {getStatusBadge(inventario.status)}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleExportExcel(inventario);
+                        }}
+                        title="Exportar Excel"
+                      >
+                        <FileDown size={16} />
+                      </Button>
                       {inventario.status === 'revisao' && (
                         <Button
                           size="sm"
