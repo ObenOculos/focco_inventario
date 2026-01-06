@@ -82,6 +82,7 @@ export default function AnaliseInventario() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [divergenceFilter, setDivergenceFilter] = useState('com_divergencia');
+  const [diferencaFilter, setDiferencaFilter] = useState('todos');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [showItensNaoContados, setShowItensNaoContados] = useState(false);
 
@@ -178,6 +179,7 @@ export default function AnaliseInventario() {
   const filteredComparativo = useMemo(() => {
     let filteredData = comparativo;
 
+    // Filtro de divergência
     if (divergenceFilter === 'com_divergencia') {
       filteredData = filteredData.filter((item) => item.foi_contado && item.divergencia !== 0);
     } else if (divergenceFilter === 'sem_divergencia') {
@@ -193,8 +195,19 @@ export default function AnaliseInventario() {
       filteredData = filteredData.filter((item) => item.foi_contado);
     }
 
+    // Filtro de diferença
+    if (diferencaFilter !== 'todos') {
+      filteredData = filteredData.filter((item) => {
+        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        if (diferencaFilter === 'positiva') return diferenca > 0;
+        if (diferencaFilter === 'negativa') return diferenca < 0;
+        if (diferencaFilter === 'zero') return diferenca === 0;
+        return true;
+      });
+    }
+
     return filteredData;
-  }, [comparativo, divergenceFilter]);
+  }, [comparativo, divergenceFilter, diferencaFilter]);
 
   const {
     currentPage,
@@ -640,16 +653,27 @@ export default function AnaliseInventario() {
                       className="w-full sm:w-64"
                     />
                     <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
-                      <SelectTrigger className="w-full sm:w-56">
-                        <SelectValue placeholder="Filtrar" />
+                      <SelectTrigger className="w-full sm:w-48">
+                        <SelectValue placeholder="Divergência" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="todos">Todas as divergências</SelectItem>
+                        <SelectItem value="todos">Todas divergências</SelectItem>
                         <SelectItem value="com_divergencia">Com divergência</SelectItem>
                         <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
                         <SelectItem value="positiva">Sobras (+)</SelectItem>
                         <SelectItem value="negativa">Faltas (-)</SelectItem>
                         <SelectItem value="nao_contados">Não Contados</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={diferencaFilter} onValueChange={setDiferencaFilter}>
+                      <SelectTrigger className="w-full sm:w-44">
+                        <SelectValue placeholder="Diferença" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todas diferenças</SelectItem>
+                        <SelectItem value="positiva">Diferença (+)</SelectItem>
+                        <SelectItem value="negativa">Diferença (-)</SelectItem>
+                        <SelectItem value="zero">Diferença (0)</SelectItem>
                       </SelectContent>
                     </Select>
                     <DropdownMenu>
