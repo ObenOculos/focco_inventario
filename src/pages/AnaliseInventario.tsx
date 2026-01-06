@@ -67,6 +67,13 @@ import {
   ComparativoItem,
 } from '@/hooks/useAnaliseInventarioQuery';
 
+// Função para calcular a diferença com lógica condicional
+const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
+  return estoqueTeor <= 0 
+    ? estoqueTeor + estoqFisico 
+    : estoqueTeor - estoqFisico;
+};
+
 export default function AnaliseInventario() {
   const { profile } = useAuth();
   const [selectedInventario, setSelectedInventario] = useState<string | null>(null);
@@ -313,6 +320,7 @@ export default function AnaliseInventario() {
       'Estoque Teórico': number;
       'Estoque Físico': number;
       Divergência: number;
+      Diferença: number;
       Status: string;
     }> = dataToExport.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
@@ -320,6 +328,7 @@ export default function AnaliseInventario() {
       'Estoque Teórico': item.estoque_teorico,
       'Estoque Físico': item.quantidade_fisica,
       Divergência: item.divergencia,
+      Diferença: calcularDiferenca(item.estoque_teorico, item.quantidade_fisica),
       Status: item.divergencia === 0 ? 'OK' : item.divergencia > 0 ? 'Sobra' : 'Falta',
     }));
 
@@ -331,6 +340,7 @@ export default function AnaliseInventario() {
         'Estoque Teórico': item.estoque_teorico,
         'Estoque Físico': 0,
         Divergência: -item.estoque_teorico,
+        Diferença: calcularDiferenca(item.estoque_teorico, 0),
         Status: 'Não Contado',
       });
     });
@@ -675,12 +685,13 @@ export default function AnaliseInventario() {
                         <TableHead className="text-center">Est. Teórico</TableHead>
                         <TableHead className="text-center">Est. Físico</TableHead>
                         <TableHead className="text-center">Divergência</TableHead>
+                        <TableHead className="text-center">Diferença</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedComparativo.length === 0 ? (
                         <TableRow>
-                          <TableCell colSpan={4} className="h-32 text-center">
+                          <TableCell colSpan={5} className="h-32 text-center">
                             <div className="flex flex-col items-center gap-2">
                               <Minus className="h-8 w-8 text-muted-foreground/50" />
                               <p className="text-sm text-muted-foreground">
@@ -735,6 +746,24 @@ export default function AnaliseInventario() {
                                     : item.divergencia}
                                 </span>
                               </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {(() => {
+                                const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+                                return (
+                                  <span
+                                    className={`font-bold ${
+                                      diferenca > 0
+                                        ? 'text-blue-600'
+                                        : diferenca < 0
+                                          ? 'text-orange-600'
+                                          : 'text-muted-foreground'
+                                    }`}
+                                  >
+                                    {diferenca > 0 ? `+${diferenca}` : diferenca}
+                                  </span>
+                                );
+                              })()}
                             </TableCell>
                           </TableRow>
                         ))
