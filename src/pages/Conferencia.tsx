@@ -385,7 +385,7 @@ export default function Conferencia() {
               <Badge variant="secondary">{inventarios.length}</Badge>
             </h2>
             {inventarios.length === 0 ? (
-              <Card className="border-2">
+              <Card className="border-2 shadow-none">
                 <CardContent className="py-12 text-center">
                   <CheckCircle size={48} className="mx-auto mb-4 text-green-500" />
                   <h2 className="text-xl font-bold mb-2">Nenhum inventário pendente</h2>
@@ -399,7 +399,7 @@ export default function Conferencia() {
                   return (
                     <Card
                       key={inv.id}
-                      className={`border-2 transition-all cursor-pointer group ${selectedInventario?.id === inv.id ? 'border-primary shadow-lg' : 'hover:border-primary/70'}`}
+                      className={`border-2 transition-all cursor-pointer group shadow-none ${selectedInventario?.id === inv.id ? 'border-blue-600' : 'hover:border-blue-300'}`}
                       onClick={() => handleSelectInventario(inv)}
                     >
                       <CardHeader className="pb-3">
@@ -457,7 +457,7 @@ export default function Conferencia() {
                 <DivergenciaStats {...stats} />
 
                 {itensNaoContados.length > 0 && (
-                  <Card className="bg-amber-50 border-amber-300">
+                  <Card className="bg-amber-50 border-amber-300 shadow-none">
                     <CardHeader className="pb-3">
                       <CardTitle
                         className="text-base flex items-center justify-between cursor-pointer"
@@ -495,7 +495,7 @@ export default function Conferencia() {
                   </Card>
                 )}
 
-                <Card className="border-2">
+                <Card className="border-2 shadow-none">
                   <CardHeader>
                     <div className="flex flex-col md:flex-row gap-3">
                       <SearchFilter
