@@ -486,7 +486,7 @@ export default function AnaliseInventario() {
 
             {/* Approval and Delete Buttons */}
             {(showApprovalButton || showDeleteButton) && (
-              <Card className="border-secondary bg-secondary/20">
+              <Card>
                 <CardContent className="pt-6">
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
                     <div>
@@ -513,7 +513,7 @@ export default function AnaliseInventario() {
                           onClick={handleApprove}
                           disabled={isApproving || isDeleting}
                           size="lg"
-                          className="shrink-0 bg-green-600 hover:bg-green-700"
+                          className="shrink-0"
                         >
                           {isApproving ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
