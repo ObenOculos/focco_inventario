@@ -35,16 +35,11 @@ import {
   CheckCircle,
   Loader2,
   Download,
-  User,
-  Calendar,
-  Hash,
+  ChevronDown,
   Minus,
   Trash2,
   TrendingUp,
   TrendingDown,
-  PackageX,
-  ChevronDown,
-  ChevronUp,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
@@ -84,7 +79,6 @@ export default function AnaliseInventario() {
   const [divergenceFilter, setDivergenceFilter] = useState('com_divergencia');
   const [diferencaFilter, setDiferencaFilter] = useState('todos');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
-  const [showItensNaoContados, setShowItensNaoContados] = useState(false);
 
   const isGerente = profile?.role === 'gerente';
   const queryClient = useQueryClient();
@@ -481,67 +475,6 @@ export default function AnaliseInventario() {
           </Card>
         ) : (
           <div className="space-y-6">
-            {/* Inventory Info Card */}
-            {selectedInventarioInfo && (
-              <Card className="border-primary/20 bg-primary/5">
-                <CardContent className="pt-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-background rounded-lg">
-                        <Hash className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Inventário</p>
-                        <p className="font-semibold">
-                          #
-                          {inventarios.findIndex((inv) => inv.id === selectedInventario) >= 0
-                            ? inventarios.length -
-                              inventarios.findIndex((inv) => inv.id === selectedInventario)
-                            : '-'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-background rounded-lg">
-                        <User className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Vendedor</p>
-                        <p className="font-semibold">
-                          {selectedInventarioInfo.vendedor_nome}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-background rounded-lg">
-                        <Calendar className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Data</p>
-                        <p className="font-semibold">
-                          {new Date(selectedInventarioInfo.data_inventario).toLocaleDateString(
-                            'pt-BR',
-                            { timeZone: 'UTC' }
-                          )}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-3">
-                      <div className="p-2 bg-background rounded-lg">
-                        <CheckCircle className="h-5 w-5 text-primary" />
-                      </div>
-                      <div>
-                        <p className="text-xs text-muted-foreground">Status</p>
-                        <p className="font-semibold capitalize">
-                          {selectedInventarioInfo.status}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Statistics - usando o componente reutilizável */}
             <DivergenciaStats
               itensCorretos={stats.itensCorretos}
@@ -550,50 +483,6 @@ export default function AnaliseInventario() {
               totalItens={stats.totalItens}
               valorTotalDivergencia={stats.valorTotalDivergencia}
             />
-
-            {/* Card de Itens Não Contados */}
-            {itensNaoContados.length > 0 && (
-              <Card className="border-amber-300 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-700">
-                <CardHeader className="pb-3">
-                  <CardTitle
-                    className="text-base flex items-center justify-between cursor-pointer"
-                    onClick={() => setShowItensNaoContados(!showItensNaoContados)}
-                  >
-                    <span className="flex items-center gap-2 text-amber-800 dark:text-amber-400">
-                      <PackageX size={18} /> {itensNaoContados.length} Itens Não Contados
-                    </span>
-                    {showItensNaoContados ? (
-                      <ChevronUp size={18} className="text-amber-700 dark:text-amber-500" />
-                    ) : (
-                      <ChevronDown size={18} className="text-amber-700 dark:text-amber-500" />
-                    )}
-                  </CardTitle>
-                </CardHeader>
-                {showItensNaoContados && (
-                  <CardContent>
-                    <p className="text-sm text-amber-700 dark:text-amber-400 mb-3">
-                      Estes itens possuem estoque teórico mas não foram contados pelo vendedor.
-                    </p>
-                    <div className="max-h-60 overflow-y-auto space-y-1">
-                      {itensNaoContados.map((item) => (
-                        <div
-                          key={item.codigo_auxiliar}
-                          className="flex justify-between items-center text-sm bg-amber-100 dark:bg-amber-900/30 p-2 rounded"
-                        >
-                          <span>
-                            <span className="font-mono font-bold">{item.codigo_auxiliar}</span>
-                            {item.nome_produto && ` - ${item.nome_produto}`}
-                          </span>
-                          <Badge className="bg-amber-600 hover:bg-amber-700">
-                            Teórico: {item.estoque_teorico}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            )}
 
             {/* Approval and Delete Buttons */}
             {(showApprovalButton || showDeleteButton) && (
