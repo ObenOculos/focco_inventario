@@ -326,16 +326,16 @@ export default function AnaliseInventario() {
       'Nome Produto': string;
       'Estoque Teórico': number;
       'Estoque Físico': number;
-      Divergência: number;
       Diferença: number;
+      Divergência: number;
       Status: string;
     }> = dataToExport.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
       'Nome Produto': item.nome_produto || '',
       'Estoque Teórico': item.estoque_teorico,
       'Estoque Físico': item.quantidade_fisica,
-      Divergência: item.divergencia,
       Diferença: calcularDiferenca(item.estoque_teorico, item.quantidade_fisica),
+      Divergência: item.divergencia,
       Status: item.divergencia === 0 ? 'OK' : item.divergencia > 0 ? 'Sobra' : 'Falta',
     }));
 
@@ -346,8 +346,8 @@ export default function AnaliseInventario() {
         'Nome Produto': item.nome_produto || '',
         'Estoque Teórico': item.estoque_teorico,
         'Estoque Físico': 0,
-        Divergência: -item.estoque_teorico,
         Diferença: calcularDiferenca(item.estoque_teorico, 0),
+        Divergência: -item.estoque_teorico,
         Status: 'Não Contado',
       });
     });
@@ -597,8 +597,8 @@ export default function AnaliseInventario() {
                         <TableHead className="w-[30%]">Código Auxiliar</TableHead>
                         <TableHead className="text-center">Est. Teórico</TableHead>
                         <TableHead className="text-center">Est. Físico</TableHead>
-                        <TableHead className="text-center">Divergência</TableHead>
                         <TableHead className="text-center">Diferença</TableHead>
+                        <TableHead className="text-center">Divergência</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -637,6 +637,24 @@ export default function AnaliseInventario() {
                               <span className="font-semibold">{item.quantidade_fisica}</span>
                             </TableCell>
                             <TableCell className="text-center">
+                              {(() => {
+                                const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+                                return (
+                                  <span
+                                    className={`font-bold ${
+                                      diferenca > 0
+                                        ? 'text-blue-600'
+                                        : diferenca < 0
+                                          ? 'text-orange-600'
+                                          : 'text-muted-foreground'
+                                    }`}
+                                  >
+                                    {diferenca > 0 ? `+${diferenca}` : diferenca}
+                                  </span>
+                                );
+                              })()}
+                            </TableCell>
+                            <TableCell className="text-center">
                               <div className="flex items-center justify-center gap-2">
                                 {item.divergencia > 0 ? (
                                   <TrendingUp className="h-4 w-4 text-yellow-600" />
@@ -659,24 +677,6 @@ export default function AnaliseInventario() {
                                     : item.divergencia}
                                 </span>
                               </div>
-                            </TableCell>
-                            <TableCell className="text-center">
-                              {(() => {
-                                const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
-                                return (
-                                  <span
-                                    className={`font-bold ${
-                                      diferenca > 0
-                                        ? 'text-blue-600'
-                                        : diferenca < 0
-                                          ? 'text-orange-600'
-                                          : 'text-muted-foreground'
-                                    }`}
-                                  >
-                                    {diferenca > 0 ? `+${diferenca}` : diferenca}
-                                  </span>
-                                );
-                              })()}
                             </TableCell>
                           </TableRow>
                         ))

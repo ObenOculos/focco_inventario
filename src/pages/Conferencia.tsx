@@ -58,6 +58,13 @@ type ItemNaoContado = {
   estoque_teorico: number;
 };
 
+// Função para calcular a diferença com lógica condicional
+const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
+  return estoqueTeor <= 0 
+    ? estoqueTeor + estoqFisico 
+    : estoqueTeor - estoqFisico;
+};
+
 export default function Conferencia() {
   const { profile } = useAuth();
   const isGerente = profile?.role === 'gerente';
@@ -323,14 +330,18 @@ export default function Conferencia() {
       return;
     }
 
-    const exportData = divergencias.map((item) => ({
-      'Código Auxiliar': item.codigo_auxiliar,
-      'Nome Produto': item.nome_produto,
-      'Estoque Teórico': item.estoque_teorico,
-      'Quantidade Física': item.quantidade_fisica,
-      Divergência: item.diferenca,
-      Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
-    }));
+    const exportData = divergencias.map((item) => {
+      const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+      return {
+        'Código Auxiliar': item.codigo_auxiliar,
+        'Nome Produto': item.nome_produto,
+        'Estoque Teórico': item.estoque_teorico,
+        'Quantidade Física': item.quantidade_fisica,
+        Divergência: item.diferenca,
+        Diferença: diferencaCalculada,
+        Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
+      };
+    });
 
     itensNaoContados.forEach((item) => {
       exportData.push({
@@ -339,6 +350,7 @@ export default function Conferencia() {
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
         Divergência: -item.estoque_teorico,
+        Diferença: calcularDiferenca(item.estoque_teorico, 0),
         Status: 'Não Contado',
       });
     });
@@ -534,50 +546,73 @@ export default function Conferencia() {
                             <TableHead className="w-[45%]">Produto</TableHead>
                             <TableHead className="text-center">Teórico</TableHead>
                             <TableHead className="text-center">Físico</TableHead>
+                            <TableHead className="text-center">Diferença</TableHead>
                             <TableHead className="text-center">Divergência</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
                           {paginatedDivergencias.length > 0 ? (
-                            paginatedDivergencias.map((item) => (
-                              <TableRow
-                                key={item.codigo_auxiliar}
-                                className={
-                                  item.tipo !== 'ok'
-                                    ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5`
-                                    : ''
-                                }
-                              >
-                                <TableCell className="font-medium">
-                                  {item.codigo_auxiliar}
-                                </TableCell>
-                                <TableCell className="text-center font-medium">
-                                  {item.estoque_teorico}
-                                </TableCell>
-                                <TableCell className="text-center">
-                                  <Input
-                                    id={`edit-${item.codigo_auxiliar}`}
-                                    name={`quantidade_${item.codigo_auxiliar}`}
-                                    type="text"
-                                    value={
-                                      editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica
-                                    }
-                                    onChange={(e) =>
-                                      handleEditValue(item.codigo_auxiliar, e.target.value)
-                                    }
-                                    className="w-20 h-8 text-center font-bold border-2 mx-auto"
-                                  />
-                                </TableCell>
-                                <TableCell
-                                  className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}
+                            paginatedDivergencias.map((item) => {
+                              const currentFisica =
+                                editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica;
+                              const diferencaCalculada = calcularDiferenca(
+                                item.estoque_teorico,
+                                currentFisica
+                              );
+
+                              return (
+                                <TableRow
+                                  key={item.codigo_auxiliar}
+                                  className={
+                                    item.tipo !== 'ok'
+                                      ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5`
+                                      : ''
+                                  }
                                 >
-                                  {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
-                                </TableCell>
-                              </TableRow>
-                            ))
+                                  <TableCell className="font-medium">
+                                    {item.codigo_auxiliar}
+                                  </TableCell>
+                                  <TableCell className="text-center font-medium">
+                                    {item.estoque_teorico}
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <Input
+                                      id={`edit-${item.codigo_auxiliar}`}
+                                      name={`quantidade_${item.codigo_auxiliar}`}
+                                      type="text"
+                                      value={currentFisica}
+                                      onChange={(e) =>
+                                        handleEditValue(item.codigo_auxiliar, e.target.value)
+                                      }
+                                      className="w-20 h-8 text-center font-bold border-2 mx-auto"
+                                    />
+                                  </TableCell>
+                                  <TableCell className="text-center">
+                                    <span
+                                      className={`font-bold ${
+                                        diferencaCalculada > 0
+                                          ? 'text-blue-600'
+                                          : diferencaCalculada < 0
+                                            ? 'text-orange-600'
+                                            : 'text-muted-foreground'
+                                      }`}
+                                    >
+                                      {diferencaCalculada > 0
+                                        ? `+${diferencaCalculada}`
+                                        : diferencaCalculada}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell
+                                    className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}
+                                  >
+                                    {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                                  </TableCell>
+                                </TableRow>
+                              );
+                            })
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={4} className="h-24 text-center">
+                              <TableCell colSpan={5} className="h-24 text-center">
                                 Nenhum item corresponde ao filtro.
                               </TableCell>
                             </TableRow>
