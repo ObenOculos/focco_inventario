@@ -548,11 +548,8 @@ export default function Conferencia() {
                                     : ''
                                 }
                               >
-                                <TableCell>
-                                  <p className="font-medium truncate">{item.nome_produto}</p>
-                                  <p className="font-mono text-xs text-muted-foreground">
-                                    {item.codigo_auxiliar}
-                                  </p>
+                                <TableCell className="font-medium">
+                                  {item.codigo_auxiliar}
                                 </TableCell>
                                 <TableCell className="text-center font-medium">
                                   {item.estoque_teorico}
