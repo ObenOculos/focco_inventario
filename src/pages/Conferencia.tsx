@@ -25,7 +25,18 @@ import {
   ChevronsRight,
   Loader2,
   Download,
+  Trash2,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { ConferenciaSkeleton } from '@/components/skeletons/PageSkeleton';
@@ -80,6 +91,11 @@ export default function Conferencia() {
   const [saving, setSaving] = useState(false);
   const [showItensNaoContados, setShowItensNaoContados] = useState(false);
   const [isDetailLoading, setIsDetailLoading] = useState(false);
+  const [deletingItem, setDeletingItem] = useState<{
+    codigo_auxiliar: string;
+    nome_produto: string;
+    itemId: string;
+  } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -306,6 +322,44 @@ export default function Conferencia() {
     } catch (error) {
       console.error('Erro ao salvar:', error);
       toast.error('Erro ao salvar alterações.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteItem = async () => {
+    if (!deletingItem || !selectedInventario) return;
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('itens_inventario')
+        .delete()
+        .eq('id', deletingItem.itemId);
+
+      if (error) throw error;
+
+      setDivergencias((prev) =>
+        prev.filter((d) => d.codigo_auxiliar !== deletingItem.codigo_auxiliar)
+      );
+
+      setSelectedInventario((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          itens_inventario: prev.itens_inventario.filter(
+            (i) => i.id !== deletingItem.itemId
+          ),
+        };
+      });
+
+      toast.success(`Item ${deletingItem.codigo_auxiliar} removido do inventário.`);
+      setDeletingItem(null);
+    } catch (error: any) {
+      console.error('Erro ao deletar item:', error);
+      toast.error('Erro ao remover item', {
+        description: error.message || 'Ocorreu um erro.',
+      });
     } finally {
       setSaving(false);
     }
@@ -544,11 +598,12 @@ export default function Conferencia() {
                       <Table>
                         <TableHeader>
                           <TableRow>
-                            <TableHead className="w-[45%]">Produto</TableHead>
+                            <TableHead className="w-[40%]">Produto</TableHead>
                             <TableHead className="text-center">Teórico</TableHead>
                             <TableHead className="text-center">Físico</TableHead>
                             <TableHead className="text-center">Diferença</TableHead>
                             <TableHead className="text-center">Divergência</TableHead>
+                            <TableHead className="text-center w-[60px]">Ações</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -608,12 +663,33 @@ export default function Conferencia() {
                                   >
                                     {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
                                   </TableCell>
+                                  <TableCell className="text-center">
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => {
+                                        const inventarioItem = selectedInventario?.itens_inventario.find(
+                                          (i) => i.codigo_auxiliar === item.codigo_auxiliar
+                                        );
+                                        if (inventarioItem) {
+                                          setDeletingItem({
+                                            codigo_auxiliar: item.codigo_auxiliar,
+                                            nome_produto: item.nome_produto,
+                                            itemId: inventarioItem.id,
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 size={16} />
+                                    </Button>
+                                  </TableCell>
                                 </TableRow>
                               );
                             })
                           ) : (
                             <TableRow>
-                              <TableCell colSpan={5} className="h-24 text-center">
+                              <TableCell colSpan={6} className="h-24 text-center">
                                 Nenhum item corresponde ao filtro.
                               </TableCell>
                             </TableRow>
@@ -677,6 +753,32 @@ export default function Conferencia() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={!!deletingItem} onOpenChange={() => setDeletingItem(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja remover o item{' '}
+              <span className="font-bold">{deletingItem?.codigo_auxiliar}</span> do
+              inventário?
+              <br />
+              <br />
+              Esta ação não pode ser desfeita. O vendedor não verá mais este item
+              quando o inventário for enviado para revisão.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteItem}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {saving ? 'Removendo...' : 'Remover Item'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AppLayout>
   );
 }
