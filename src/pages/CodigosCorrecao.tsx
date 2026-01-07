@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
@@ -23,7 +23,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, ArrowRight, Tags } from 'lucide-react';
+import { Plus, Pencil, Trash2, ArrowRight, Tags, Download, Upload } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
@@ -33,6 +33,7 @@ import {
   useInvalidateCodigosCorrecao,
   CodigoCorrecao,
 } from '@/hooks/useCodigosCorrecaoQuery';
+import * as XLSX from 'xlsx';
 
 export default function CodigosCorrecao() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -44,6 +45,8 @@ export default function CodigosCorrecao() {
     cod_errado: '',
     cod_auxiliar_correto: '',
   });
+  const [importing, setImporting] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const { data: codigos = [], isLoading: loading, isFetching } = useCodigosCorrecaoQuery();
   const invalidateCodigos = useInvalidateCodigosCorrecao();
@@ -149,6 +152,108 @@ export default function CodigosCorrecao() {
     setFormData({ cod_errado: '', cod_auxiliar_correto: '' });
   };
 
+  const downloadTemplate = () => {
+    const templateData = [
+      { cod_errado: 'CODIGO_ERRADO_EXEMPLO', cod_auxiliar_correto: 'CODIGO_CORRETO_EXEMPLO' },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(templateData);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Códigos');
+
+    // Ajustar largura das colunas
+    ws['!cols'] = [{ wch: 25 }, { wch: 25 }];
+
+    XLSX.writeFile(wb, 'modelo_codigos_correcao.xlsx');
+    toast.success('Modelo baixado!');
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheetName = workbook.SheetNames[0];
+      const worksheet = workbook.Sheets[sheetName];
+      const jsonData = XLSX.utils.sheet_to_json<{
+        cod_errado?: string;
+        cod_auxiliar_correto?: string;
+      }>(worksheet);
+
+      if (jsonData.length === 0) {
+        toast.error('Arquivo vazio ou formato inválido');
+        return;
+      }
+
+      // Validar colunas
+      const firstRow = jsonData[0];
+      if (!('cod_errado' in firstRow) || !('cod_auxiliar_correto' in firstRow)) {
+        toast.error('Colunas obrigatórias: cod_errado, cod_auxiliar_correto');
+        return;
+      }
+
+      // Criar Set com códigos errados já existentes
+      const codigosExistentes = new Set(codigos.map((c) => c.cod_errado.toUpperCase()));
+
+      // Filtrar apenas novos (não duplicados)
+      const novosRegistros = jsonData
+        .filter((row) => {
+          const codErrado = row.cod_errado?.toString().trim().toUpperCase();
+          const codCorreto = row.cod_auxiliar_correto?.toString().trim().toUpperCase();
+          return codErrado && codCorreto && !codigosExistentes.has(codErrado);
+        })
+        .map((row) => ({
+          cod_errado: row.cod_errado!.toString().trim().toUpperCase(),
+          cod_auxiliar_correto: row.cod_auxiliar_correto!.toString().trim().toUpperCase(),
+        }));
+
+      const duplicadosIgnorados = jsonData.length - novosRegistros.length;
+
+      if (novosRegistros.length === 0) {
+        toast.warning('Todos os códigos já existem no sistema');
+        return;
+      }
+
+      // Inserir em lotes de 100
+      const batchSize = 100;
+      let inserted = 0;
+
+      for (let i = 0; i < novosRegistros.length; i += batchSize) {
+        const batch = novosRegistros.slice(i, i + batchSize);
+        const { error } = await supabase.from('codigos_correcao').insert(batch);
+
+        if (error) {
+          console.error('Erro ao inserir lote:', error);
+          toast.error(`Erro ao importar: ${error.message}`);
+          break;
+        }
+        inserted += batch.length;
+      }
+
+      invalidateCodigos();
+
+      if (duplicadosIgnorados > 0) {
+        toast.success(
+          `${inserted} códigos importados! ${duplicadosIgnorados} duplicados ignorados.`
+        );
+      } else {
+        toast.success(`${inserted} códigos importados com sucesso!`);
+      }
+    } catch (error) {
+      console.error('Erro ao processar arquivo:', error);
+      toast.error('Erro ao processar arquivo Excel');
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -162,58 +267,80 @@ export default function CodigosCorrecao() {
             </div>
             <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
-          <Dialog
-            open={dialogOpen}
-            onOpenChange={(open) => {
-              setDialogOpen(open);
-              if (!open) resetForm();
-            }}
-          >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2" size={16} />
-                Novo Mapeamento
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="border-2">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingItem ? 'Editar Mapeamento' : 'Novo Mapeamento'}
-                </DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="cod_errado">Código Errado (da etiqueta)</Label>
-                  <Input
-                    id="cod_errado"
-                    value={formData.cod_errado}
-                    onChange={(e) =>
-                      setFormData({ ...formData, cod_errado: e.target.value })
-                    }
-                    className="border-2 uppercase"
-                    placeholder="Ex: OB1105 PRETO F"
-                    required
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="cod_auxiliar_correto">Código Correto</Label>
-                  <Input
-                    id="cod_auxiliar_correto"
-                    value={formData.cod_auxiliar_correto}
-                    onChange={(e) =>
-                      setFormData({ ...formData, cod_auxiliar_correto: e.target.value })
-                    }
-                    className="border-2 uppercase"
-                    placeholder="Ex: OB1105 C1"
-                    required
-                  />
-                </div>
-                <Button type="submit" className="w-full">
-                  {editingItem ? 'Salvar Alterações' : 'Cadastrar'}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={downloadTemplate} className="border-2">
+              <Download className="mr-2" size={16} />
+              Baixar Modelo
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={importing}
+              className="border-2"
+            >
+              <Upload className="mr-2" size={16} />
+              {importing ? 'Importando...' : 'Importar Excel'}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx,.xls"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+            <Dialog
+              open={dialogOpen}
+              onOpenChange={(open) => {
+                setDialogOpen(open);
+                if (!open) resetForm();
+              }}
+            >
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2" size={16} />
+                  Novo Mapeamento
                 </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="border-2">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingItem ? 'Editar Mapeamento' : 'Novo Mapeamento'}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="cod_errado">Código Errado (da etiqueta)</Label>
+                    <Input
+                      id="cod_errado"
+                      value={formData.cod_errado}
+                      onChange={(e) =>
+                        setFormData({ ...formData, cod_errado: e.target.value })
+                      }
+                      className="border-2 uppercase"
+                      placeholder="Ex: OB1105 PRETO F"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="cod_auxiliar_correto">Código Correto</Label>
+                    <Input
+                      id="cod_auxiliar_correto"
+                      value={formData.cod_auxiliar_correto}
+                      onChange={(e) =>
+                        setFormData({ ...formData, cod_auxiliar_correto: e.target.value })
+                      }
+                      className="border-2 uppercase"
+                      placeholder="Ex: OB1105 C1"
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full">
+                    {editingItem ? 'Salvar Alterações' : 'Cadastrar'}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
 
         <SearchFilter
