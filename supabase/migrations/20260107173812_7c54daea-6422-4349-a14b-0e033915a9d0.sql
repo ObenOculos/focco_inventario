@@ -1,0 +1,109 @@
+-- Tabela para mapeamento de códigos errados para corretos
+CREATE TABLE codigos_correcao (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  cod_auxiliar_correto TEXT NOT NULL,
+  cod_errado TEXT NOT NULL UNIQUE,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Índice para busca rápida por código errado
+CREATE INDEX idx_codigos_correcao_cod_errado ON codigos_correcao(cod_errado);
+
+-- Habilitar RLS
+ALTER TABLE codigos_correcao ENABLE ROW LEVEL SECURITY;
+
+-- Políticas: Todos podem visualizar (vendedores precisam consultar)
+CREATE POLICY "Everyone can view codigos_correcao" 
+  ON codigos_correcao FOR SELECT USING (true);
+
+-- Apenas gerentes podem modificar
+CREATE POLICY "Gerentes can manage codigos_correcao" 
+  ON codigos_correcao FOR ALL 
+  USING (get_user_role(auth.uid()) = 'gerente');
+
+-- Inserir os 84 códigos do Excel
+INSERT INTO codigos_correcao (cod_auxiliar_correto, cod_errado) VALUES
+('OB1101 C1', 'OB1101 C001'),
+('OB1101 C2', 'OB1101 C002'),
+('OB1101 C3', 'OB1101 C003'),
+('OB1101 C4', 'OB1101 C004'),
+('OB1102 C1', 'OB1102 C001'),
+('OB1102 C2', 'OB1102 C002'),
+('OB1102 C3', 'OB1102 C003'),
+('OB1102 C4', 'OB1102 C004'),
+('OB1103 C1', 'OB1103 C001'),
+('OB1103 C2', 'OB1103 C002'),
+('OB1103 C3', 'OB1103 C003'),
+('OB1103 C4', 'OB1103 C004'),
+('OB1104 C1', 'OB1104 C001'),
+('OB1104 C2', 'OB1104 C002'),
+('OB1104 C3', 'OB1104 C003'),
+('OB1104 C4', 'OB1104 C004'),
+('OB1105 C1', 'OB1105 PRETO F'),
+('OB1105 C2', 'OB1105 PRETO G'),
+('OB1105 C3', 'OB1105 PRETO M'),
+('OB1105 C4', 'OB1105 PRETO P'),
+('OB1106 C1', 'OB1106 PRETO F'),
+('OB1106 C2', 'OB1106 PRETO G'),
+('OB1106 C3', 'OB1106 PRETO M'),
+('OB1106 C4', 'OB1106 PRETO P'),
+('OB1107 C1', 'OB1107 MARROM'),
+('OB1107 C2', 'OB1107 PRETO'),
+('OB1108 C1', 'OB1108 MARROM'),
+('OB1108 C2', 'OB1108 PRETO'),
+('OB1109 C1', 'OB1109 MARROM'),
+('OB1109 C2', 'OB1109 PRETO'),
+('OB1110 C1', 'OB1110 MARROM'),
+('OB1110 C2', 'OB1110 PRETO'),
+('OB1111 C1', 'OB1111 PRETO F'),
+('OB1111 C2', 'OB1111 PRETO G'),
+('OB1111 C3', 'OB1111 PRETO M'),
+('OB1111 C4', 'OB1111 PRETO P'),
+('OB1112 C1', 'OB1112 PRETO F'),
+('OB1112 C2', 'OB1112 PRETO G'),
+('OB1112 C3', 'OB1112 PRETO M'),
+('OB1112 C4', 'OB1112 PRETO P'),
+('OB1113 C1', 'OB1113 PRETO F'),
+('OB1113 C2', 'OB1113 PRETO G'),
+('OB1113 C3', 'OB1113 PRETO M'),
+('OB1113 C4', 'OB1113 PRETO P'),
+('OB1114 C1', 'OB1114 PRETO F'),
+('OB1114 C2', 'OB1114 PRETO G'),
+('OB1114 C3', 'OB1114 PRETO M'),
+('OB1114 C4', 'OB1114 PRETO P'),
+('OB1115 C1', 'OB1115 PRETO F'),
+('OB1115 C2', 'OB1115 PRETO G'),
+('OB1115 C3', 'OB1115 PRETO M'),
+('OB1115 C4', 'OB1115 PRETO P'),
+('OB1116 C1', 'OB1116 PRETO F'),
+('OB1116 C2', 'OB1116 PRETO G'),
+('OB1116 C3', 'OB1116 PRETO M'),
+('OB1116 C4', 'OB1116 PRETO P'),
+('OB1117 C1', 'OB1117 PRETO F'),
+('OB1117 C2', 'OB1117 PRETO G'),
+('OB1117 C3', 'OB1117 PRETO M'),
+('OB1117 C4', 'OB1117 PRETO P'),
+('OB1118 C1', 'OB1118 PRETO F'),
+('OB1118 C2', 'OB1118 PRETO G'),
+('OB1118 C3', 'OB1118 PRETO M'),
+('OB1118 C4', 'OB1118 PRETO P'),
+('OB1119 C1', 'OB1119 PRETO F'),
+('OB1119 C2', 'OB1119 PRETO G'),
+('OB1119 C3', 'OB1119 PRETO M'),
+('OB1119 C4', 'OB1119 PRETO P'),
+('OB1120 C1', 'OB1120 PRETO F'),
+('OB1120 C2', 'OB1120 PRETO G'),
+('OB1120 C3', 'OB1120 PRETO M'),
+('OB1120 C4', 'OB1120 PRETO P'),
+('OB1121 C1', 'OB1121 PRETO F'),
+('OB1121 C2', 'OB1121 PRETO G'),
+('OB1121 C3', 'OB1121 PRETO M'),
+('OB1121 C4', 'OB1121 PRETO P'),
+('OB1122 C1', 'OB1122 PRETO F'),
+('OB1122 C2', 'OB1122 PRETO G'),
+('OB1122 C3', 'OB1122 PRETO M'),
+('OB1122 C4', 'OB1122 PRETO P'),
+('OB1123 C1', 'OB1123 PRETO F'),
+('OB1123 C2', 'OB1123 PRETO G'),
+('OB1123 C3', 'OB1123 PRETO M'),
+('OB1123 C4', 'OB1123 PRETO P');

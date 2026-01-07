@@ -14,6 +14,27 @@ export type Database = {
   }
   public: {
     Tables: {
+      codigos_correcao: {
+        Row: {
+          cod_auxiliar_correto: string
+          cod_errado: string
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          cod_auxiliar_correto: string
+          cod_errado: string
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          cod_auxiliar_correto?: string
+          cod_errado?: string
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: []
+      }
       estoque_real: {
         Row: {
           codigo_auxiliar: string
