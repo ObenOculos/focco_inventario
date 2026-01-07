@@ -64,10 +64,9 @@ import {
 
 // Função para calcular a diferença com lógica condicional
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
-  const result = estoqueTeor <= 0 
+  return estoqueTeor <= 0 
     ? estoqueTeor + estoqFisico 
     : estoqueTeor - estoqFisico;
-  return result > 0 ? -result : result;
 };
 
 export default function AnaliseInventario() {
