@@ -66,7 +66,7 @@ import {
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
   return estoqueTeor <= 0 
     ? estoqueTeor + estoqFisico 
-    : estoqueTeor - estoqFisico;
+    : estoqFisico - estoqueTeor;
 };
 
 export default function AnaliseInventario() {
