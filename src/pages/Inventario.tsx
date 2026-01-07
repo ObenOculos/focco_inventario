@@ -224,9 +224,32 @@ export default function Inventario() {
     processCode(code);
   };
 
+  const getCodigoCorrigido = async (
+    codigo: string
+  ): Promise<{ codigoFinal: string; foiCorrigido: boolean }> => {
+    const { data } = await supabase
+      .from('codigos_correcao')
+      .select('cod_auxiliar_correto')
+      .eq('cod_errado', codigo)
+      .maybeSingle();
+
+    if (data) {
+      return { codigoFinal: data.cod_auxiliar_correto, foiCorrigido: true };
+    }
+
+    return { codigoFinal: codigo, foiCorrigido: false };
+  };
+
   const processCode = async (code: string) => {
-    // Verificar se o item já existe na lista
-    const existingItemIndex = items.findIndex((item) => item.codigo_auxiliar === code);
+    // 1. Verificar se o código precisa ser corrigido
+    const { codigoFinal, foiCorrigido } = await getCodigoCorrigido(code);
+
+    if (foiCorrigido) {
+      toast.info(`Código corrigido: ${code} → ${codigoFinal}`);
+    }
+
+    // 2. Verificar se o item já existe na lista (usando código corrigido)
+    const existingItemIndex = items.findIndex((item) => item.codigo_auxiliar === codigoFinal);
 
     if (existingItemIndex !== -1) {
       const existingItem = items[existingItemIndex];
@@ -236,22 +259,22 @@ export default function Inventario() {
       return;
     }
 
-    // Se for um item novo, buscar informações do produto
+    // Se for um item novo, buscar informações do produto com código CORRETO
     const { data: produtoData } = await supabase
       .from('produtos')
       .select('nome_produto')
-      .eq('codigo_auxiliar', code)
+      .eq('codigo_auxiliar', codigoFinal)
       .maybeSingle();
 
     // Adiciona o produto: usa o nome cadastrado quando existir, caso contrário um rótulo indicando não cadastrado
-    const nomeProduto = produtoData?.nome_produto ?? `Produto não cadastrado (${code})`;
+    const nomeProduto = produtoData?.nome_produto ?? `Produto não cadastrado (${codigoFinal})`;
     const newItem: InventarioItem = {
-      codigo_auxiliar: code,
+      codigo_auxiliar: codigoFinal,
       nome_produto: nomeProduto,
       quantidade_fisica: 1,
     };
     setItems((prev) => [newItem, ...prev]);
-    toast.success(`Produto ${code} adicionado`);
+    toast.success(`Produto ${codigoFinal} adicionado`);
     resumeScanner();
     return;
   };
