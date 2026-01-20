@@ -49,7 +49,11 @@ export default function Inventario() {
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Modal de confirmação removido: produtos não cadastrados agora são adicionados automaticamente
+  // Estado para modal de produto não cadastrado
+  const [produtoNaoCadastrado, setProdutoNaoCadastrado] = useState<{
+    codigo: string;
+    open: boolean;
+  } | null>(null);
 
   // Estado para informações do inventário sendo editado
   const [inventarioInfo, setInventarioInfo] = useState<{
@@ -266,11 +270,17 @@ export default function Inventario() {
       .eq('codigo_auxiliar', codigoFinal)
       .maybeSingle();
 
-    // Adiciona o produto: usa o nome cadastrado quando existir, caso contrário um rótulo indicando não cadastrado
-    const nomeProduto = produtoData?.nome_produto ?? `Produto não cadastrado (${codigoFinal})`;
+    // Se produto NÃO existe no banco, bloquear e mostrar modal
+    if (!produtoData) {
+      setProdutoNaoCadastrado({ codigo: codigoFinal, open: true });
+      resumeScanner();
+      return;
+    }
+
+    // Produto existe, adicionar normalmente
     const newItem: InventarioItem = {
       codigo_auxiliar: codigoFinal,
-      nome_produto: nomeProduto,
+      nome_produto: produtoData.nome_produto,
       quantidade_fisica: 1,
     };
     setItems((prev) => [newItem, ...prev]);
@@ -791,6 +801,31 @@ export default function Inventario() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Modal de produto não cadastrado */}
+      <AlertDialog 
+        open={produtoNaoCadastrado?.open} 
+        onOpenChange={(open) => !open && setProdutoNaoCadastrado(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive flex items-center gap-2">
+              <X className="h-5 w-5" />
+              Produto Não Cadastrado
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              O código <strong className="font-mono">{produtoNaoCadastrado?.codigo}</strong> não está 
+              cadastrado no sistema. Entre em contato com o gerente para 
+              adicionar este produto antes de incluí-lo no inventário.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setProdutoNaoCadastrado(null)}>
+              Entendi
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={blocker.state === 'blocked'}>
         <AlertDialogContent>
