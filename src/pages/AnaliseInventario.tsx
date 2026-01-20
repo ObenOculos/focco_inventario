@@ -321,22 +321,30 @@ export default function AnaliseInventario() {
       return;
     }
 
-    // Buscar custos dos produtos pelo codigo_auxiliar
+    // Buscar custos dos produtos pelo codigo_auxiliar em lotes para evitar URL muito longa
     const todosCodigos = [
       ...dataToExport.map((item) => item.codigo_auxiliar),
       ...itensNaoContados.map((item) => item.codigo_auxiliar),
     ];
     
-    const { data: produtosCusto } = await supabase
-      .from('produtos')
-      .select('codigo_auxiliar, valor_produto')
-      .in('codigo_auxiliar', todosCodigos);
-
-    // Criar mapa de código -> custo para lookup rápido
-    const custosMap = (produtosCusto || []).reduce((acc, p) => {
-      acc[p.codigo_auxiliar] = p.valor_produto || 0;
-      return acc;
-    }, {} as Record<string, number>);
+    // Dividir em lotes de 100 para evitar erro 400 (URL muito longa)
+    const TAMANHO_LOTE = 100;
+    const custosMap: Record<string, number> = {};
+    
+    for (let i = 0; i < todosCodigos.length; i += TAMANHO_LOTE) {
+      const lote = todosCodigos.slice(i, i + TAMANHO_LOTE);
+      
+      const { data: produtosCusto } = await supabase
+        .from('produtos')
+        .select('codigo_auxiliar, valor_produto')
+        .in('codigo_auxiliar', lote);
+      
+      if (produtosCusto) {
+        produtosCusto.forEach((p) => {
+          custosMap[p.codigo_auxiliar] = p.valor_produto || 0;
+        });
+      }
+    }
 
     const dataExport: Array<{
       'Código Auxiliar': string;
