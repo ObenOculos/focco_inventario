@@ -313,7 +313,7 @@ export default function AnaliseInventario() {
 
   const showDeleteButton = isGerente && selectedInventarioInfo;
 
-  const handleExportDivergencias = (exportAll: boolean = false) => {
+  const handleExportDivergencias = async (exportAll: boolean = false) => {
     const dataToExport = exportAll ? comparativo.filter((item) => item.foi_contado) : filteredComparativo;
     
     if (!selectedInventarioInfo || (dataToExport.length === 0 && itensNaoContados.length === 0)) {
@@ -321,9 +321,27 @@ export default function AnaliseInventario() {
       return;
     }
 
+    // Buscar custos dos produtos pelo codigo_auxiliar
+    const todosCodigos = [
+      ...dataToExport.map((item) => item.codigo_auxiliar),
+      ...itensNaoContados.map((item) => item.codigo_auxiliar),
+    ];
+    
+    const { data: produtosCusto } = await supabase
+      .from('produtos')
+      .select('codigo_auxiliar, valor_produto')
+      .in('codigo_auxiliar', todosCodigos);
+
+    // Criar mapa de código -> custo para lookup rápido
+    const custosMap = (produtosCusto || []).reduce((acc, p) => {
+      acc[p.codigo_auxiliar] = p.valor_produto || 0;
+      return acc;
+    }, {} as Record<string, number>);
+
     const dataExport: Array<{
       'Código Auxiliar': string;
       'Nome Produto': string;
+      'Custo Produto': number;
       'Estoque Teórico': number;
       'Estoque Físico': number;
       Diferença: number;
@@ -332,6 +350,7 @@ export default function AnaliseInventario() {
     }> = dataToExport.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
       'Nome Produto': item.nome_produto || '',
+      'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
       'Estoque Teórico': item.estoque_teorico,
       'Estoque Físico': item.quantidade_fisica,
       Diferença: calcularDiferenca(item.estoque_teorico, item.quantidade_fisica),
@@ -344,6 +363,7 @@ export default function AnaliseInventario() {
       dataExport.push({
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto || '',
+        'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
         'Estoque Teórico': item.estoque_teorico,
         'Estoque Físico': 0,
         Diferença: calcularDiferenca(item.estoque_teorico, 0),
