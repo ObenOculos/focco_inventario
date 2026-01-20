@@ -22,7 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Package, Plus, QrCode, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle, Loader2 } from 'lucide-react';
+import { Package, Plus, QrCode, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
 import { Pagination } from '@/components/Pagination';
@@ -39,8 +39,8 @@ interface ImportError {
 interface ImportValidation {
   isValid: boolean;
   errors: ImportError[];
-  duplicates: string[];
   newProducts: number;
+  existingProducts: number;
   produtosMap: Map<string, {
     codigo_produto: string;
     codigo_auxiliar: string;
@@ -252,9 +252,9 @@ export default function Produtos() {
         }
       });
 
-      // Verificar duplicatas no banco em lotes
+      // Verificar quais produtos já existem no banco (para informar usuário)
       const codigos = Array.from(produtosMap.keys());
-      const duplicates: string[] = [];
+      const existingCodes: string[] = [];
       const BATCH_SIZE = 100;
 
       for (let i = 0; i < codigos.length; i += BATCH_SIZE) {
@@ -265,31 +265,35 @@ export default function Produtos() {
           .in('codigo_auxiliar', batch);
 
         if (existing) {
-          existing.forEach(p => {
-            duplicates.push(p.codigo_auxiliar);
-            produtosMap.delete(p.codigo_auxiliar);
-          });
+          existing.forEach(p => existingCodes.push(p.codigo_auxiliar));
         }
       }
+
+      // NÃO remover do produtosMap - mantê-los para atualização via upsert
+      const newProducts = produtosMap.size - existingCodes.length;
+      const existingProducts = existingCodes.length;
 
       const isValid = errors.length === 0 && produtosMap.size > 0;
 
       setImportValidation({
         isValid,
         errors,
-        duplicates,
-        newProducts: produtosMap.size,
+        newProducts,
+        existingProducts,
         produtosMap,
       });
 
       setImportStatus(isValid ? 'validated' : 'error');
 
       if (isValid) {
-        toast.success(`Validação concluída: ${produtosMap.size} novos produtos prontos para importar.`);
+        const msgParts = [];
+        if (newProducts > 0) msgParts.push(`${newProducts} novos`);
+        if (existingProducts > 0) msgParts.push(`${existingProducts} para atualizar`);
+        toast.success(`Validação OK: ${msgParts.join(', ')}`);
       } else if (errors.length > 0) {
         toast.error(`Encontrados ${errors.length} erros de validação.`);
       } else if (produtosMap.size === 0) {
-        toast.warning('Todos os produtos já existem no sistema.');
+        toast.warning('Nenhum produto válido encontrado.');
       }
     } catch (err) {
       toast.error('Erro ao validar arquivo');
@@ -323,7 +327,7 @@ export default function Produtos() {
         importedCount += batch.length;
       }
 
-      toast.success(`${importedCount} produtos importados com sucesso!`);
+      toast.success(`${importedCount} produtos processados (criados/atualizados)!`);
       setImportStatus('completed');
       invalidateProdutos();
     } catch (err) {
@@ -549,24 +553,20 @@ export default function Produtos() {
                     </div>
                   )}
 
-                  {importValidation.duplicates.length > 0 && (
-                    <div className="bg-warning/10 border-2 border-warning/30 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-warning font-medium mb-2">
-                        <AlertTriangle size={18} />
-                        {importValidation.duplicates.length} produtos já existem
-                      </div>
-                      <p className="text-sm text-muted-foreground">
-                        Estes códigos serão ignorados: {importValidation.duplicates.slice(0, 5).join(', ')}
-                        {importValidation.duplicates.length > 5 && ` e mais ${importValidation.duplicates.length - 5}`}
-                      </p>
-                    </div>
-                  )}
-
                   {importValidation.newProducts > 0 && (
                     <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4">
                       <div className="flex items-center gap-2 text-primary font-medium">
                         <CheckCircle2 size={18} />
-                        {importValidation.newProducts} novos produtos prontos para importar
+                        {importValidation.newProducts} novos produtos serão criados
+                      </div>
+                    </div>
+                  )}
+
+                  {importValidation.existingProducts > 0 && (
+                    <div className="bg-accent border-2 border-accent-foreground/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-accent-foreground font-medium">
+                        <RefreshCw size={18} />
+                        {importValidation.existingProducts} produtos existentes serão atualizados
                       </div>
                     </div>
                   )}
