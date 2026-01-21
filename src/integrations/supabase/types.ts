@@ -321,6 +321,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      atualizar_valores_produtos: { Args: { p_updates: Json }; Returns: number }
       calcular_estoque_teorico_pos_inventario: {
         Args: { p_codigo_vendedor: string }
         Returns: {

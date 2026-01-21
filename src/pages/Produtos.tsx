@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/table';
 import { toast } from 'sonner';
 import { Package, Plus, QrCode, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
 import { Pagination } from '@/components/Pagination';
@@ -92,6 +93,7 @@ export default function Produtos() {
   const [updatePreview, setUpdatePreview] = useState<Record<string, unknown>[]>([]);
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle');
   const [updateValidation, setUpdateValidation] = useState<UpdateValidation | null>(null);
+  const [updateProgress, setUpdateProgress] = useState({ current: 0, total: 0 });
   const updateFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -516,32 +518,38 @@ export default function Produtos() {
     if (!updateValidation?.updateMap || updateValidation.updateMap.size === 0) return;
 
     setUpdateStatus('updating');
+    const entries = Array.from(updateValidation.updateMap.entries());
+    const total = entries.length;
+    setUpdateProgress({ current: 0, total });
 
     try {
       const BATCH_SIZE = 100;
-      const entries = Array.from(updateValidation.updateMap.entries());
       let updatedCount = 0;
 
       for (let i = 0; i < entries.length; i += BATCH_SIZE) {
         const batch = entries.slice(i, i + BATCH_SIZE);
 
-        // Atualizar cada produto individualmente no lote
-        for (const [codigo, valor] of batch) {
-          const { error } = await supabase
-            .from('produtos')
-            .update({ valor_produto: valor })
-            .eq('codigo_auxiliar', codigo);
+        // Preparar dados para a RPC
+        const updates = batch.map(([codigo, valor]) => ({ codigo, valor }));
 
-          if (error) {
-            console.error(`Erro ao atualizar ${codigo}:`, error);
-          } else {
-            updatedCount++;
-          }
+        // Chamar RPC que faz update em lote
+        const { data, error } = await supabase.rpc('atualizar_valores_produtos', {
+          p_updates: updates
+        });
+
+        if (error) {
+          console.error(`Erro no lote ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
+        } else {
+          updatedCount += data || batch.length;
         }
+
+        // Atualizar progresso
+        setUpdateProgress({ current: Math.min(i + BATCH_SIZE, total), total });
       }
 
       toast.success(`${updatedCount} valores atualizados!`);
       setUpdateStatus('completed');
+      setUpdateProgress({ current: total, total });
       invalidateProdutos();
     } catch (err) {
       toast.error('Erro ao atualizar valores');
@@ -1007,13 +1015,29 @@ export default function Produtos() {
                     Atualizando...
                   </Button>
                 )}
-
-                {(updateStatus === 'error' || updateStatus === 'completed') && (
-                  <Button variant="outline" className="border-2" onClick={resetUpdate}>
-                    Nova Atualização
-                  </Button>
-                )}
               </div>
+
+              {/* Progress Bar */}
+              {updateStatus === 'updating' && updateProgress.total > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Progresso</span>
+                    <span className="font-medium">
+                      {updateProgress.current} de {updateProgress.total} ({Math.round((updateProgress.current / updateProgress.total) * 100)}%)
+                    </span>
+                  </div>
+                  <Progress 
+                    value={Math.round((updateProgress.current / updateProgress.total) * 100)} 
+                    className="h-2" 
+                  />
+                </div>
+              )}
+
+              {(updateStatus === 'error' || updateStatus === 'completed') && (
+                <Button variant="outline" className="border-2" onClick={resetUpdate}>
+                  Nova Atualização
+                </Button>
+              )}
 
               {/* Format Info */}
               <div className="bg-muted/50 rounded-lg p-4 text-sm">
