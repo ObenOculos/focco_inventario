@@ -40,7 +40,7 @@ interface ImportValidation {
   isValid: boolean;
   errors: ImportError[];
   newProducts: number;
-  existingProducts: number;
+  skippedProducts: number;
   produtosMap: Map<string, {
     codigo_produto: string;
     codigo_auxiliar: string;
@@ -51,7 +51,16 @@ interface ImportValidation {
   }>;
 }
 
+interface UpdateValidation {
+  isValid: boolean;
+  errors: { linha: number; codigo: string; mensagem: string }[];
+  matchedProducts: number;
+  notFoundProducts: string[];
+  updateMap: Map<string, number>;
+}
+
 type ImportStatus = 'idle' | 'validating' | 'validated' | 'importing' | 'completed' | 'error';
+type UpdateStatus = 'idle' | 'validating' | 'validated' | 'updating' | 'completed' | 'error';
 
 export default function Produtos() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -69,13 +78,21 @@ export default function Produtos() {
     valor_produto: '',
   });
 
-  // Import states
+  // Import states (novos produtos)
   const [importDialogOpen, setImportDialogOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importPreview, setImportPreview] = useState<Record<string, unknown>[]>([]);
   const [importStatus, setImportStatus] = useState<ImportStatus>('idle');
   const [importValidation, setImportValidation] = useState<ImportValidation | null>(null);
   const importFileInputRef = useRef<HTMLInputElement>(null);
+
+  // Update values states (atualizar valores)
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [updateFile, setUpdateFile] = useState<File | null>(null);
+  const [updatePreview, setUpdatePreview] = useState<Record<string, unknown>[]>([]);
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>('idle');
+  const [updateValidation, setUpdateValidation] = useState<UpdateValidation | null>(null);
+  const updateFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handler = setTimeout(() => {
@@ -162,7 +179,7 @@ export default function Produtos() {
     link.click();
   };
 
-  // ========== Import Functions ==========
+  // ========== Import Functions (Novos Produtos) ==========
 
   const resetImport = () => {
     setImportFile(null);
@@ -252,7 +269,7 @@ export default function Produtos() {
         }
       });
 
-      // Verificar quais produtos já existem no banco (para informar usuário)
+      // Verificar quais produtos já existem no banco e REMOVÊ-LOS do map
       const codigos = Array.from(produtosMap.keys());
       const existingCodes: string[] = [];
       const BATCH_SIZE = 100;
@@ -269,30 +286,34 @@ export default function Produtos() {
         }
       }
 
-      // NÃO remover do produtosMap - mantê-los para atualização via upsert
-      const newProducts = produtosMap.size - existingCodes.length;
-      const existingProducts = existingCodes.length;
+      // Remover produtos existentes do map (apenas novos serão importados)
+      existingCodes.forEach(code => produtosMap.delete(code));
 
-      const isValid = errors.length === 0 && produtosMap.size > 0;
+      const newProducts = produtosMap.size;
+      const skippedProducts = existingCodes.length;
+
+      const isValid = errors.length === 0 && newProducts > 0;
 
       setImportValidation({
         isValid,
         errors,
         newProducts,
-        existingProducts,
+        skippedProducts,
         produtosMap,
       });
 
       setImportStatus(isValid ? 'validated' : 'error');
 
       if (isValid) {
-        const msgParts = [];
-        if (newProducts > 0) msgParts.push(`${newProducts} novos`);
-        if (existingProducts > 0) msgParts.push(`${existingProducts} para atualizar`);
-        toast.success(`Validação OK: ${msgParts.join(', ')}`);
+        toast.success(`${newProducts} novos produtos prontos para importar`);
+        if (skippedProducts > 0) {
+          toast.info(`${skippedProducts} produtos já existem e serão ignorados`);
+        }
       } else if (errors.length > 0) {
         toast.error(`Encontrados ${errors.length} erros de validação.`);
-      } else if (produtosMap.size === 0) {
+      } else if (newProducts === 0 && skippedProducts > 0) {
+        toast.warning('Todos os produtos já existem no banco.');
+      } else {
         toast.warning('Nenhum produto válido encontrado.');
       }
     } catch (err) {
@@ -315,7 +336,7 @@ export default function Produtos() {
         const batch = produtos.slice(i, i + BATCH_SIZE);
         const { error } = await supabase
           .from('produtos')
-          .upsert(batch, { onConflict: 'codigo_auxiliar' });
+          .insert(batch);
 
         if (error) {
           toast.error(`Erro ao importar lote ${Math.floor(i / BATCH_SIZE) + 1}`);
@@ -327,7 +348,7 @@ export default function Produtos() {
         importedCount += batch.length;
       }
 
-      toast.success(`${importedCount} produtos processados (criados/atualizados)!`);
+      toast.success(`${importedCount} novos produtos importados!`);
       setImportStatus('completed');
       invalidateProdutos();
     } catch (err) {
@@ -365,6 +386,183 @@ export default function Produtos() {
     toast.success('Modelo baixado!');
   };
 
+  // ========== Update Values Functions ==========
+
+  const resetUpdate = () => {
+    setUpdateFile(null);
+    setUpdatePreview([]);
+    setUpdateStatus('idle');
+    setUpdateValidation(null);
+    if (updateFileInputRef.current) {
+      updateFileInputRef.current.value = '';
+    }
+  };
+
+  const handleUpdateFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = e.target.files?.[0];
+    if (!selectedFile) return;
+
+    setUpdateFile(selectedFile);
+    setUpdateStatus('idle');
+    setUpdateValidation(null);
+
+    try {
+      const data = await selectedFile.arrayBuffer();
+      const isCsv = selectedFile.name.toLowerCase().endsWith('.csv');
+      const workbook = XLSX.read(data, { type: 'array', FS: isCsv ? ';' : undefined });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const jsonData = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
+
+      setUpdatePreview(jsonData.slice(0, 5));
+      toast.success(`${jsonData.length} linhas encontradas no arquivo.`);
+    } catch (err) {
+      toast.error('Erro ao ler o arquivo');
+      resetUpdate();
+    }
+  };
+
+  const handleValidateUpdate = async () => {
+    if (!updateFile) return;
+
+    setUpdateStatus('validating');
+
+    try {
+      const data = await updateFile.arrayBuffer();
+      const isCsv = updateFile.name.toLowerCase().endsWith('.csv');
+      const workbook = XLSX.read(data, { type: 'array', FS: isCsv ? ';' : undefined });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
+
+      const errors: { linha: number; codigo: string; mensagem: string }[] = [];
+      const updateMap = new Map<string, number>();
+
+      // Validar campos obrigatórios: codigo_auxiliar e valor_produto
+      rows.forEach((row, index) => {
+        const linha = index + 2;
+
+        if (!row.codigo_auxiliar) {
+          errors.push({ linha, codigo: '', mensagem: 'codigo_auxiliar obrigatório' });
+          return;
+        }
+        if (row.valor_produto === undefined || row.valor_produto === null || row.valor_produto === '') {
+          errors.push({ linha, codigo: String(row.codigo_auxiliar), mensagem: 'valor_produto obrigatório' });
+          return;
+        }
+
+        const codigo = String(row.codigo_auxiliar).toUpperCase().trim();
+        const valor = parseFloat(String(row.valor_produto));
+
+        if (isNaN(valor)) {
+          errors.push({ linha, codigo, mensagem: 'valor_produto inválido' });
+          return;
+        }
+
+        updateMap.set(codigo, valor);
+      });
+
+      // Verificar quais códigos existem no banco
+      const codigos = Array.from(updateMap.keys());
+      const existingCodes: string[] = [];
+      const BATCH_SIZE = 100;
+
+      for (let i = 0; i < codigos.length; i += BATCH_SIZE) {
+        const batch = codigos.slice(i, i + BATCH_SIZE);
+        const { data: existing } = await supabase
+          .from('produtos')
+          .select('codigo_auxiliar')
+          .in('codigo_auxiliar', batch);
+
+        if (existing) {
+          existing.forEach(p => existingCodes.push(p.codigo_auxiliar));
+        }
+      }
+
+      // Identificar códigos não encontrados
+      const notFoundProducts = codigos.filter(c => !existingCodes.includes(c));
+
+      // Remover do updateMap os que não existem no banco
+      notFoundProducts.forEach(c => updateMap.delete(c));
+
+      const matchedProducts = updateMap.size;
+      const isValid = errors.length === 0 && matchedProducts > 0;
+
+      setUpdateValidation({
+        isValid,
+        errors,
+        matchedProducts,
+        notFoundProducts,
+        updateMap,
+      });
+
+      setUpdateStatus(isValid ? 'validated' : 'error');
+
+      if (isValid) {
+        toast.success(`${matchedProducts} produtos serão atualizados`);
+        if (notFoundProducts.length > 0) {
+          toast.warning(`${notFoundProducts.length} códigos não encontrados no banco`);
+        }
+      } else if (errors.length > 0) {
+        toast.error(`Encontrados ${errors.length} erros de validação.`);
+      } else if (matchedProducts === 0) {
+        toast.warning('Nenhum produto encontrado no banco para atualizar.');
+      }
+    } catch (err) {
+      toast.error('Erro ao validar arquivo');
+      setUpdateStatus('error');
+    }
+  };
+
+  const handleUpdateValues = async () => {
+    if (!updateValidation?.updateMap || updateValidation.updateMap.size === 0) return;
+
+    setUpdateStatus('updating');
+
+    try {
+      const BATCH_SIZE = 100;
+      const entries = Array.from(updateValidation.updateMap.entries());
+      let updatedCount = 0;
+
+      for (let i = 0; i < entries.length; i += BATCH_SIZE) {
+        const batch = entries.slice(i, i + BATCH_SIZE);
+
+        // Atualizar cada produto individualmente no lote
+        for (const [codigo, valor] of batch) {
+          const { error } = await supabase
+            .from('produtos')
+            .update({ valor_produto: valor })
+            .eq('codigo_auxiliar', codigo);
+
+          if (error) {
+            console.error(`Erro ao atualizar ${codigo}:`, error);
+          } else {
+            updatedCount++;
+          }
+        }
+      }
+
+      toast.success(`${updatedCount} valores atualizados!`);
+      setUpdateStatus('completed');
+      invalidateProdutos();
+    } catch (err) {
+      toast.error('Erro ao atualizar valores');
+      setUpdateStatus('error');
+    }
+  };
+
+  const downloadUpdateTemplate = () => {
+    const template = [
+      { codigo_auxiliar: 'OB1215 Q01', valor_produto: 45.90 },
+      { codigo_auxiliar: 'OB1215 Q02', valor_produto: 45.90 },
+      { codigo_auxiliar: 'PW6146 A01', valor_produto: 32.50 },
+    ];
+
+    const ws = XLSX.utils.json_to_sheet(template);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Atualizar Valores');
+    XLSX.writeFile(wb, 'modelo_atualizar_valores.xlsx');
+    toast.success('Modelo baixado!');
+  };
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -376,10 +574,14 @@ export default function Produtos() {
             </div>
             <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="outline" className="border-2" onClick={() => setImportDialogOpen(true)}>
               <Upload className="mr-2" size={16} />
-              Importar
+              Importar Produtos
+            </Button>
+            <Button variant="outline" className="border-2" onClick={() => setUpdateDialogOpen(true)}>
+              <RefreshCw className="mr-2" size={16} />
+              Atualizar Valores
             </Button>
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
               <DialogTrigger asChild>
@@ -459,7 +661,7 @@ export default function Produtos() {
         {/* Search */}
         <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
 
-        {/* Import Dialog */}
+        {/* Import Dialog (Novos Produtos) */}
         <Dialog open={importDialogOpen} onOpenChange={(open) => {
           setImportDialogOpen(open);
           if (!open) resetImport();
@@ -467,8 +669,8 @@ export default function Produtos() {
           <DialogContent className="border-2 max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <FileSpreadsheet size={20} />
-                Importar Produtos
+                <Upload size={20} />
+                Importar Novos Produtos
               </DialogTitle>
             </DialogHeader>
 
@@ -562,11 +764,20 @@ export default function Produtos() {
                     </div>
                   )}
 
-                  {importValidation.existingProducts > 0 && (
-                    <div className="bg-accent border-2 border-accent-foreground/20 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-accent-foreground font-medium">
-                        <RefreshCw size={18} />
-                        {importValidation.existingProducts} produtos existentes serão atualizados
+                  {importValidation.skippedProducts > 0 && (
+                    <div className="bg-muted border-2 border-muted-foreground/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-muted-foreground font-medium">
+                        <AlertTriangle size={18} />
+                        {importValidation.skippedProducts} produtos já existem (serão ignorados)
+                      </div>
+                    </div>
+                  )}
+
+                  {importValidation.newProducts === 0 && importValidation.skippedProducts > 0 && (
+                    <div className="bg-yellow-500/10 border-2 border-yellow-500/30 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-yellow-600 font-medium">
+                        <AlertTriangle size={18} />
+                        Todos os produtos já existem. Use "Atualizar Valores" para alterar preços.
                       </div>
                     </div>
                   )}
@@ -631,6 +842,189 @@ export default function Produtos() {
                   <li><strong>nome_produto</strong> (obrigatório): Nome/descrição do produto</li>
                   <li><strong>valor_produto</strong> (opcional): Custo do produto. Ex: 45.90</li>
                 </ul>
+                <p className="mt-2 text-primary font-medium">
+                  Apenas produtos NOVOS serão importados. Produtos existentes são ignorados.
+                </p>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Update Values Dialog */}
+        <Dialog open={updateDialogOpen} onOpenChange={(open) => {
+          setUpdateDialogOpen(open);
+          if (!open) resetUpdate();
+        }}>
+          <DialogContent className="border-2 max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <RefreshCw size={20} />
+                Atualizar Valores de Produtos
+              </DialogTitle>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              {/* Upload Area */}
+              <div className="border-2 border-dashed rounded-lg p-6 text-center">
+                <input
+                  ref={updateFileInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleUpdateFileSelect}
+                  className="hidden"
+                  id="update-file-input"
+                />
+                {!updateFile ? (
+                  <label htmlFor="update-file-input" className="cursor-pointer">
+                    <RefreshCw className="mx-auto mb-2 text-muted-foreground" size={32} />
+                    <p className="font-medium">Selecione arquivo com valores</p>
+                    <p className="text-sm text-muted-foreground">
+                      Apenas codigo_auxiliar e valor_produto são necessários
+                    </p>
+                  </label>
+                ) : (
+                  <div>
+                    <FileSpreadsheet className="mx-auto mb-2 text-primary" size={32} />
+                    <p className="font-medium">{updateFile.name}</p>
+                    <Button variant="ghost" size="sm" onClick={resetUpdate} className="mt-2">
+                      Remover
+                    </Button>
+                  </div>
+                )}
+              </div>
+
+              {/* Preview */}
+              {updatePreview.length > 0 && (
+                <div>
+                  <h4 className="font-medium mb-2">Preview (primeiras 5 linhas)</h4>
+                  <div className="border-2 rounded-lg overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>codigo_auxiliar</TableHead>
+                          <TableHead>valor_produto</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {updatePreview.map((row, i) => (
+                          <TableRow key={i}>
+                            <TableCell className="font-mono">{String(row.codigo_auxiliar || '')}</TableCell>
+                            <TableCell>{String(row.valor_produto || '0')}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              )}
+
+              {/* Validation Results */}
+              {updateValidation && (
+                <div className="space-y-3">
+                  {updateValidation.errors.length > 0 && (
+                    <div className="bg-destructive/10 border-2 border-destructive/30 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-destructive font-medium mb-2">
+                        <XCircle size={18} />
+                        {updateValidation.errors.length} erros encontrados
+                      </div>
+                      <ul className="text-sm space-y-1 max-h-32 overflow-y-auto">
+                        {updateValidation.errors.slice(0, 10).map((err, i) => (
+                          <li key={i}>
+                            Linha {err.linha}: {err.codigo || '(sem código)'} - {err.mensagem}
+                          </li>
+                        ))}
+                        {updateValidation.errors.length > 10 && (
+                          <li className="text-muted-foreground">
+                            ... e mais {updateValidation.errors.length - 10} erros
+                          </li>
+                        )}
+                      </ul>
+                    </div>
+                  )}
+
+                  {updateValidation.matchedProducts > 0 && (
+                    <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-primary font-medium">
+                        <CheckCircle2 size={18} />
+                        {updateValidation.matchedProducts} produtos serão atualizados
+                      </div>
+                    </div>
+                  )}
+
+                  {updateValidation.notFoundProducts.length > 0 && (
+                    <div className="bg-yellow-500/10 border-2 border-yellow-500/30 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-yellow-600 font-medium mb-2">
+                        <AlertTriangle size={18} />
+                        {updateValidation.notFoundProducts.length} códigos não encontrados
+                      </div>
+                      <p className="text-sm text-muted-foreground">
+                        Estes serão ignorados: {updateValidation.notFoundProducts.slice(0, 5).join(', ')}
+                        {updateValidation.notFoundProducts.length > 5 && '...'}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Status Messages */}
+              {updateStatus === 'completed' && (
+                <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4 text-center">
+                  <CheckCircle2 className="mx-auto mb-2 text-primary" size={32} />
+                  <p className="font-medium text-primary">Valores atualizados com sucesso!</p>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" className="border-2" onClick={downloadUpdateTemplate}>
+                  <Download className="mr-2" size={16} />
+                  Baixar Modelo
+                </Button>
+
+                {updateFile && updateStatus === 'idle' && (
+                  <Button onClick={handleValidateUpdate}>
+                    Validar Arquivo
+                  </Button>
+                )}
+
+                {updateStatus === 'validating' && (
+                  <Button disabled>
+                    <Loader2 className="mr-2 animate-spin" size={16} />
+                    Validando...
+                  </Button>
+                )}
+
+                {updateStatus === 'validated' && updateValidation?.isValid && (
+                  <Button onClick={handleUpdateValues}>
+                    <RefreshCw className="mr-2" size={16} />
+                    Atualizar {updateValidation.matchedProducts} Valores
+                  </Button>
+                )}
+
+                {updateStatus === 'updating' && (
+                  <Button disabled>
+                    <Loader2 className="mr-2 animate-spin" size={16} />
+                    Atualizando...
+                  </Button>
+                )}
+
+                {(updateStatus === 'error' || updateStatus === 'completed') && (
+                  <Button variant="outline" className="border-2" onClick={resetUpdate}>
+                    Nova Atualização
+                  </Button>
+                )}
+              </div>
+
+              {/* Format Info */}
+              <div className="bg-muted/50 rounded-lg p-4 text-sm">
+                <h4 className="font-medium mb-2">Formato Esperado</h4>
+                <ul className="space-y-1 text-muted-foreground">
+                  <li><strong>codigo_auxiliar</strong> (obrigatório): Código do produto. Ex: OB1215 Q01</li>
+                  <li><strong>valor_produto</strong> (obrigatório): Novo valor. Ex: 45.90</li>
+                </ul>
+                <p className="mt-2 text-yellow-600 font-medium">
+                  Apenas produtos que já existem no banco terão seus valores atualizados.
+                </p>
               </div>
             </div>
           </DialogContent>
