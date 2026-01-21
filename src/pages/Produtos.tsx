@@ -85,6 +85,7 @@ export default function Produtos() {
   const [importPreview, setImportPreview] = useState<Record<string, unknown>[]>([]);
   const [importStatus, setImportStatus] = useState<ImportStatus>('idle');
   const [importValidation, setImportValidation] = useState<ImportValidation | null>(null);
+  const [importProgress, setImportProgress] = useState({ current: 0, total: 0 });
   const importFileInputRef = useRef<HTMLInputElement>(null);
 
   // Update values states (atualizar valores)
@@ -328,9 +329,11 @@ export default function Produtos() {
     if (!importValidation?.produtosMap || importValidation.produtosMap.size === 0) return;
 
     setImportStatus('importing');
+    const produtos = Array.from(importValidation.produtosMap.values());
+    const total = produtos.length;
+    setImportProgress({ current: 0, total });
 
     try {
-      const produtos = Array.from(importValidation.produtosMap.values());
       const BATCH_SIZE = 100;
       let importedCount = 0;
 
@@ -348,10 +351,12 @@ export default function Produtos() {
         }
 
         importedCount += batch.length;
+        setImportProgress({ current: importedCount, total });
       }
 
       toast.success(`${importedCount} novos produtos importados!`);
       setImportStatus('completed');
+      setImportProgress({ current: total, total });
       invalidateProdutos();
     } catch (err) {
       toast.error('Erro ao importar produtos');
@@ -833,13 +838,29 @@ export default function Produtos() {
                     Importando...
                   </Button>
                 )}
-
-                {(importStatus === 'error' || importStatus === 'completed') && (
-                  <Button variant="outline" className="border-2" onClick={resetImport}>
-                    Nova Importação
-                  </Button>
-                )}
               </div>
+
+              {/* Progress Bar */}
+              {importStatus === 'importing' && importProgress.total > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Progresso</span>
+                    <span className="font-medium">
+                      {importProgress.current} de {importProgress.total} ({Math.round((importProgress.current / importProgress.total) * 100)}%)
+                    </span>
+                  </div>
+                  <Progress 
+                    value={Math.round((importProgress.current / importProgress.total) * 100)} 
+                    className="h-2" 
+                  />
+                </div>
+              )}
+
+              {(importStatus === 'error' || importStatus === 'completed') && (
+                <Button variant="outline" className="border-2" onClick={resetImport}>
+                  Nova Importação
+                </Button>
+              )}
 
               {/* Format Info */}
               <div className="bg-muted/50 rounded-lg p-4 text-sm">
