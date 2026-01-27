@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X, RefreshCcw } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -65,6 +65,7 @@ export default function Inventario() {
   const [editingInventarioId, setEditingInventarioId] = useState<string | null>(null);
   const [observacoesGerente, setObservacoesGerente] = useState<string>('');
   const [brandFilter, setBrandFilter] = useState<'all' | 'oben' | 'power' | 'outros'>('all');
+  const [showClearAllDialog, setShowClearAllDialog] = useState(false);
 
   const filteredItemsByBrand = useMemo(() => {
     if (brandFilter === 'all') {
@@ -331,6 +332,14 @@ export default function Inventario() {
 
   const removeItem = (codigo_auxiliar: string) => {
     setItems(items.filter((item) => item.codigo_auxiliar !== codigo_auxiliar));
+  };
+
+  const handleClearAll = () => {
+    setItems([]);
+    setObservacoes('');
+    clearDraft();
+    setShowClearAllDialog(false);
+    toast.success('Todos os itens foram removidos.');
   };
 
   const handleSubmit = async () => {
@@ -684,35 +693,47 @@ export default function Inventario() {
                 className="pl-9 border-2"
               />
             </div>
-            <div className="flex gap-2 mt-4">
-              <Button
-                variant={brandFilter === 'all' ? 'default' : 'outline'}
-                onClick={() => setBrandFilter('all')}
-                size={isMobile ? 'sm' : 'default'}
-              >
-                Todos
-              </Button>
-              <Button
-                variant={brandFilter === 'oben' ? 'default' : 'outline'}
-                onClick={() => setBrandFilter('oben')}
-                size={isMobile ? 'sm' : 'default'}
-              >
-                Oben
-              </Button>
-              <Button
-                variant={brandFilter === 'power' ? 'default' : 'outline'}
-                onClick={() => setBrandFilter('power')}
-                size={isMobile ? 'sm' : 'default'}
-              >
-                Power
-              </Button>
-              <Button
-                variant={brandFilter === 'outros' ? 'default' : 'outline'}
-                onClick={() => setBrandFilter('outros')}
-                size={isMobile ? 'sm' : 'default'}
-              >
-                Outros
-              </Button>
+            <div className="flex flex-wrap gap-2 mt-4 justify-between">
+              <div className="flex gap-2 flex-wrap">
+                <Button
+                  variant={brandFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setBrandFilter('all')}
+                  size={isMobile ? 'sm' : 'default'}
+                >
+                  Todos
+                </Button>
+                <Button
+                  variant={brandFilter === 'oben' ? 'default' : 'outline'}
+                  onClick={() => setBrandFilter('oben')}
+                  size={isMobile ? 'sm' : 'default'}
+                >
+                  Oben
+                </Button>
+                <Button
+                  variant={brandFilter === 'power' ? 'default' : 'outline'}
+                  onClick={() => setBrandFilter('power')}
+                  size={isMobile ? 'sm' : 'default'}
+                >
+                  Power
+                </Button>
+                <Button
+                  variant={brandFilter === 'outros' ? 'default' : 'outline'}
+                  onClick={() => setBrandFilter('outros')}
+                  size={isMobile ? 'sm' : 'default'}
+                >
+                  Outros
+                </Button>
+              </div>
+              {items.length > 0 && (
+                <Button
+                  variant="destructive"
+                  size={isMobile ? 'sm' : 'default'}
+                  onClick={() => setShowClearAllDialog(true)}
+                >
+                  <RefreshCcw size={16} className="mr-2" />
+                  Limpar Tudo
+                </Button>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -844,6 +865,27 @@ export default function Inventario() {
               Sair e apagar
             </AlertDialogAction>
             <AlertDialogAction onClick={handleBlockerSave}>Salvar como rascunho</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear All Confirmation Dialog */}
+      <AlertDialog open={showClearAllDialog} onOpenChange={setShowClearAllDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Limpar todos os itens?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação irá remover todos os {items.length} itens do inventário atual e limpar o rascunho salvo. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleClearAll}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              Limpar Tudo
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
