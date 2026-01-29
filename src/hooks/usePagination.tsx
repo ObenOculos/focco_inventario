@@ -32,10 +32,10 @@ export function usePagination<T>({
     );
   }, [data, searchTerm, searchFields]);
 
-  // Resetar para página 1 quando o termo de busca mudar
+  // Resetar para página 1 quando o termo de busca ou os dados mudarem
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm]);
+  }, [searchTerm, data]);
 
   // Calcular totais
   const totalPages = Math.ceil(filteredData.length / itemsPerPage);
