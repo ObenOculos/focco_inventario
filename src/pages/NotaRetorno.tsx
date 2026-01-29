@@ -32,7 +32,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check } from 'lucide-react';
 import { useVendedoresListQuery } from '@/hooks/useVendedoresGerenciamentoQuery';
-import { useEstoqueRealVendedorQuery, useGerarNotaRetornoMutation } from '@/hooks/useNotaRetornoQuery';
+import {
+  useEstoqueRealVendedorQuery,
+  useGerarNotaRetornoMutation,
+} from '@/hooks/useNotaRetornoQuery';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
@@ -114,7 +117,10 @@ export default function NotaRetorno() {
     setItensRetorno((prev) =>
       prev.map((item) =>
         item.codigo_auxiliar === codigoAuxiliar
-          ? { ...item, quantidade_retorno: Math.max(0, Math.min(quantidade, item.quantidade_atual)) }
+          ? {
+              ...item,
+              quantidade_retorno: Math.max(0, Math.min(quantidade, item.quantidade_atual)),
+            }
           : item
       )
     );
@@ -410,10 +416,7 @@ export default function NotaRetorno() {
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>Cancelar</AlertDialogCancel>
-              <AlertDialogAction
-                onClick={handleGerarNota}
-                disabled={gerarNotaMutation.isPending}
-              >
+              <AlertDialogAction onClick={handleGerarNota} disabled={gerarNotaMutation.isPending}>
                 {gerarNotaMutation.isPending ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />

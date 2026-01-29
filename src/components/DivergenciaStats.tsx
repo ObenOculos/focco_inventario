@@ -1,10 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  CheckCircle,
-  TrendingUp,
-  TrendingDown,
-  PackageSearch,
-} from 'lucide-react';
+import { CheckCircle, TrendingUp, TrendingDown, PackageSearch } from 'lucide-react';
 
 interface DivergenciaStatsProps {
   itensCorretos: number;
@@ -25,8 +20,6 @@ export function DivergenciaStats({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-
-
       <Card className="border-2">
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-medium flex items-center gap-2">
@@ -55,7 +48,9 @@ export function DivergenciaStats({
             <p className="text-3xl font-bold text-destructive">{totalDivergencias}</p>
             <p className="text-xs text-muted-foreground text-center">Total Divergente</p>
             {typeof valorTotalDivergencia === 'number' && (
-              <p className="text-[10px] text-muted-foreground mt-1">Valor total: {valorTotalDivergencia}</p>
+              <p className="text-[10px] text-muted-foreground mt-1">
+                Valor total: {valorTotalDivergencia}
+              </p>
             )}
           </div>
           <div className="col-span-2 flex flex-col justify-center space-y-2">

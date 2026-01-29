@@ -71,9 +71,7 @@ type ItemNaoContado = {
 
 // Função para calcular a diferença com lógica condicional
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
-  return estoqueTeor <= 0 
-    ? estoqueTeor + estoqFisico 
-    : estoqFisico - estoqueTeor;
+  return estoqueTeor <= 0 ? estoqueTeor + estoqFisico : estoqFisico - estoqueTeor;
 };
 
 export default function Conferencia() {
@@ -346,9 +344,7 @@ export default function Conferencia() {
         if (!prev) return null;
         return {
           ...prev,
-          itens_inventario: prev.itens_inventario.filter(
-            (i) => i.id !== deletingItem.itemId
-          ),
+          itens_inventario: prev.itens_inventario.filter((i) => i.id !== deletingItem.itemId),
         };
       });
 
@@ -484,7 +480,12 @@ export default function Conferencia() {
                       <CardContent className="text-sm space-y-2">
                         <div className="flex justify-between items-center text-muted-foreground">
                           <span className="flex items-center gap-1.5">
-                            <Package size={14} /> {inv.itens_inventario.reduce((sum, item) => sum + item.quantidade_fisica, 0)} itens
+                            <Package size={14} />{' '}
+                            {inv.itens_inventario.reduce(
+                              (sum, item) => sum + item.quantidade_fisica,
+                              0
+                            )}{' '}
+                            itens
                           </span>
                           <span className="flex items-center gap-1.5">
                             <Calendar size={14} />{' '}
@@ -668,9 +669,10 @@ export default function Conferencia() {
                                       size="icon"
                                       className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
                                       onClick={() => {
-                                        const inventarioItem = selectedInventario?.itens_inventario.find(
-                                          (i) => i.codigo_auxiliar === item.codigo_auxiliar
-                                        );
+                                        const inventarioItem =
+                                          selectedInventario?.itens_inventario.find(
+                                            (i) => i.codigo_auxiliar === item.codigo_auxiliar
+                                          );
                                         if (inventarioItem) {
                                           setDeletingItem({
                                             codigo_auxiliar: item.codigo_auxiliar,
@@ -759,12 +761,11 @@ export default function Conferencia() {
             <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja remover o item{' '}
-              <span className="font-bold">{deletingItem?.codigo_auxiliar}</span> do
-              inventário?
+              <span className="font-bold">{deletingItem?.codigo_auxiliar}</span> do inventário?
               <br />
               <br />
-              Esta ação não pode ser desfeita. O vendedor não verá mais este item
-              quando o inventário for enviado para revisão.
+              Esta ação não pode ser desfeita. O vendedor não verá mais este item quando o
+              inventário for enviado para revisão.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

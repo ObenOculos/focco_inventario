@@ -67,13 +67,13 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
 
       // Busca nomes dos produtos
       const codigosAuxiliares = allData.map((item) => item.codigo_auxiliar);
-      
+
       if (codigosAuxiliares.length === 0) return [];
 
       // Busca produtos em lotes
       const produtosMap = new Map<string, { nome_produto: string; valor_produto: number }>();
       const produtoBatchSize = 500;
-      
+
       for (let i = 0; i < codigosAuxiliares.length; i += produtoBatchSize) {
         const batch = codigosAuxiliares.slice(i, i + produtoBatchSize);
         const { data: produtos } = await supabase

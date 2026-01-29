@@ -99,8 +99,11 @@ export default function Inventario() {
   });
 
   const isMobile = useIsMobile();
-  
-  const totalQuantity = useMemo(() => items.reduce((acc, item) => acc + item.quantidade_fisica, 0), [items]);
+
+  const totalQuantity = useMemo(
+    () => items.reduce((acc, item) => acc + item.quantidade_fisica, 0),
+    [items]
+  );
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
@@ -433,7 +436,11 @@ export default function Inventario() {
 
         if (itensError) throw itensError;
 
-        toast.success(editingInventarioId ? 'Inventário atualizado e reenviado!' : 'Inventário enviado para conferência!');
+        toast.success(
+          editingInventarioId
+            ? 'Inventário atualizado e reenviado!'
+            : 'Inventário enviado para conferência!'
+        );
       }
 
       // Invalidar cache para atualizar lista de inventários
@@ -824,8 +831,8 @@ export default function Inventario() {
       </div>
 
       {/* Modal de produto não cadastrado */}
-      <AlertDialog 
-        open={produtoNaoCadastrado?.open} 
+      <AlertDialog
+        open={produtoNaoCadastrado?.open}
         onOpenChange={(open) => !open && setProdutoNaoCadastrado(null)}
       >
         <AlertDialogContent>
@@ -835,9 +842,9 @@ export default function Inventario() {
               Produto Não Cadastrado
             </AlertDialogTitle>
             <AlertDialogDescription>
-              O código <strong className="font-mono">{produtoNaoCadastrado?.codigo}</strong> não está 
-              cadastrado no sistema. Entre em contato com o gerente para 
-              adicionar este produto antes de incluí-lo no inventário.
+              O código <strong className="font-mono">{produtoNaoCadastrado?.codigo}</strong> não
+              está cadastrado no sistema. Entre em contato com o gerente para adicionar este produto
+              antes de incluí-lo no inventário.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -875,7 +882,8 @@ export default function Inventario() {
           <AlertDialogHeader>
             <AlertDialogTitle>Limpar todos os itens?</AlertDialogTitle>
             <AlertDialogDescription>
-              Esta ação irá remover todos os {items.length} itens do inventário atual e limpar o rascunho salvo. Esta ação não pode ser desfeita.
+              Esta ação irá remover todos os {items.length} itens do inventário atual e limpar o
+              rascunho salvo. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

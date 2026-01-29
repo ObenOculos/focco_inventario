@@ -437,7 +437,7 @@ export default function Pedidos() {
                               (acc, item) =>
                                 acc +
                                 Math.abs(Number(item.quantidade)) * Number(item.valor_produto),
-                              0,
+                              0
                             )
                             .toLocaleString('pt-BR', {
                               style: 'currency',

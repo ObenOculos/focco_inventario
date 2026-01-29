@@ -169,7 +169,11 @@ export function useVendedoresDesempenhoQuery(options?: UseVendedoresDesempenhoOp
               id: ultimoInv.id,
               data: ultimoInv.data_inventario,
               status: ultimoInv.status,
-              itens_contados: ultimoInv.itens_inventario?.reduce((sum: number, item: any) => sum + (item.quantidade_fisica || 0), 0) || 0,
+              itens_contados:
+                ultimoInv.itens_inventario?.reduce(
+                  (sum: number, item: any) => sum + (item.quantidade_fisica || 0),
+                  0
+                ) || 0,
               acuracidade,
             };
           }

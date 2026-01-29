@@ -8,7 +8,12 @@ interface SearchFilterProps {
   className?: string;
 }
 
-export function SearchFilter({ value, onChange, placeholder = 'Buscar...', className = '' }: SearchFilterProps) {
+export function SearchFilter({
+  value,
+  onChange,
+  placeholder = 'Buscar...',
+  className = '',
+}: SearchFilterProps) {
   return (
     <div className={`relative flex-1 max-w-sm ${className}`}>
       <Search

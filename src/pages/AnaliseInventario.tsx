@@ -64,9 +64,7 @@ import {
 
 // Função para calcular a diferença com lógica condicional
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
-  return estoqueTeor <= 0 
-    ? estoqueTeor + estoqFisico 
-    : estoqFisico - estoqueTeor;
+  return estoqueTeor <= 0 ? estoqueTeor + estoqFisico : estoqFisico - estoqueTeor;
 };
 
 export default function AnaliseInventario() {
@@ -314,8 +312,10 @@ export default function AnaliseInventario() {
   const showDeleteButton = isGerente && selectedInventarioInfo;
 
   const handleExportDivergencias = async (exportAll: boolean = false) => {
-    const dataToExport = exportAll ? comparativo.filter((item) => item.foi_contado) : filteredComparativo;
-    
+    const dataToExport = exportAll
+      ? comparativo.filter((item) => item.foi_contado)
+      : filteredComparativo;
+
     if (!selectedInventarioInfo || (dataToExport.length === 0 && itensNaoContados.length === 0)) {
       toast.error('Não há dados para exportar.');
       return;
@@ -326,19 +326,19 @@ export default function AnaliseInventario() {
       ...dataToExport.map((item) => item.codigo_auxiliar),
       ...itensNaoContados.map((item) => item.codigo_auxiliar),
     ];
-    
+
     // Dividir em lotes de 100 para evitar erro 400 (URL muito longa)
     const TAMANHO_LOTE = 100;
     const custosMap: Record<string, number> = {};
-    
+
     for (let i = 0; i < todosCodigos.length; i += TAMANHO_LOTE) {
       const lote = todosCodigos.slice(i, i + TAMANHO_LOTE);
-      
+
       const { data: produtosCusto } = await supabase
         .from('produtos')
         .select('codigo_auxiliar, valor_produto')
         .in('codigo_auxiliar', lote);
-      
+
       if (produtosCusto) {
         produtosCusto.forEach((p) => {
           custosMap[p.codigo_auxiliar] = p.valor_produto || 0;
@@ -666,7 +666,10 @@ export default function AnaliseInventario() {
                             </TableCell>
                             <TableCell className="text-center">
                               {(() => {
-                                const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+                                const diferenca = calcularDiferenca(
+                                  item.estoque_teorico,
+                                  item.quantidade_fisica
+                                );
                                 return (
                                   <span
                                     className={`font-bold ${
@@ -700,9 +703,7 @@ export default function AnaliseInventario() {
                                         : 'text-green-600'
                                   }`}
                                 >
-                                  {item.divergencia > 0
-                                    ? `+${item.divergencia}`
-                                    : item.divergencia}
+                                  {item.divergencia > 0 ? `+${item.divergencia}` : item.divergencia}
                                 </span>
                               </div>
                             </TableCell>
@@ -737,7 +738,8 @@ export default function AnaliseInventario() {
           <AlertDialogHeader>
             <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
             <AlertDialogDescription>
-              Essa ação não pode ser desfeita. Isso excluirá permanentemente o inventário e todos os seus itens.
+              Essa ação não pode ser desfeita. Isso excluirá permanentemente o inventário e todos os
+              seus itens.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

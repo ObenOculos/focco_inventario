@@ -22,7 +22,19 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { toast } from 'sonner';
-import { Package, Plus, QrCode, Download, Upload, FileSpreadsheet, CheckCircle2, XCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
+import {
+  Package,
+  Plus,
+  QrCode,
+  Download,
+  Upload,
+  FileSpreadsheet,
+  CheckCircle2,
+  XCircle,
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
+} from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
@@ -42,14 +54,17 @@ interface ImportValidation {
   errors: ImportError[];
   newProducts: number;
   skippedProducts: number;
-  produtosMap: Map<string, {
-    codigo_produto: string;
-    codigo_auxiliar: string;
-    nome_produto: string;
-    modelo: string;
-    cor: string;
-    valor_produto: number;
-  }>;
+  produtosMap: Map<
+    string,
+    {
+      codigo_produto: string;
+      codigo_auxiliar: string;
+      nome_produto: string;
+      modelo: string;
+      cor: string;
+      valor_produto: number;
+    }
+  >;
 }
 
 interface UpdateValidation {
@@ -230,14 +245,17 @@ export default function Produtos() {
       const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
 
       const errors: ImportError[] = [];
-      const produtosMap = new Map<string, {
-        codigo_produto: string;
-        codigo_auxiliar: string;
-        nome_produto: string;
-        modelo: string;
-        cor: string;
-        valor_produto: number;
-      }>();
+      const produtosMap = new Map<
+        string,
+        {
+          codigo_produto: string;
+          codigo_auxiliar: string;
+          nome_produto: string;
+          modelo: string;
+          cor: string;
+          valor_produto: number;
+        }
+      >();
 
       // Validar campos obrigatórios
       rows.forEach((row, index) => {
@@ -254,7 +272,7 @@ export default function Produtos() {
         }
 
         // Se não houver erros para esta linha, adicionar ao map
-        if (!errors.some(e => e.linha === linha)) {
+        if (!errors.some((e) => e.linha === linha)) {
           const codigoAuxiliar = String(row.codigo_auxiliar).toUpperCase().trim();
           const codigoProduto = String(row.codigo_produto).toUpperCase().trim();
           const parts = codigoAuxiliar.split(' ');
@@ -285,12 +303,12 @@ export default function Produtos() {
           .in('codigo_auxiliar', batch);
 
         if (existing) {
-          existing.forEach(p => existingCodes.push(p.codigo_auxiliar));
+          existing.forEach((p) => existingCodes.push(p.codigo_auxiliar));
         }
       }
 
       // Remover produtos existentes do map (apenas novos serão importados)
-      existingCodes.forEach(code => produtosMap.delete(code));
+      existingCodes.forEach((code) => produtosMap.delete(code));
 
       const newProducts = produtosMap.size;
       const skippedProducts = existingCodes.length;
@@ -339,9 +357,7 @@ export default function Produtos() {
 
       for (let i = 0; i < produtos.length; i += BATCH_SIZE) {
         const batch = produtos.slice(i, i + BATCH_SIZE);
-        const { error } = await supabase
-          .from('produtos')
-          .insert(batch);
+        const { error } = await supabase.from('produtos').insert(batch);
 
         if (error) {
           toast.error(`Erro ao importar lote ${Math.floor(i / BATCH_SIZE) + 1}`);
@@ -370,19 +386,19 @@ export default function Produtos() {
         codigo_produto: 'OB1215',
         codigo_auxiliar: 'OB1215 Q01',
         nome_produto: 'ORX OB1215 O51-P19-H144',
-        valor_produto: 45.90,
+        valor_produto: 45.9,
       },
       {
         codigo_produto: 'OB1215',
         codigo_auxiliar: 'OB1215 Q02',
         nome_produto: 'ORX OB1215 O51-P19-H144',
-        valor_produto: 45.90,
+        valor_produto: 45.9,
       },
       {
         codigo_produto: 'PW6146',
         codigo_auxiliar: 'PW6146 A01',
         nome_produto: 'PW6146 Preto',
-        valor_produto: 32.50,
+        valor_produto: 32.5,
       },
     ];
 
@@ -451,8 +467,16 @@ export default function Produtos() {
           errors.push({ linha, codigo: '', mensagem: 'codigo_auxiliar obrigatório' });
           return;
         }
-        if (row.valor_produto === undefined || row.valor_produto === null || row.valor_produto === '') {
-          errors.push({ linha, codigo: String(row.codigo_auxiliar), mensagem: 'valor_produto obrigatório' });
+        if (
+          row.valor_produto === undefined ||
+          row.valor_produto === null ||
+          row.valor_produto === ''
+        ) {
+          errors.push({
+            linha,
+            codigo: String(row.codigo_auxiliar),
+            mensagem: 'valor_produto obrigatório',
+          });
           return;
         }
 
@@ -480,15 +504,15 @@ export default function Produtos() {
           .in('codigo_auxiliar', batch);
 
         if (existing) {
-          existing.forEach(p => existingCodes.push(p.codigo_auxiliar));
+          existing.forEach((p) => existingCodes.push(p.codigo_auxiliar));
         }
       }
 
       // Identificar códigos não encontrados
-      const notFoundProducts = codigos.filter(c => !existingCodes.includes(c));
+      const notFoundProducts = codigos.filter((c) => !existingCodes.includes(c));
 
       // Remover do updateMap os que não existem no banco
-      notFoundProducts.forEach(c => updateMap.delete(c));
+      notFoundProducts.forEach((c) => updateMap.delete(c));
 
       const matchedProducts = updateMap.size;
       const isValid = errors.length === 0 && matchedProducts > 0;
@@ -539,7 +563,7 @@ export default function Produtos() {
 
         // Chamar RPC que faz update em lote
         const { data, error } = await supabase.rpc('atualizar_valores_produtos', {
-          p_updates: updates
+          p_updates: updates,
         });
 
         if (error) {
@@ -564,9 +588,9 @@ export default function Produtos() {
 
   const downloadUpdateTemplate = () => {
     const template = [
-      { codigo_auxiliar: 'OB1215 Q01', valor_produto: 45.90 },
-      { codigo_auxiliar: 'OB1215 Q02', valor_produto: 45.90 },
-      { codigo_auxiliar: 'PW6146 A01', valor_produto: 32.50 },
+      { codigo_auxiliar: 'OB1215 Q01', valor_produto: 45.9 },
+      { codigo_auxiliar: 'OB1215 Q02', valor_produto: 45.9 },
+      { codigo_auxiliar: 'PW6146 A01', valor_produto: 32.5 },
     ];
 
     const ws = XLSX.utils.json_to_sheet(template);
@@ -588,11 +612,19 @@ export default function Produtos() {
             <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" className="border-2" onClick={() => setImportDialogOpen(true)}>
+            <Button
+              variant="outline"
+              className="border-2"
+              onClick={() => setImportDialogOpen(true)}
+            >
               <Upload className="mr-2" size={16} />
               Importar Produtos
             </Button>
-            <Button variant="outline" className="border-2" onClick={() => setUpdateDialogOpen(true)}>
+            <Button
+              variant="outline"
+              className="border-2"
+              onClick={() => setUpdateDialogOpen(true)}
+            >
               <RefreshCw className="mr-2" size={16} />
               Atualizar Valores
             </Button>
@@ -675,10 +707,13 @@ export default function Produtos() {
         <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
 
         {/* Import Dialog (Novos Produtos) */}
-        <Dialog open={importDialogOpen} onOpenChange={(open) => {
-          setImportDialogOpen(open);
-          if (!open) resetImport();
-        }}>
+        <Dialog
+          open={importDialogOpen}
+          onOpenChange={(open) => {
+            setImportDialogOpen(open);
+            if (!open) resetImport();
+          }}
+        >
           <DialogContent className="border-2 max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -702,7 +737,9 @@ export default function Produtos() {
                   <label htmlFor="import-file-input" className="cursor-pointer">
                     <Upload className="mx-auto mb-2 text-muted-foreground" size={32} />
                     <p className="font-medium">Clique para selecionar arquivo</p>
-                    <p className="text-sm text-muted-foreground">Excel (.xlsx, .xls) ou CSV (delimitador ;)</p>
+                    <p className="text-sm text-muted-foreground">
+                      Excel (.xlsx, .xls) ou CSV (delimitador ;)
+                    </p>
                   </label>
                 ) : (
                   <div>
@@ -732,8 +769,12 @@ export default function Produtos() {
                       <TableBody>
                         {importPreview.map((row, i) => (
                           <TableRow key={i}>
-                            <TableCell className="font-mono">{String(row.codigo_produto || '')}</TableCell>
-                            <TableCell className="font-mono">{String(row.codigo_auxiliar || '')}</TableCell>
+                            <TableCell className="font-mono">
+                              {String(row.codigo_produto || '')}
+                            </TableCell>
+                            <TableCell className="font-mono">
+                              {String(row.codigo_auxiliar || '')}
+                            </TableCell>
                             <TableCell>{String(row.nome_produto || '')}</TableCell>
                             <TableCell>{String(row.valor_produto || '0')}</TableCell>
                           </TableRow>
@@ -813,9 +854,7 @@ export default function Produtos() {
                 </Button>
 
                 {importFile && importStatus === 'idle' && (
-                  <Button onClick={handleValidateImport}>
-                    Validar Arquivo
-                  </Button>
+                  <Button onClick={handleValidateImport}>Validar Arquivo</Button>
                 )}
 
                 {importStatus === 'validating' && (
@@ -846,12 +885,13 @@ export default function Produtos() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Progresso</span>
                     <span className="font-medium">
-                      {importProgress.current} de {importProgress.total} ({Math.round((importProgress.current / importProgress.total) * 100)}%)
+                      {importProgress.current} de {importProgress.total} (
+                      {Math.round((importProgress.current / importProgress.total) * 100)}%)
                     </span>
                   </div>
-                  <Progress 
-                    value={Math.round((importProgress.current / importProgress.total) * 100)} 
-                    className="h-2" 
+                  <Progress
+                    value={Math.round((importProgress.current / importProgress.total) * 100)}
+                    className="h-2"
                   />
                 </div>
               )}
@@ -866,10 +906,20 @@ export default function Produtos() {
               <div className="bg-muted/50 rounded-lg p-4 text-sm">
                 <h4 className="font-medium mb-2">Formato Esperado</h4>
                 <ul className="space-y-1 text-muted-foreground">
-                  <li><strong>codigo_produto</strong> (obrigatório): Código principal do produto. Ex: OB1215</li>
-                  <li><strong>codigo_auxiliar</strong> (obrigatório): Código único para QR Code. Ex: OB1215 Q01</li>
-                  <li><strong>nome_produto</strong> (obrigatório): Nome/descrição do produto</li>
-                  <li><strong>valor_produto</strong> (opcional): Custo do produto. Ex: 45.90</li>
+                  <li>
+                    <strong>codigo_produto</strong> (obrigatório): Código principal do produto. Ex:
+                    OB1215
+                  </li>
+                  <li>
+                    <strong>codigo_auxiliar</strong> (obrigatório): Código único para QR Code. Ex:
+                    OB1215 Q01
+                  </li>
+                  <li>
+                    <strong>nome_produto</strong> (obrigatório): Nome/descrição do produto
+                  </li>
+                  <li>
+                    <strong>valor_produto</strong> (opcional): Custo do produto. Ex: 45.90
+                  </li>
                 </ul>
                 <p className="mt-2 text-primary font-medium">
                   Apenas produtos NOVOS serão importados. Produtos existentes são ignorados.
@@ -880,10 +930,13 @@ export default function Produtos() {
         </Dialog>
 
         {/* Update Values Dialog */}
-        <Dialog open={updateDialogOpen} onOpenChange={(open) => {
-          setUpdateDialogOpen(open);
-          if (!open) resetUpdate();
-        }}>
+        <Dialog
+          open={updateDialogOpen}
+          onOpenChange={(open) => {
+            setUpdateDialogOpen(open);
+            if (!open) resetUpdate();
+          }}
+        >
           <DialogContent className="border-2 max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
@@ -937,7 +990,9 @@ export default function Produtos() {
                       <TableBody>
                         {updatePreview.map((row, i) => (
                           <TableRow key={i}>
-                            <TableCell className="font-mono">{String(row.codigo_auxiliar || '')}</TableCell>
+                            <TableCell className="font-mono">
+                              {String(row.codigo_auxiliar || '')}
+                            </TableCell>
                             <TableCell>{String(row.valor_produto || '0')}</TableCell>
                           </TableRow>
                         ))}
@@ -987,7 +1042,8 @@ export default function Produtos() {
                         {updateValidation.notFoundProducts.length} códigos não encontrados
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        Estes serão ignorados: {updateValidation.notFoundProducts.slice(0, 5).join(', ')}
+                        Estes serão ignorados:{' '}
+                        {updateValidation.notFoundProducts.slice(0, 5).join(', ')}
                         {updateValidation.notFoundProducts.length > 5 && '...'}
                       </p>
                     </div>
@@ -1011,9 +1067,7 @@ export default function Produtos() {
                 </Button>
 
                 {updateFile && updateStatus === 'idle' && (
-                  <Button onClick={handleValidateUpdate}>
-                    Validar Arquivo
-                  </Button>
+                  <Button onClick={handleValidateUpdate}>Validar Arquivo</Button>
                 )}
 
                 {updateStatus === 'validating' && (
@@ -1044,12 +1098,13 @@ export default function Produtos() {
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Progresso</span>
                     <span className="font-medium">
-                      {updateProgress.current} de {updateProgress.total} ({Math.round((updateProgress.current / updateProgress.total) * 100)}%)
+                      {updateProgress.current} de {updateProgress.total} (
+                      {Math.round((updateProgress.current / updateProgress.total) * 100)}%)
                     </span>
                   </div>
-                  <Progress 
-                    value={Math.round((updateProgress.current / updateProgress.total) * 100)} 
-                    className="h-2" 
+                  <Progress
+                    value={Math.round((updateProgress.current / updateProgress.total) * 100)}
+                    className="h-2"
                   />
                 </div>
               )}
@@ -1064,8 +1119,13 @@ export default function Produtos() {
               <div className="bg-muted/50 rounded-lg p-4 text-sm">
                 <h4 className="font-medium mb-2">Formato Esperado</h4>
                 <ul className="space-y-1 text-muted-foreground">
-                  <li><strong>codigo_auxiliar</strong> (obrigatório): Código do produto. Ex: OB1215 Q01</li>
-                  <li><strong>valor_produto</strong> (obrigatório): Novo valor. Ex: 45.90</li>
+                  <li>
+                    <strong>codigo_auxiliar</strong> (obrigatório): Código do produto. Ex: OB1215
+                    Q01
+                  </li>
+                  <li>
+                    <strong>valor_produto</strong> (obrigatório): Novo valor. Ex: 45.90
+                  </li>
                 </ul>
                 <p className="mt-2 text-yellow-600 font-medium">
                   Apenas produtos que já existem no banco terão seus valores atualizados.

@@ -48,7 +48,7 @@ export default function Historico() {
   const handleExportExcel = (inventario: InventarioComItens) => {
     const dataExport = inventario.itens_inventario.map((item) => ({
       'Código Auxiliar': item.codigo_auxiliar,
-      'Produto': item.nome_produto || '',
+      Produto: item.nome_produto || '',
       'Quantidade Física': item.quantidade_fisica,
     }));
 
@@ -96,8 +96,11 @@ export default function Historico() {
                         })}
                       </CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        {inventario.itens_inventario.reduce((sum, item) => sum + item.quantidade_fisica, 0)} itens •{' '}
-                        {format(new Date(inventario.data_inventario), 'HH:mm')}
+                        {inventario.itens_inventario.reduce(
+                          (sum, item) => sum + item.quantidade_fisica,
+                          0
+                        )}{' '}
+                        itens • {format(new Date(inventario.data_inventario), 'HH:mm')}
                       </p>
                     </div>
                     <div className="flex items-center gap-3">

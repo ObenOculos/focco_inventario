@@ -68,13 +68,15 @@ export const usePedidosPaginatedQuery = (filters: PedidosFilters) => {
       // Build base query for data
       let dataQuery = supabase
         .from('pedidos')
-        .select(`
+        .select(
+          `
           *,
           itens_pedido (
             quantidade,
             valor_produto
           )
-        `)
+        `
+        )
         .order('data_emissao', { ascending: false });
 
       // Apply vendedor filter based on role
@@ -124,7 +126,7 @@ export const usePedidosPaginatedQuery = (filters: PedidosFilters) => {
             pedido.itens_pedido?.reduce(
               (acc: number, item: any) =>
                 acc + Math.abs(Number(item.quantidade)) * Number(item.valor_produto),
-              0,
+              0
             ) || pedido.valor_total,
         })) as Pedido[],
         totalCount,

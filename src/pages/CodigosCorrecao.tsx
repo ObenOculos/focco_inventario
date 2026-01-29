@@ -117,10 +117,7 @@ export default function CodigosCorrecao() {
   const handleDelete = async () => {
     if (!deletingItem) return;
 
-    const { error } = await supabase
-      .from('codigos_correcao')
-      .delete()
-      .eq('id', deletingItem.id);
+    const { error } = await supabase.from('codigos_correcao').delete().eq('id', deletingItem.id);
 
     if (error) {
       toast.error('Erro ao excluir mapeamento');
@@ -303,9 +300,7 @@ export default function CodigosCorrecao() {
               </DialogTrigger>
               <DialogContent className="border-2">
                 <DialogHeader>
-                  <DialogTitle>
-                    {editingItem ? 'Editar Mapeamento' : 'Novo Mapeamento'}
-                  </DialogTitle>
+                  <DialogTitle>{editingItem ? 'Editar Mapeamento' : 'Novo Mapeamento'}</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
@@ -313,9 +308,7 @@ export default function CodigosCorrecao() {
                     <Input
                       id="cod_errado"
                       value={formData.cod_errado}
-                      onChange={(e) =>
-                        setFormData({ ...formData, cod_errado: e.target.value })
-                      }
+                      onChange={(e) => setFormData({ ...formData, cod_errado: e.target.value })}
                       className="border-2 uppercase"
                       placeholder="Ex: OB1105 PRETO F"
                       required
@@ -343,11 +336,7 @@ export default function CodigosCorrecao() {
           </div>
         </div>
 
-        <SearchFilter
-          value={searchTerm}
-          onChange={setSearchTerm}
-          placeholder="Buscar código..."
-        />
+        <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar código..." />
 
         {loading ? (
           <div className="text-center py-8 text-muted-foreground">Carregando...</div>
@@ -427,8 +416,8 @@ export default function CodigosCorrecao() {
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
               Tem certeza que deseja excluir o mapeamento{' '}
-              <span className="font-mono font-bold">{deletingItem?.cod_errado}</span>?
-              Esta ação não pode ser desfeita.
+              <span className="font-mono font-bold">{deletingItem?.cod_errado}</span>? Esta ação não
+              pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
