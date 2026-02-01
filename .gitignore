@@ -25,3 +25,5 @@ dist-ssr
 
 # Project specific
 Pasta_Esquema_SQL_Ciclone/
+.vercel
+.env*.local
