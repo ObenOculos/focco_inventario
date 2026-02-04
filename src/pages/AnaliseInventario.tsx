@@ -276,12 +276,10 @@ export default function AnaliseInventario() {
   const stats = useMemo(() => {
     // Filtrar apenas itens que foram contados (igual à Conferência)
     const itensContados = comparativo.filter((item) => item.foi_contado);
-    // Soma das quantidades físicas dos itens corretos (sem divergência)
-    const itensCorretos = itensContados
-      .filter((item) => item.divergencia === 0)
-      .reduce((sum, item) => sum + item.quantidade_fisica, 0);
-    // Total de itens (soma de todas as quantidades físicas)
-    const totalItens = itensContados.reduce((sum, item) => sum + item.quantidade_fisica, 0);
+    // Contagem de itens corretos (sem divergência)
+    const itensCorretos = itensContados.filter((item) => item.divergencia === 0).length;
+    // Total de itens contados
+    const totalItens = itensContados.length;
     // Contagem de produtos com sobra
     const itensSobra = itensContados.filter((item) => item.divergencia > 0).length;
     // Contagem de produtos com falta
