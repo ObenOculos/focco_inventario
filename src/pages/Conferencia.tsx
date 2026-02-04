@@ -363,12 +363,10 @@ export default function Conferencia() {
   const hasEdits = Object.keys(editedValues).length > 0;
   const stats = useMemo(
     () => ({
-      itensCorretos: divergencias
-        .filter((d) => d.diferenca === 0)
-        .reduce((sum, d) => sum + d.quantidade_fisica, 0),
+      itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
       itensSobra: divergencias.filter((d) => d.diferenca > 0).length,
       itensFalta: divergencias.filter((d) => d.diferenca < 0).length,
-      totalItens: divergencias.reduce((sum, d) => sum + d.quantidade_fisica, 0),
+      totalItens: divergencias.length,
       valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
     }),
     [divergencias]
