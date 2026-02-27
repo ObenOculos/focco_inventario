@@ -71,14 +71,14 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
       if (codigosAuxiliares.length === 0) return [];
 
       // Busca produtos em lotes
-      const produtosMap = new Map<string, { nome_produto: string; valor_produto: number }>();
+      const produtosMap = new Map<string, { nome_produto: string; valor_produto: number; codigo_produto: string }>();
       const produtoBatchSize = 500;
 
       for (let i = 0; i < codigosAuxiliares.length; i += produtoBatchSize) {
         const batch = codigosAuxiliares.slice(i, i + produtoBatchSize);
         const { data: produtos } = await supabase
           .from('produtos')
-          .select('codigo_auxiliar, nome_produto, valor_produto')
+          .select('codigo_auxiliar, nome_produto, valor_produto, codigo_produto')
           .in('codigo_auxiliar', batch);
 
         if (produtos) {
@@ -86,6 +86,7 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
             produtosMap.set(p.codigo_auxiliar, {
               nome_produto: p.nome_produto,
               valor_produto: p.valor_produto || 0,
+              codigo_produto: p.codigo_produto,
             });
           });
         }
@@ -100,8 +101,9 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
             codigo_auxiliar: item.codigo_auxiliar,
             nome_produto: produto?.nome_produto || item.codigo_auxiliar,
             quantidade_atual: item.quantidade_real,
-            quantidade_retorno: item.quantidade_real, // Pré-preenche com valor total
+            quantidade_retorno: item.quantidade_real,
             valor_produto: produto?.valor_produto || 0,
+            codigo_produto: produto?.codigo_produto || '',
           };
         })
         .sort((a, b) => a.codigo_auxiliar.localeCompare(b.codigo_auxiliar));

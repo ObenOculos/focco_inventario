@@ -30,7 +30,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check } from 'lucide-react';
+import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check, FileCode } from 'lucide-react';
 import { useVendedoresListQuery } from '@/hooks/useVendedoresGerenciamentoQuery';
 import {
   useEstoqueRealVendedorQuery,
@@ -40,6 +40,7 @@ import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import * as XLSX from 'xlsx';
+import { gerarXmlRetornoCiclone, downloadXml } from '@/lib/gerarXmlCiclone';
 
 interface ItemRetornoLocal {
   codigo_auxiliar: string;
@@ -47,6 +48,7 @@ interface ItemRetornoLocal {
   quantidade_atual: number;
   quantidade_retorno: number;
   valor_produto: number;
+  codigo_produto: string;
 }
 
 export default function NotaRetorno() {
@@ -370,6 +372,27 @@ export default function NotaRetorno() {
                     <Button variant="outline" onClick={handleExportExcel}>
                       <FileDown className="h-4 w-4 mr-2" />
                       Exportar Excel
+                    </Button>
+                    <Button variant="outline" onClick={() => {
+                      const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
+                      const itensXml = itensRetorno
+                        .filter((i) => i.quantidade_retorno > 0)
+                        .map((item) => ({
+                          codigo_produto: item.codigo_produto,
+                          nome_produto: item.nome_produto,
+                          quantidade: item.quantidade_retorno,
+                          valor_unitario: item.valor_produto,
+                        }));
+                      const xml = gerarXmlRetornoCiclone({
+                        codigoVendedor: selectedVendedor,
+                        nomeVendedor: vendedorInfo?.nome || selectedVendedor,
+                        itens: itensXml,
+                      });
+                      const nomeArquivo = `retorno-ciclone-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
+                      downloadXml(xml, nomeArquivo);
+                    }}>
+                      <FileCode className="h-4 w-4 mr-2" />
+                      Exportar XML Ciclone
                     </Button>
                     <Button onClick={() => setConfirmDialogOpen(true)}>
                       <Check className="h-4 w-4 mr-2" />
