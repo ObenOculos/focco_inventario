@@ -1,45 +1,88 @@
 
-# Plano: Corrigir Interação entre Paginação e Filtros
 
-## O Problema
+# Gerar XML Ciclone na Pagina Nota de Retorno
 
-Quando você troca o filtro de "Sobras (+)" (42 páginas) para "Faltas (-)" (1 página), o sistema mantém o número da página atual (ex: página 42). Como "Faltas" tem apenas 1 página, a listagem aparece vazia porque não existem dados nessa página.
+## Resumo
 
-## A Solução
+Adicionar um botao "Exportar XML Ciclone" na pagina Nota de Retorno existente. Ao clicar, o sistema gera um arquivo XML no formato exato do Ciclone (estrutura `pedidovenda`) com os itens selecionados para retorno e faz o download automatico.
 
-Resetar automaticamente a paginação para a página 1 sempre que os dados filtrados mudarem, garantindo que o usuário sempre veja resultados válidos.
+## Abordagem
 
----
+A geracao do XML sera feita diretamente no frontend (sem necessidade de edge function), pois todos os dados necessarios ja estao disponiveis na pagina: codigo do vendedor, itens com quantidades, valores e codigo do produto. O XML sera montado em memoria e baixado como arquivo.
 
-## Detalhes Técnicos
+## Estrutura do XML Ciclone
 
-### Arquivo: `src/hooks/usePagination.tsx`
+O XML seguira exatamente o modelo fornecido:
 
-Modificar o `useEffect` existente para também reagir a mudanças nos dados:
-
-**Código atual:**
-```tsx
-useEffect(() => {
-  setCurrentPage(1);
-}, [searchTerm]);
+```text
+<ciclone>
+  <id>pedidovenda</id>
+  <registro>
+    <id>ws_api_pedido</id>
+    <ws_api_pedido_uuid>[UUID gerado]</ws_api_pedido_uuid>
+    <pgemp_codigo>1</pgemp_codigo>
+    <pgfll_codigo>1</pgfll_codigo>
+    <pgwsm_codigo>4</pgwsm_codigo>
+    <wsapd_empresa>1.:.1</wsapd_empresa>
+    <wsapd_origem>STORMSYSTEM</wsapd_origem>
+    <wsapd_vendedor>[codigo_vendedor]</wsapd_vendedor>
+    <wsapd_valortotal>[valor total]</wsapd_valortotal>
+    ... (demais campos do pedido)
+    <subregistro>
+      <id>ws_api_cliente</id>
+      ... (vendedor como "cliente" para ajuste interno)
+    </subregistro>
+    <subregistro>
+      <id>ws_api_pedidoitem</id>
+      <wsapi_produtocodigo>[codigo_produto]</wsapi_produtocodigo>
+      <wsapi_quantidade>[quantidade]</wsapi_quantidade>
+      <wsapi_valorunitario>[valor]</wsapi_valorunitario>
+      ...
+    </subregistro>
+  </registro>
+</ciclone>
 ```
 
-**Código novo:**
-```tsx
-useEffect(() => {
-  setCurrentPage(1);
-}, [searchTerm, data]);
-```
+## Alteracoes Necessarias
 
-Esta alteração é simples mas eficaz:
-- Quando `data` muda (resultado de mudança nos filtros), a página volta para 1
-- Quando `searchTerm` muda, a página também volta para 1
-- O hook `usePagination` é genérico e será corrigido em todas as páginas que o utilizam
+### 1. Buscar `codigo_produto` dos produtos (src/hooks/useNotaRetornoQuery.ts)
 
-### Impacto
+O XML precisa do campo `codigo_produto` (codigo do produto no Ciclone), que atualmente nao e buscado pelo hook `useEstoqueRealVendedorQuery`. Sera adicionado ao SELECT da tabela `produtos` e incluido no retorno do hook.
 
-Esta correção beneficiará automaticamente todas as páginas que usam o hook `usePagination`:
-- Análise de Inventário
-- Conferência de Inventários
-- Estoque ERP
-- Outras páginas com paginação e filtros
+### 2. Funcao de geracao XML (src/lib/gerarXmlCiclone.ts)
+
+Criar um arquivo utilitario com a funcao `gerarXmlRetornoCiclone()` que:
+- Recebe os itens de retorno (com codigo_produto, quantidade, valor), dados do vendedor e timestamp
+- Gera um UUID para o pedido
+- Monta a string XML com todos os campos no formato Ciclone
+- Campos fixos: `pgemp_codigo=1`, `pgfll_codigo=1`, `pgwsm_codigo=4`
+- Sub-registro `ws_api_cliente`: usa codigo_vendedor como cliente (operacao interna)
+- Sub-registros `ws_api_pedidoitem`: um por item, com sequencia, codigo_produto, nome, quantidade, valor
+- Retorna a string XML pronta
+
+### 3. Botao na pagina NotaRetorno (src/pages/NotaRetorno.tsx)
+
+- Adicionar botao "Exportar XML Ciclone" ao lado do botao "Exportar Excel" existente (linha 370)
+- Ao clicar, chama a funcao de geracao e dispara download do arquivo `.xml`
+- O botao so aparece quando ha itens com quantidade de retorno > 0
+
+### Mapeamento de Campos
+
+| Campo XML | Origem no Sistema |
+|---|---|
+| `wsapd_vendedor` | `profiles.codigo_vendedor` |
+| `wsapi_produtocodigo` | `produtos.codigo_produto` |
+| `wsapi_quantidade` | Quantidade de retorno definida pelo usuario |
+| `wsapi_valorunitario` | `produtos.valor_produto` |
+| `wsapi_produtonome` | `produtos.nome_produto` |
+| `wsapd_valortotal` | Soma de (quantidade x valor) de todos os itens |
+
+### Arquivos a Criar
+
+- `src/lib/gerarXmlCiclone.ts` - Funcao utilitaria de geracao do XML
+
+### Arquivos a Modificar
+
+- `src/hooks/useNotaRetornoQuery.ts` - Incluir `codigo_produto` na busca de produtos
+- `src/pages/NotaRetorno.tsx` - Adicionar botao de exportacao XML e handler de download
+
