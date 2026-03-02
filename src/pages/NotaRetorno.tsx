@@ -378,7 +378,7 @@ export default function NotaRetorno() {
                       const itensXml = itensRetorno
                         .filter((i) => i.quantidade_retorno > 0)
                         .map((item) => ({
-                          codigo_produto: item.codigo_produto,
+                          codigo_auxiliar: item.codigo_auxiliar,
                           nome_produto: item.nome_produto,
                           quantidade: item.quantidade_retorno,
                           valor_unitario: item.valor_produto,

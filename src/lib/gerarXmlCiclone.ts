@@ -1,5 +1,5 @@
 interface ItemXmlCiclone {
-  codigo_produto: string;
+  codigo_auxiliar: string;
   nome_produto: string;
   quantidade: number;
   valor_unitario: number;
@@ -55,7 +55,7 @@ export function gerarXmlRetornoCiclone({ codigoVendedor, nomeVendedor, itens }: 
   const itensXml = itens
     .map((item, index) => {
       const subtotal = item.quantidade * item.valor_unitario;
-      return `<subregistro><id>ws_api_pedidoitem</id><ws_api_pedido_uuid>${pedidoUuid}</ws_api_pedido_uuid><wsapi_sequecia>${index + 1}</wsapi_sequecia><wsapi_datahoraregistro>${dataHora}</wsapi_datahoraregistro><wsapi_produtocodigo>${escapeXml(item.codigo_produto)}</wsapi_produtocodigo><wsapi_produtonome>${escapeXml(item.nome_produto)}</wsapi_produtonome><wsapi_quantidade>${formatNumber(item.quantidade)}</wsapi_quantidade><wsapi_valorunitario>${formatNumber(item.valor_unitario)}</wsapi_valorunitario><wsapi_tabelapreco>0</wsapi_tabelapreco><wsapi_valortotal>${formatNumber(subtotal)}</wsapi_valortotal><wsapi_observacao></wsapi_observacao><wsapi_extras></wsapi_extras></subregistro>`;
+      return `<subregistro><id>ws_api_pedidoitem</id><ws_api_pedido_uuid>${pedidoUuid}</ws_api_pedido_uuid><wsapi_sequecia>${index + 1}</wsapi_sequecia><wsapi_datahoraregistro>${dataHora}</wsapi_datahoraregistro><wsapi_produtocodigo>${escapeXml(item.codigo_auxiliar)}</wsapi_produtocodigo><wsapi_produtonome>${escapeXml(item.nome_produto)}</wsapi_produtonome><wsapi_quantidade>${formatNumber(item.quantidade)}</wsapi_quantidade><wsapi_valorunitario>${formatNumber(item.valor_unitario)}</wsapi_valorunitario><wsapi_tabelapreco>0</wsapi_tabelapreco><wsapi_valortotal>${formatNumber(subtotal)}</wsapi_valortotal><wsapi_observacao></wsapi_observacao><wsapi_extras></wsapi_extras></subregistro>`;
     })
     .join('');
 
