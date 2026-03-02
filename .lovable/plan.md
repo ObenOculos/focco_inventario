@@ -1,14 +1,23 @@
 
 
-# Corrigir constantes no XML Ciclone
+# Gerar numero de pedido unico no XML Ciclone
 
-## Alteracoes no arquivo `src/lib/gerarXmlCiclone.ts`
+## Problema
+O campo `<wsapd_pedidonumero>` no XML esta vazio. O usuario quer um codigo de pedido unico, somente numerico.
 
-Tres ajustes simples de valores fixos no template XML:
+## Solucao
 
-1. **`pgwsm_codigo`**: Trocar de `4` para `1` (aparece 2 vezes: no registro principal e no sub-registro cliente)
-2. **`wsapd_origem`**: Trocar de `STORMSYSTEM` para `FOCCO_BRASIL`
-3. **`wsapd_pedidonumero`**: Este campo ja existe no XML atual (esta vazio: `<wsapd_pedidonumero></wsapd_pedidonumero>`). Preciso confirmar: o usuario quer que ele tenha algum valor especifico, ou esta dizendo que o campo sumiu e precisa ser mantido?
+Gerar um numero de pedido no formato: `{codigoVendedor}{YYYYMMDD}{HHmmss}`
 
-Vou verificar o arquivo atual para confirmar o estado exato.
+Exemplo: `2720260302143025` (vendedor 27, em 02/03/2026 as 14:30:25)
+
+Somente numeros, sem letras. Unicidade garantida pela combinacao de vendedor + data/hora com precisao de segundo.
+
+## Alteracao tecnica
+
+### `src/lib/gerarXmlCiclone.ts`
+- Criar funcao `generatePedidoNumero(codigoVendedor: string)` que extrai apenas os digitos do codigo do vendedor e concatena com `YYYYMMDDHHmmss`
+- Preencher `<wsapd_pedidonumero>` com o valor gerado
+
+Apenas 1 arquivo alterado, ~5 linhas adicionadas.
 
