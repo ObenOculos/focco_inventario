@@ -50,19 +50,6 @@ export type EstoqueItem = {
   estoque_teorico: number;
 };
 
-export type EstoqueAteDataItem = {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  estoque_teorico: number;
-};
-
-export type ComparacaoInventarioItem = {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  estoque_teorico: number;
-  quantidade_fisica: number;
-  divergencia: number;
-};
 
 // Tipo para importação Excel
 export interface ExcelRow {

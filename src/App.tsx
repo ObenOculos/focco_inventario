@@ -3,7 +3,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ImportProvider } from '@/contexts/ImportContext';
-import { MobileProvider } from '@/contexts/MobileContext';
+
 import { ImportProgress } from '@/components/ImportProgress';
 import { ImportBlocker } from '@/components/ImportBlocker';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
@@ -191,16 +191,14 @@ const router = createBrowserRouter(
 );
 
 const App = () => (
-  <MobileProvider>
-    <AuthProvider>
-      <ImportProvider>
-        <TooltipProvider>
-          <Sonner />
-          <ImportProgress />
-          <RouterProvider router={router} />
-        </TooltipProvider>
-      </ImportProvider>
-    </AuthProvider>
-  </MobileProvider>
+  <AuthProvider>
+    <ImportProvider>
+      <TooltipProvider>
+        <Sonner />
+        <ImportProgress />
+        <RouterProvider router={router} />
+      </TooltipProvider>
+    </ImportProvider>
+  </AuthProvider>
 );
 export default App;
