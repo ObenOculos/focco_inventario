@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useMobile } from '@/contexts/MobileContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -49,7 +49,7 @@ export function VendedorEstoqueCard({
   itens,
   pedidosRecentes,
 }: VendedorEstoqueCardProps) {
-  const { isMobile } = useMobile();
+  const isMobile = useIsMobile();
   const [expanded, setExpanded] = useState(false);
   const [showItens, setShowItens] = useState(false);
   const [showPedidos, setShowPedidos] = useState(false);

@@ -19,24 +19,25 @@ function generateUUID(): string {
   });
 }
 
+function getDateParts(date: Date) {
+  return {
+    yyyy: date.getFullYear(),
+    mm: String(date.getMonth() + 1).padStart(2, '0'),
+    dd: String(date.getDate()).padStart(2, '0'),
+    hh: String(date.getHours()).padStart(2, '0'),
+    min: String(date.getMinutes()).padStart(2, '0'),
+    ss: String(date.getSeconds()).padStart(2, '0'),
+  };
+}
+
 function generatePedidoNumero(codigoVendedor: string, date: Date): string {
   const digits = codigoVendedor.replace(/\D/g, '');
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  const ss = String(date.getSeconds()).padStart(2, '0');
+  const { yyyy, mm, dd, hh, min, ss } = getDateParts(date);
   return `${digits}${yyyy}${mm}${dd}${hh}${min}${ss}`;
 }
 
 function formatDateTime(date: Date): string {
-  const dd = String(date.getDate()).padStart(2, '0');
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const yyyy = date.getFullYear();
-  const hh = String(date.getHours()).padStart(2, '0');
-  const min = String(date.getMinutes()).padStart(2, '0');
-  const ss = String(date.getSeconds()).padStart(2, '0');
+  const { dd, mm, yyyy, hh, min, ss } = getDateParts(date);
   return `${dd}/${mm}/${yyyy} ${hh}:${min}:${ss}`;
 }
 

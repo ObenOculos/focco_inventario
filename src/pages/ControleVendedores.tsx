@@ -1,4 +1,4 @@
-import { useMobile } from '@/contexts/MobileContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 import { useState, useMemo } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,7 +47,7 @@ type SortField = 'nome' | 'estoque_total' | 'total_vendas' | 'acuracidade' | 'di
 type SortDirection = 'asc' | 'desc';
 
 export default function ControleVendedores() {
-  const { isMobile } = useMobile();
+  const isMobile = useIsMobile();
   const { profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [periodo, setPeriodo] = useState('30');
