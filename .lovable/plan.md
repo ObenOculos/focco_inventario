@@ -1,15 +1,14 @@
 
-# Usar codigo_auxiliar no XML Ciclone
 
-## Alteracao
+# Corrigir constantes no XML Ciclone
 
-Trocar o campo usado como codigo do produto no XML de `codigo_produto` para `codigo_auxiliar` em todos os pontos:
+## Alteracoes no arquivo `src/lib/gerarXmlCiclone.ts`
 
-### 1. `src/lib/gerarXmlCiclone.ts`
-- Renomear o campo `codigo_produto` para `codigo_auxiliar` na interface `ItemXmlCiclone`
-- Atualizar a referencia no template XML: `<wsapi_produtocodigo>${escapeXml(item.codigo_auxiliar)}</wsapi_produtocodigo>`
+Tres ajustes simples de valores fixos no template XML:
 
-### 2. `src/pages/NotaRetorno.tsx`
-- Na montagem do array `itensXml` (linha 381), trocar `codigo_produto: item.codigo_produto` para `codigo_auxiliar: item.codigo_auxiliar`
+1. **`pgwsm_codigo`**: Trocar de `4` para `1` (aparece 2 vezes: no registro principal e no sub-registro cliente)
+2. **`wsapd_origem`**: Trocar de `STORMSYSTEM` para `FOCCO_BRASIL`
+3. **`wsapd_pedidonumero`**: Este campo ja existe no XML atual (esta vazio: `<wsapd_pedidonumero></wsapd_pedidonumero>`). Preciso confirmar: o usuario quer que ele tenha algum valor especifico, ou esta dizendo que o campo sumiu e precisa ser mantido?
 
-Resultado: o campo `<wsapi_produtocodigo>` no XML passara a conter o valor do `codigo_auxiliar` (ex: "OB1007 A01") em vez do `codigo_produto`.
+Vou verificar o arquivo atual para confirmar o estado exato.
+
