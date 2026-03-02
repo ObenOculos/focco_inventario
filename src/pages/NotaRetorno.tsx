@@ -394,9 +394,18 @@ export default function NotaRetorno() {
                       <FileCode className="h-4 w-4 mr-2" />
                       Exportar XML Ciclone
                     </Button>
-                    <Button onClick={() => setConfirmDialogOpen(true)}>
-                      <Check className="h-4 w-4 mr-2" />
-                      Gerar Nota de Retorno
+                    <Button onClick={() => setConfirmDialogOpen(true)} disabled={gerarNotaMutation.isPending}>
+                      {gerarNotaMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Gerando...
+                        </>
+                      ) : (
+                        <>
+                          <Check className="h-4 w-4 mr-2" />
+                          Gerar Nota de Retorno
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
