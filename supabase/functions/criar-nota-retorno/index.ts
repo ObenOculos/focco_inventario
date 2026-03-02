@@ -168,6 +168,48 @@ serve(async (req: Request) => {
 
     const totalUnidades = itensValidos.reduce((acc, item) => acc + item.quantidade, 0);
 
+    // === ATUALIZAR ESTOQUE_REAL ===
+    // Insere novos registros com quantidade reduzida para cada item retornado
+    console.log(`[INFO] Atualizando estoque_real para ${itensValidos.length} itens...`);
+    const agora = new Date().toISOString();
+
+    for (const item of itensValidos) {
+      // Busca quantidade atual do estoque_real (registro mais recente)
+      const { data: estoqueAtual, error: estoqueError } = await supabaseAdmin
+        .from('estoque_real')
+        .select('quantidade_real')
+        .eq('codigo_vendedor', codigo_vendedor)
+        .eq('codigo_auxiliar', item.codigo_auxiliar)
+        .order('data_atualizacao', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (estoqueError) {
+        console.error(`[WARN] Erro ao buscar estoque_real para ${item.codigo_auxiliar}:`, estoqueError);
+        continue;
+      }
+
+      const quantidadeAtual = estoqueAtual?.quantidade_real || 0;
+      const novaQuantidade = Math.max(0, quantidadeAtual - item.quantidade);
+
+      // Insere novo registro com quantidade reduzida
+      const { error: insertEstoqueError } = await supabaseAdmin
+        .from('estoque_real')
+        .insert({
+          codigo_vendedor: codigo_vendedor,
+          codigo_auxiliar: item.codigo_auxiliar,
+          quantidade_real: novaQuantidade,
+          data_atualizacao: agora,
+          inventario_id: null,
+        });
+
+      if (insertEstoqueError) {
+        console.error(`[WARN] Erro ao atualizar estoque_real para ${item.codigo_auxiliar}:`, insertEstoqueError);
+      } else {
+        console.log(`[INFO] estoque_real ${item.codigo_auxiliar}: ${quantidadeAtual} -> ${novaQuantidade}`);
+      }
+    }
+
     console.log(`[INFO] Nota de retorno criada com sucesso: ${numeroPedido}`);
 
     return new Response(
