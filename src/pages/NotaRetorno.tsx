@@ -381,24 +381,7 @@ export default function NotaRetorno() {
                       <FileDown className="h-4 w-4 mr-2" />
                       Exportar Excel
                     </Button>
-                    <Button variant="outline" onClick={() => {
-                      const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
-                      const itensXml = itensRetorno
-                        .filter((i) => i.quantidade_retorno > 0)
-                        .map((item) => ({
-                          codigo_auxiliar: item.codigo_auxiliar,
-                          nome_produto: item.nome_produto,
-                          quantidade: item.quantidade_retorno,
-                          valor_unitario: item.valor_produto,
-                        }));
-                      const xml = gerarXmlRetornoCiclone({
-                        codigoVendedor: selectedVendedor,
-                        nomeVendedor: vendedorInfo?.nome || selectedVendedor,
-                        itens: itensXml,
-                      });
-                      const nomeArquivo = `retorno-ciclone-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
-                      downloadXml(xml, nomeArquivo);
-                    }}>
+                    <Button variant="outline" onClick={() => setLojaDialogOpen(true)}>
                       <FileCode className="h-4 w-4 mr-2" />
                       Exportar XML Ciclone
                     </Button>
