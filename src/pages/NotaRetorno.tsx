@@ -30,6 +30,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check, FileCode } from 'lucide-react';
 import { useVendedoresListQuery } from '@/hooks/useVendedoresGerenciamentoQuery';
 import {
