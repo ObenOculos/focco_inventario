@@ -37,7 +37,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check, FileCode } from 'lucide-react';
+import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check, FileCode, Store } from 'lucide-react';
 import { useVendedoresListQuery } from '@/hooks/useVendedoresGerenciamentoQuery';
 import {
   useEstoqueRealVendedorQuery,
