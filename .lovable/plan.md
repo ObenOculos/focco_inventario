@@ -1,51 +1,24 @@
 
 
-# Analise de Redundancias no Projeto
+# Modal de seleção de loja no export XML Ciclone
 
-## 1. Arquivo de tipos duplicado: `src/types/database.ts`
+## O que muda
 
-O arquivo `src/types/database.ts` e uma copia quase identica de `src/types/app.ts`. Ambos definem os mesmos tipos: `Profile`, `Produto`, `Pedido`, `ItemPedido`, `Inventario`, `ItemInventario`, `UserRole`, `InventoryStatus`, `DivergenciaItem`, `MetricConfig`, `MetricDataPoint`, `EstoqueItem`, `ExcelRow`.
+Ao clicar em "Exportar XML Ciclone", em vez de exportar direto, abre um modal (Dialog) para o usuário escolher entre **Loja 01** e **Loja 02**. Após selecionar, o XML é gerado e baixado.
 
-**Nenhum arquivo no projeto importa de `src/types/database.ts`** — todos usam `src/types/app.ts`.
+O valor da loja selecionada será usado no campo `<pgemp_codigo>` do XML (atualmente fixo em `1`). Loja 01 = `1`, Loja 02 = `2`.
 
-**Acao:** Deletar `src/types/database.ts` completamente. E codigo morto.
+## Alterações
 
----
+### `src/pages/NotaRetorno.tsx`
+- Adicionar estado `lojaDialogOpen` e `selectedLoja`
+- No botão "Exportar XML Ciclone", ao invés de gerar direto, abrir um Dialog com duas opções (Loja 01 / Loja 02)
+- Ao selecionar a loja, chamar `gerarXmlRetornoCiclone` passando o código da loja e fazer o download
+- Usar o componente `Dialog` já existente no projeto
 
-## 2. MobileContext e redundante com useIsMobile
+### `src/lib/gerarXmlCiclone.ts`
+- Adicionar `codigoLoja` (number) ao `GerarXmlParams`
+- Usar `codigoLoja` no campo `<pgemp_codigo>` em vez do valor fixo `1` (aparece 3 vezes: registro principal + sub-registro cliente)
 
-O `MobileContext` (`src/contexts/MobileContext.tsx`) e apenas um wrapper fino em volta do hook `useIsMobile`. Ele nao adiciona nenhuma logica extra — so repassa o valor.
-
-Porem, ele e usado em 2 componentes (`ControleVendedores`, `VendedorEstoqueCard`), enquanto `useIsMobile` e usado diretamente em outros 2 (`Inventario`, `sidebar.tsx`). Isso cria inconsistencia — metade do codigo usa o Context, metade usa o hook direto.
-
-**Acao sugerida:** Padronizar para usar `useIsMobile` direto em todos os lugares e remover o `MobileContext` e o `MobileProvider` do `App.tsx`. O hook ja faz exatamente a mesma coisa sem a complexidade extra do Context.
-
-**Impacto:** 4 arquivos alterados (`App.tsx`, `ControleVendedores.tsx`, `VendedorEstoqueCard.tsx`, deletar `MobileContext.tsx`).
-
----
-
-## 3. Tipo `EstoqueAteDataItem` e `ComparacaoInventarioItem` nao utilizados
-
-Em `src/types/app.ts`, os tipos `EstoqueAteDataItem` e `ComparacaoInventarioItem` estao definidos mas nao sao importados em nenhum outro arquivo do projeto.
-
-**Acao:** Remover esses dois tipos de `src/types/app.ts`.
-
----
-
-## 4. Formatacao de data duplicada em `gerarXmlCiclone.ts`
-
-As funcoes `generatePedidoNumero` e `formatDateTime` fazem a mesma extracao de componentes de data (ano, mes, dia, hora, minuto, segundo) de formas levemente diferentes. Poderiam compartilhar a logica de extracao.
-
-**Acao:** Refatorar para extrair os componentes de data uma unica vez e reutilizar. E um corte menor, mas melhora legibilidade.
-
----
-
-## Resumo de acoes
-
-| Prioridade | Acao | Tipo |
-|---|---|---|
-| Alta | Deletar `src/types/database.ts` | Codigo morto |
-| Media | Remover `MobileContext`, usar `useIsMobile` direto | Redundancia |
-| Baixa | Remover tipos nao usados de `app.ts` | Limpeza |
-| Baixa | Unificar formatacao de data no XML | Refatoracao menor |
+2 arquivos alterados.
 
