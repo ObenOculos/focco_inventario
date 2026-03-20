@@ -66,6 +66,7 @@ export default function NotaRetorno() {
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [itensRetorno, setItensRetorno] = useState<ItemRetornoLocal[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [lojaDialogOpen, setLojaDialogOpen] = useState(false);
 
   const { data: vendedores = [], isLoading: loadingVendedores } = useVendedoresListQuery();
   const {
