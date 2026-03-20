@@ -41,6 +41,8 @@ import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import * as XLSX from 'xlsx';
 import { gerarXmlRetornoCiclone, downloadXml } from '@/lib/gerarXmlCiclone';
+import { toast } from 'sonner';
+import { enviarXmlCiclonePedido } from '@/lib/stormApi';
 
 interface ItemRetornoLocal {
   codigo_auxiliar: string;
@@ -163,6 +165,8 @@ export default function NotaRetorno() {
     XLSX.writeFile(wb, nomeArquivo);
   };
 
+  const [isSendingStorm, setIsSendingStorm] = useState(false);
+
   const handleGerarNota = async () => {
     const itensParaRetorno = itensRetorno
       .filter((i) => i.quantidade_retorno > 0)
@@ -181,6 +185,35 @@ export default function NotaRetorno() {
     setConfirmDialogOpen(false);
     setSelectedVendedor('');
     setItensRetorno([]);
+  };
+
+  const handleEnviarStorm = async () => {
+    if (itensRetorno.length === 0) return;
+    const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
+    const itensXml = itensRetorno
+      .filter((i) => i.quantidade_retorno > 0)
+      .map((item) => ({
+        codigo_auxiliar: item.codigo_auxiliar,
+        nome_produto: item.nome_produto,
+        quantidade: item.quantidade_retorno,
+        valor_unitario: item.valor_produto,
+      }));
+
+    const xml = gerarXmlRetornoCiclone({
+      codigoVendedor: selectedVendedor,
+      nomeVendedor: vendedorInfo?.nome || selectedVendedor,
+      itens: itensXml,
+    });
+
+    try {
+      setIsSendingStorm(true);
+      await enviarXmlCiclonePedido(xml);
+      toast.success('Pedido enviado ao Storm com sucesso');
+    } catch (err) {
+      toast.error(`Erro ao enviar ao Storm: ${(err as Error).message}`);
+    } finally {
+      setIsSendingStorm(false);
+    }
   };
 
   const vendedorSelecionado = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
@@ -393,6 +426,19 @@ export default function NotaRetorno() {
                     }}>
                       <FileCode className="h-4 w-4 mr-2" />
                       Exportar XML Ciclone
+                    </Button>
+                    <Button variant="outline" onClick={handleEnviarStorm} disabled={isSendingStorm}>
+                      {isSendingStorm ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Enviando...
+                        </>
+                      ) : (
+                        <>
+                          <Package className="h-4 w-4 mr-2" />
+                          Enviar para Storm
+                        </>
+                      )}
                     </Button>
                     <Button onClick={() => setConfirmDialogOpen(true)} disabled={gerarNotaMutation.isPending}>
                       {gerarNotaMutation.isPending ? (
