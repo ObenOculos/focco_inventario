@@ -452,6 +452,56 @@ export default function NotaRetorno() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Dialog de Seleção de Loja */}
+        <Dialog open={lojaDialogOpen} onOpenChange={setLojaDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Store className="h-5 w-5" />
+                Selecionar Loja
+              </DialogTitle>
+              <DialogDescription>
+                Escolha a loja para gerar o XML de retorno Ciclone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4 py-4">
+              {[
+                { codigo: 1, nome: 'Loja 01' },
+                { codigo: 2, nome: 'Loja 02' },
+              ].map((loja) => (
+                <Button
+                  key={loja.codigo}
+                  variant="outline"
+                  className="h-24 flex flex-col gap-2 text-base"
+                  onClick={() => {
+                    const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
+                    const itensXml = itensRetorno
+                      .filter((i) => i.quantidade_retorno > 0)
+                      .map((item) => ({
+                        codigo_auxiliar: item.codigo_auxiliar,
+                        nome_produto: item.nome_produto,
+                        quantidade: item.quantidade_retorno,
+                        valor_unitario: item.valor_produto,
+                      }));
+                    const xml = gerarXmlRetornoCiclone({
+                      codigoVendedor: selectedVendedor,
+                      nomeVendedor: vendedorInfo?.nome || selectedVendedor,
+                      codigoLoja: loja.codigo,
+                      itens: itensXml,
+                    });
+                    const nomeArquivo = `retorno-ciclone-loja${loja.codigo}-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
+                    downloadXml(xml, nomeArquivo);
+                    setLojaDialogOpen(false);
+                  }}
+                >
+                  <Store className="h-6 w-6" />
+                  {loja.nome}
+                </Button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
