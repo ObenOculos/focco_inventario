@@ -8,6 +8,7 @@ interface ItemXmlCiclone {
 interface GerarXmlParams {
   codigoVendedor: string;
   nomeVendedor: string;
+  codigoLoja: number;
   itens: ItemXmlCiclone[];
 }
 
