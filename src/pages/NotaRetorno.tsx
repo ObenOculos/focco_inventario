@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -30,7 +30,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check, FileCode } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { Undo2, Package, Search, FileDown, Loader2, AlertTriangle, Check, FileCode, Store } from 'lucide-react';
 import { useVendedoresListQuery } from '@/hooks/useVendedoresGerenciamentoQuery';
 import {
   useEstoqueRealVendedorQuery,
@@ -59,6 +66,7 @@ export default function NotaRetorno() {
   const [itemsPerPage, setItemsPerPage] = useState(20);
   const [itensRetorno, setItensRetorno] = useState<ItemRetornoLocal[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [lojaDialogOpen, setLojaDialogOpen] = useState(false);
 
   const { data: vendedores = [], isLoading: loadingVendedores } = useVendedoresListQuery();
   const {
@@ -373,24 +381,7 @@ export default function NotaRetorno() {
                       <FileDown className="h-4 w-4 mr-2" />
                       Exportar Excel
                     </Button>
-                    <Button variant="outline" onClick={() => {
-                      const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
-                      const itensXml = itensRetorno
-                        .filter((i) => i.quantidade_retorno > 0)
-                        .map((item) => ({
-                          codigo_auxiliar: item.codigo_auxiliar,
-                          nome_produto: item.nome_produto,
-                          quantidade: item.quantidade_retorno,
-                          valor_unitario: item.valor_produto,
-                        }));
-                      const xml = gerarXmlRetornoCiclone({
-                        codigoVendedor: selectedVendedor,
-                        nomeVendedor: vendedorInfo?.nome || selectedVendedor,
-                        itens: itensXml,
-                      });
-                      const nomeArquivo = `retorno-ciclone-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
-                      downloadXml(xml, nomeArquivo);
-                    }}>
+                    <Button variant="outline" onClick={() => setLojaDialogOpen(true)}>
                       <FileCode className="h-4 w-4 mr-2" />
                       Exportar XML Ciclone
                     </Button>
@@ -461,6 +452,56 @@ export default function NotaRetorno() {
             </AlertDialogFooter>
           </AlertDialogContent>
         </AlertDialog>
+
+        {/* Dialog de Seleção de Loja */}
+        <Dialog open={lojaDialogOpen} onOpenChange={setLojaDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Store className="h-5 w-5" />
+                Selecionar Loja
+              </DialogTitle>
+              <DialogDescription>
+                Escolha a loja para gerar o XML de retorno Ciclone.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid grid-cols-2 gap-4 py-4">
+              {[
+                { codigo: 1, nome: 'Loja 01' },
+                { codigo: 2, nome: 'Loja 02' },
+              ].map((loja) => (
+                <Button
+                  key={loja.codigo}
+                  variant="outline"
+                  className="h-24 flex flex-col gap-2 text-base"
+                  onClick={() => {
+                    const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
+                    const itensXml = itensRetorno
+                      .filter((i) => i.quantidade_retorno > 0)
+                      .map((item) => ({
+                        codigo_auxiliar: item.codigo_auxiliar,
+                        nome_produto: item.nome_produto,
+                        quantidade: item.quantidade_retorno,
+                        valor_unitario: item.valor_produto,
+                      }));
+                    const xml = gerarXmlRetornoCiclone({
+                      codigoVendedor: selectedVendedor,
+                      nomeVendedor: vendedorInfo?.nome || selectedVendedor,
+                      codigoLoja: loja.codigo,
+                      itens: itensXml,
+                    });
+                    const nomeArquivo = `retorno-ciclone-loja${loja.codigo}-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
+                    downloadXml(xml, nomeArquivo);
+                    setLojaDialogOpen(false);
+                  }}
+                >
+                  <Store className="h-6 w-6" />
+                  {loja.nome}
+                </Button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </AppLayout>
   );
