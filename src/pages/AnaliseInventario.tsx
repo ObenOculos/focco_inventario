@@ -409,60 +409,82 @@ export default function AnaliseInventario() {
           <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
 
-        {/* Selection Card */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Selecione o Inventário</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-col lg:flex-row gap-4">
-              <div className="flex-1">
-                <label className="text-sm font-medium mb-2 block">Inventário</label>
-                <Select
-                  value={selectedInventario ?? ''}
-                  onValueChange={setSelectedInventario}
-                  disabled={inventarios.length === 0}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione uma data de inventário" />
+        {/* Screen 1: Inventory List */}
+        {!selectedInventario ? (
+          <div>
+            {isGerente && (
+              <div className="mb-4">
+                <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
+                  <SelectTrigger className="w-full sm:w-72">
+                    <SelectValue placeholder="Filtrar por vendedor" />
                   </SelectTrigger>
                   <SelectContent>
-                    {inventarios.map((inv, index) => (
-                      <SelectItem key={inv.id} value={inv.id}>
-                        <span className="font-medium">#{inventarios.length - index}</span> -{' '}
-                        {new Date(inv.data_inventario).toLocaleDateString('pt-BR', {
-                          timeZone: 'UTC',
-                        })}{' '}
-                        - {inv.vendedor_nome} - <span className="capitalize">{inv.status}</span>
+                    <SelectItem value="todos">Todos os vendedores</SelectItem>
+                    {vendedores.map((vendedor) => (
+                      <SelectItem key={vendedor.codigo_vendedor} value={vendedor.codigo_vendedor}>
+                        {vendedor.nome} ({vendedor.codigo_vendedor})
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
               </div>
-              {isGerente && (
-                <div className="lg:w-80">
-                  <label className="text-sm font-medium mb-2 block">Vendedor</label>
-                  <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Filtrar por vendedor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todos os vendedores</SelectItem>
-                      {vendedores.map((vendedor) => (
-                        <SelectItem key={vendedor.codigo_vendedor} value={vendedor.codigo_vendedor}>
-                          {vendedor.nome} ({vendedor.codigo_vendedor})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+            )}
 
-        {/* Content Area */}
-        {loading ? (
+            <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
+              <PackageSearch size={20} />
+              Inventários Disponíveis
+              <Badge variant="secondary">{inventarios.length}</Badge>
+            </h2>
+
+            {inventarios.length === 0 ? (
+              <Card className="border-2 shadow-none">
+                <CardContent className="py-12 text-center">
+                  <CheckCircle size={48} className="mx-auto mb-4 text-green-500" />
+                  <h2 className="text-xl font-bold mb-2">Nenhum inventário encontrado</h2>
+                  <p className="text-muted-foreground">Não há inventários disponíveis para análise.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                {inventarios.map((inv, index) => {
+                  const isRevisao = inv.status === 'revisao';
+                  const isAprovado = inv.status === 'aprovado';
+                  return (
+                    <Card
+                      key={inv.id}
+                      className="border-2 transition-all cursor-pointer group shadow-none hover:border-blue-300"
+                      onClick={() => setSelectedInventario(inv.id)}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between">
+                          <CardTitle className="text-base flex items-center gap-2">
+                            <User size={16} /> {inv.vendedor_nome || 'Vendedor'}
+                          </CardTitle>
+                          <Badge
+                            variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
+                          >
+                            <span className="capitalize">{inv.status}</span>
+                          </Badge>
+                        </div>
+                        <p className="font-mono text-xs text-muted-foreground pt-1">
+                          #{inventarios.length - index} — {inv.codigo_vendedor}
+                        </p>
+                      </CardHeader>
+                      <CardContent className="text-sm space-y-2">
+                        <div className="flex justify-between items-center text-muted-foreground">
+                          <span className="flex items-center gap-1.5">
+                            <Calendar size={14} />{' '}
+                            {format(new Date(inv.data_inventario), 'dd/MM/yy')}
+                          </span>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : loading ? (
           <Card>
             <CardContent className="py-16">
               <div className="text-center">
@@ -488,20 +510,47 @@ export default function AnaliseInventario() {
               </div>
             </CardContent>
           </Card>
-        ) : !selectedInventario ? (
-          <Card>
-            <CardContent className="py-16">
-              <div className="text-center">
-                <PackageSearch className="h-16 w-16 mx-auto mb-4 text-muted-foreground/50" />
-                <p className="text-lg font-medium mb-1">Nenhum inventário selecionado</p>
-                <p className="text-sm text-muted-foreground">
-                  Selecione um inventário acima para visualizar a análise
-                </p>
-              </div>
-            </CardContent>
-          </Card>
         ) : (
           <div className="space-y-6">
+            {/* Back button + inventory info */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setSelectedInventario(null);
+                  setComparativo([]);
+                  setSearchTerm('');
+                  setDivergenceFilter('com_divergencia');
+                  setDiferencaFilter('todos');
+                }}
+                className="self-start"
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar para lista
+              </Button>
+              {selectedInventarioInfo && (
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <User size={14} /> {selectedInventarioInfo.vendedor_nome}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Calendar size={14} />{' '}
+                    {format(new Date(selectedInventarioInfo.data_inventario), 'dd/MM/yyyy')}
+                  </span>
+                  <Badge
+                    variant={
+                      selectedInventarioInfo.status === 'revisao'
+                        ? 'destructive'
+                        : selectedInventarioInfo.status === 'aprovado'
+                          ? 'default'
+                          : 'outline'
+                    }
+                  >
+                    <span className="capitalize">{selectedInventarioInfo.status}</span>
+                  </Badge>
+                </div>
+              )}
+            </div>
             {/* Statistics - usando o componente reutilizável */}
             <DivergenciaStats
               itensCorretos={stats.itensCorretos}
