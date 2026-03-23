@@ -1,24 +1,24 @@
 
 
-# Modal de seleção de loja no export XML Ciclone
+# Conferência: layout de tela única (sem divisão)
 
 ## O que muda
 
-Ao clicar em "Exportar XML Ciclone", em vez de exportar direto, abre um modal (Dialog) para o usuário escolher entre **Loja 01** e **Loja 02**. Após selecionar, o XML é gerado e baixado.
+Atualmente a página tem layout master-detail lado a lado (lista de inventários à esquerda, detalhes à direita em `grid-cols-3`). O usuário quer que a lista e os detalhes ocupem o **mesmo espaço**, alternando entre duas "telas":
 
-O valor da loja selecionada será usado no campo `<pgemp_codigo>` do XML (atualmente fixo em `1`). Loja 01 = `1`, Loja 02 = `2`.
+- **Tela 1**: Lista de inventários pendentes (tela cheia)
+- **Tela 2**: Detalhes/divergências do inventário selecionado (tela cheia), com botão "Voltar" para retornar à lista
 
-## Alterações
+## Alteração técnica
 
-### `src/pages/NotaRetorno.tsx`
-- Adicionar estado `lojaDialogOpen` e `selectedLoja`
-- No botão "Exportar XML Ciclone", ao invés de gerar direto, abrir um Dialog com duas opções (Loja 01 / Loja 02)
-- Ao selecionar a loja, chamar `gerarXmlRetornoCiclone` passando o código da loja e fazer o download
-- Usar o componente `Dialog` já existente no projeto
+### `src/pages/Conferencia.tsx`
 
-### `src/lib/gerarXmlCiclone.ts`
-- Adicionar `codigoLoja` (number) ao `GerarXmlParams`
-- Usar `codigoLoja` no campo `<pgemp_codigo>` em vez do valor fixo `1` (aparece 3 vezes: registro principal + sub-registro cliente)
+1. **Remover o grid de colunas** (`grid grid-cols-1 lg:grid-cols-3`) e a borda lateral (`border-l-2`)
+2. **Renderização condicional simples**:
+   - Se `selectedInventario` é `null` → mostra a lista de inventários (largura total)
+   - Se `selectedInventario` existe → mostra os detalhes (largura total)
+3. **Adicionar botão "Voltar"** no topo da tela de detalhes, que faz `setSelectedInventario(null)` e limpa os estados relacionados
+4. Remover o placeholder "Selecione um inventário" (não é mais necessário)
 
-2 arquivos alterados.
+Apenas 1 arquivo alterado. Refatoração puramente de layout, sem mudança de lógica.
 
