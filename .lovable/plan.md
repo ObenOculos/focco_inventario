@@ -1,23 +1,25 @@
 
 
-# Melhorar UX dos filtros no "Comparativo de Estoque"
+# Redesign dos filtros "Comparativo de Estoque"
 
 ## Problema
-
-Os filtros (busca, divergência, diferença, exportar) estão em uma única linha flex que causa overflow em telas estreitas. São 4 elementos lado a lado que não cabem bem.
+O layout atual com título + botão na primeira linha e três filtros na segunda linha ficou visualmente desagradável.
 
 ## Solução
+Redesenhar como uma barra de filtros compacta e elegante, usando ícones para contexto visual:
 
-Reorganizar os filtros em layout responsivo com wrap, garantindo que quebrem graciosamente:
+### `src/pages/AnaliseInventario.tsx` (linhas 609-667)
 
-### `src/pages/AnaliseInventario.tsx` (linhas 611-665)
+1. **Título integrado ao CardHeader** sem separação artificial — título à esquerda, exportar à direita (como antes, mas com ícone only no mobile)
+2. **Barra de filtros** como uma única linha com visual coeso:
+   - Usar `CardDescription` ou uma div sutil abaixo do título
+   - Ícones nos Selects: `AlertTriangle` para divergência, `TrendingUp`/`TrendingDown` para diferença
+   - SearchFilter com `flex-1` para ocupar espaço restante
+   - Selects com largura fixa (`w-48`) sem forçar `w-full` no mobile — usar `min-w-0` e truncation
+3. **Em mobile** (`< sm`): filtros empilham via `flex-wrap` com `gap-2`, cada um `w-full`
+4. **Em desktop**: tudo numa linha, filtros com larguras proporcionais, sem quebra forçada
 
-1. **Primeira linha**: Título "Comparativo de Estoque" + botão Exportar (alinhado à direita)
-2. **Segunda linha**: Filtros lado a lado com `flex-wrap` — SearchFilter, Select de divergência, Select de diferença
-3. Em mobile: todos os filtros ocupam largura total (`w-full`), empilhando verticalmente
-4. Em telas médias+: filtros ficam lado a lado com tamanhos fixos, quebrando linha se necessário via `flex-wrap`
+Visual mais limpo: menos espaçamento vertical, filtros parecem parte integrada do card header.
 
-Isso evita overflow horizontal e mantém os filtros acessíveis em qualquer viewport.
-
-1 arquivo alterado, apenas reestruturação do layout dos filtros.
+1 arquivo alterado.
 
