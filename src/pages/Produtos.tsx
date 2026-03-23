@@ -49,7 +49,15 @@ import {
   Trash2,
   ArrowRight,
   Tags,
+  ChevronDown,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
