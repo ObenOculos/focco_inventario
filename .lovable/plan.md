@@ -1,24 +1,32 @@
 
 
-# Conferência: layout de tela única (sem divisão)
+# Análise de Inventário: layout de duas telas (como Conferência)
 
 ## O que muda
 
-Atualmente a página tem layout master-detail lado a lado (lista de inventários à esquerda, detalhes à direita em `grid-cols-3`). O usuário quer que a lista e os detalhes ocupem o **mesmo espaço**, alternando entre duas "telas":
+Atualmente a página usa um Card com dropdowns (Select) para escolher inventário. O usuário quer o mesmo padrão da Conferência: duas telas alternando no mesmo espaço.
 
-- **Tela 1**: Lista de inventários pendentes (tela cheia)
-- **Tela 2**: Detalhes/divergências do inventário selecionado (tela cheia), com botão "Voltar" para retornar à lista
+- **Tela 1**: Lista de inventários como cards clicáveis (com filtro de vendedor para gerente), ocupando tela cheia
+- **Tela 2**: Detalhes do inventário selecionado (estatísticas, tabela comparativa, ações do gerente), com botão "Voltar para lista"
 
-## Alteração técnica
+## Alterações
 
-### `src/pages/Conferencia.tsx`
+### `src/pages/AnaliseInventario.tsx`
 
-1. **Remover o grid de colunas** (`grid grid-cols-1 lg:grid-cols-3`) e a borda lateral (`border-l-2`)
-2. **Renderização condicional simples**:
-   - Se `selectedInventario` é `null` → mostra a lista de inventários (largura total)
-   - Se `selectedInventario` existe → mostra os detalhes (largura total)
-3. **Adicionar botão "Voltar"** no topo da tela de detalhes, que faz `setSelectedInventario(null)` e limpa os estados relacionados
-4. Remover o placeholder "Selecione um inventário" (não é mais necessário)
+1. **Remover o Card "Selecione o Inventário"** com os dropdowns Select
+2. **Tela 1 — Lista de inventários**:
+   - Filtro de vendedor no topo (para gerente)
+   - Grid de cards clicáveis mostrando: número do inventário, data, vendedor, status (badge)
+   - Ao clicar, seta `selectedInventario` e vai para a Tela 2
+3. **Tela 2 — Detalhes**:
+   - Botão "Voltar para lista" no topo que faz `setSelectedInventario(null)` e limpa estados
+   - Info do inventário selecionado (vendedor, data, status) como header
+   - Todo o conteúdo atual: DivergenciaStats, ações do gerente, tabela comparativa
+4. **Remover auto-select** do primeiro inventário (useEffect linha 165-169) — agora o usuário escolhe clicando
 
-Apenas 1 arquivo alterado. Refatoração puramente de layout, sem mudança de lógica.
+### `src/components/skeletons/PageSkeleton.tsx`
+
+- Atualizar `ConferenciaSkeleton` (se compartilhado) ou manter como está — impacto mínimo
+
+1 arquivo principal alterado.
 
