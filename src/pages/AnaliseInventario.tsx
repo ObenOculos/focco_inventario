@@ -619,7 +619,7 @@ export default function AnaliseInventario() {
                         className="shrink-0 h-9 w-9"
                       >
                         <Download className="h-4 w-4" />
-                        <ChevronDown className="ml-1 h-3 w-3" />
+                        </Button>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
