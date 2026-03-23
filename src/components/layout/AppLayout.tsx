@@ -20,7 +20,6 @@ import {
   UserCog,
   PackageSearch,
   Tags,
-  Tags,
 } from 'lucide-react';
 import { useState } from 'react';
 
