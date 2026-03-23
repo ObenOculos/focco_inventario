@@ -104,7 +104,7 @@ export function AppLayout({ children }: AppLayoutProps) {
       <div className="flex">
         {/* Sidebar - Desktop */}
         <aside className="hidden md:block w-64 border-r-2 border-foreground min-h-[calc(100vh-4rem)] bg-card">
-          <nav className="p-4 space-y-2">
+          <nav className="p-2 space-y-2">
             {links.map((link) => {
               const isActive = location.pathname === link.to;
               return (

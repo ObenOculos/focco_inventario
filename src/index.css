@@ -204,3 +204,7 @@
     background: hsl(var(--background));
   }
 }
+
+.w-64 {
+  width: 18rem !important;
+}
