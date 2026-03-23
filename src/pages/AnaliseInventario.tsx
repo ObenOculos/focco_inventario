@@ -607,19 +607,20 @@ export default function AnaliseInventario() {
 
             {/* Data Table */}
             <Card>
-              <CardHeader className="space-y-4">
-                <div className="flex items-center justify-between gap-4">
-                  <CardTitle>Comparativo de Estoque</CardTitle>
+              <CardHeader className="pb-4">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-lg">Comparativo de Estoque</CardTitle>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
+                        size="sm"
                         disabled={comparativo.length === 0}
                         className="shrink-0"
                       >
-                        <Download className="mr-2 h-4 w-4" />
-                        Exportar
-                        <ChevronDown className="ml-2 h-4 w-4" />
+                        <Download className="h-4 w-4 sm:mr-1.5" />
+                        <span className="hidden sm:inline">Exportar</span>
+                        <ChevronDown className="ml-1 h-3 w-3" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
@@ -632,15 +633,16 @@ export default function AnaliseInventario() {
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-wrap items-center gap-2 pt-2">
                   <SearchFilter
                     value={searchTerm}
                     onChange={setSearchTerm}
-                    placeholder="Buscar por código..."
-                    className="w-full sm:w-64 sm:flex-none"
+                    placeholder="Buscar código..."
+                    className="min-w-0 flex-1 basis-40"
                   />
                   <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
-                    <SelectTrigger className="w-full sm:w-48">
+                    <SelectTrigger className="w-full basis-40 sm:w-44">
+                      <AlertTriangle className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <SelectValue placeholder="Divergência" />
                     </SelectTrigger>
                     <SelectContent>
@@ -653,7 +655,8 @@ export default function AnaliseInventario() {
                     </SelectContent>
                   </Select>
                   <Select value={diferencaFilter} onValueChange={setDiferencaFilter}>
-                    <SelectTrigger className="w-full sm:w-44">
+                    <SelectTrigger className="w-full basis-36 sm:w-40">
+                      <TrendingDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <SelectValue placeholder="Diferença" />
                     </SelectTrigger>
                     <SelectContent>
