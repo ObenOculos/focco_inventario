@@ -24,7 +24,7 @@ const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
 const AnaliseInventario = lazy(() => import('./pages/AnaliseInventario'));
 const HistoricoEstoqueReal = lazy(() => import('./pages/HistoricoEstoqueReal'));
 
-const CodigosCorrecao = lazy(() => import('./pages/CodigosCorrecao'));
+
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const HomeRedirect = () => {
