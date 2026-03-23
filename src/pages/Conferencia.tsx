@@ -452,13 +452,13 @@ export default function Conferencia() {
                 </CardContent>
               </Card>
             ) : (
-              <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {inventarios.map((inv) => {
                   const isRevisao = inv.status === 'revisao';
                   return (
                     <Card
                       key={inv.id}
-                      className={`border-2 transition-all cursor-pointer group shadow-none ${selectedInventario?.id === inv.id ? 'border-blue-600' : 'hover:border-blue-300'}`}
+                      className={`border-2 transition-all cursor-pointer group shadow-none hover:border-blue-300`}
                       onClick={() => handleSelectInventario(inv)}
                     >
                       <CardHeader className="pb-3">
@@ -503,254 +503,258 @@ export default function Conferencia() {
               </div>
             )}
           </div>
+        ) : isDetailLoading ? (
+          <div className="flex items-center justify-center py-24 text-muted-foreground">
+            <Loader2 className="mr-2 h-8 w-8 animate-spin" /> Carregando detalhes...
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setSelectedInventario(null);
+                setDivergencias([]);
+                setItensNaoContados([]);
+                setSearchTerm('');
+                setFilterTipo('todos');
+                setObservacoes('');
+                setEditedValues({});
+              }}
+            >
+              ← Voltar para lista
+            </Button>
 
-          {/* Coluna de Detalhes (Detail) */}
-          <div className="lg:col-span-2 overflow-y-auto pr-2 border-l-2 pl-6">
-            {!selectedInventario ? (
-              <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-                <ChevronsRight size={48} className="mb-4" />
-                <h2 className="text-xl font-bold">Selecione um inventário</h2>
-                <p>Escolha um inventário da lista para iniciar a análise.</p>
-              </div>
-            ) : isDetailLoading ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground">
-                <Loader2 className="mr-2 h-8 w-8 animate-spin" /> Carregando detalhes...
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <DivergenciaStats {...stats} />
+            <DivergenciaStats {...stats} />
 
-                {itensNaoContados.length > 0 && (
-                  <Card className="bg-amber-50 border-amber-300 shadow-none">
-                    <CardHeader className="pb-3">
-                      <CardTitle
-                        className="text-base flex items-center justify-between cursor-pointer"
-                        onClick={() => setShowItensNaoContados(!showItensNaoContados)}
-                      >
-                        <span className="flex items-center gap-2 text-amber-800">
-                          <PackageX size={18} /> {itensNaoContados.length} Itens Não Contados
-                        </span>
-                        {showItensNaoContados ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                      </CardTitle>
-                    </CardHeader>
-                    {showItensNaoContados && (
-                      <CardContent>
-                        <p className="text-sm text-amber-700 mb-3">
-                          Estes itens possuem estoque teórico mas não foram contados.
-                        </p>
-                        <div className="max-h-40 overflow-y-auto space-y-1">
-                          {itensNaoContados.map((item) => (
-                            <div
-                              key={item.codigo_auxiliar}
-                              className="flex justify-between items-center text-sm bg-amber-100 p-2 rounded"
-                            >
-                              <span>
-                                <span className="font-mono font-bold">{item.codigo_auxiliar}</span>{' '}
-                                - {item.nome_produto}
-                              </span>
-                              <Badge className="bg-amber-600">
-                                Teórico: {item.estoque_teorico}
-                              </Badge>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    )}
-                  </Card>
-                )}
-
-                <Card className="border-2 shadow-none">
-                  <CardHeader>
-                    <div className="flex flex-col md:flex-row gap-3">
-                      <SearchFilter
-                        value={searchTerm}
-                        onChange={setSearchTerm}
-                        placeholder="Buscar produto..."
-                      />
-                      <Select value={filterTipo} onValueChange={setFilterTipo}>
-                        <SelectTrigger className="w-full md:w-48">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="todos">Todos os Itens</SelectItem>
-                          <SelectItem value="ok">Apenas OK</SelectItem>
-                          <SelectItem value="sobra">Apenas Sobras</SelectItem>
-                          <SelectItem value="falta">Apenas Faltas</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={handleExportExcel}
-                        disabled={divergencias.length === 0}
-                        className="ml-auto"
-                      >
-                        <Download size={16} className="mr-2" />
-                        Exportar
-                      </Button>
-                    </div>
-                  </CardHeader>
+            {itensNaoContados.length > 0 && (
+              <Card className="bg-amber-50 border-amber-300 shadow-none">
+                <CardHeader className="pb-3">
+                  <CardTitle
+                    className="text-base flex items-center justify-between cursor-pointer"
+                    onClick={() => setShowItensNaoContados(!showItensNaoContados)}
+                  >
+                    <span className="flex items-center gap-2 text-amber-800">
+                      <PackageX size={18} /> {itensNaoContados.length} Itens Não Contados
+                    </span>
+                    {showItensNaoContados ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </CardTitle>
+                </CardHeader>
+                {showItensNaoContados && (
                   <CardContent>
-                    <div className="border-2 rounded-lg overflow-hidden">
-                      <Table>
-                        <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-[40%]">Produto</TableHead>
-                            <TableHead className="text-center">Teórico</TableHead>
-                            <TableHead className="text-center">Físico</TableHead>
-                            <TableHead className="text-center">Diferença</TableHead>
-                            <TableHead className="text-center">Divergência</TableHead>
-                            <TableHead className="text-center w-[60px]">Ações</TableHead>
-                          </TableRow>
-                        </TableHeader>
-                        <TableBody>
-                          {paginatedDivergencias.length > 0 ? (
-                            paginatedDivergencias.map((item) => {
-                              const currentFisica =
-                                editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica;
-                              const diferencaCalculada = calcularDiferenca(
-                                item.estoque_teorico,
-                                currentFisica
-                              );
+                    <p className="text-sm text-amber-700 mb-3">
+                      Estes itens possuem estoque teórico mas não foram contados.
+                    </p>
+                    <div className="max-h-40 overflow-y-auto space-y-1">
+                      {itensNaoContados.map((item) => (
+                        <div
+                          key={item.codigo_auxiliar}
+                          className="flex justify-between items-center text-sm bg-amber-100 p-2 rounded"
+                        >
+                          <span>
+                            <span className="font-mono font-bold">{item.codigo_auxiliar}</span>{' '}
+                            - {item.nome_produto}
+                          </span>
+                          <Badge className="bg-amber-600">
+                            Teórico: {item.estoque_teorico}
+                          </Badge>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            )}
 
-                              return (
-                                <TableRow
-                                  key={item.codigo_auxiliar}
-                                  className={
-                                    item.tipo !== 'ok'
-                                      ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5`
-                                      : ''
+            <Card className="border-2 shadow-none">
+              <CardHeader>
+                <div className="flex flex-col md:flex-row gap-3">
+                  <SearchFilter
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder="Buscar produto..."
+                  />
+                  <Select value={filterTipo} onValueChange={setFilterTipo}>
+                    <SelectTrigger className="w-full md:w-48">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todos os Itens</SelectItem>
+                      <SelectItem value="ok">Apenas OK</SelectItem>
+                      <SelectItem value="sobra">Apenas Sobras</SelectItem>
+                      <SelectItem value="falta">Apenas Faltas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleExportExcel}
+                    disabled={divergencias.length === 0}
+                    className="ml-auto"
+                  >
+                    <Download size={16} className="mr-2" />
+                    Exportar
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="border-2 rounded-lg overflow-hidden">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="w-[40%]">Produto</TableHead>
+                        <TableHead className="text-center">Teórico</TableHead>
+                        <TableHead className="text-center">Físico</TableHead>
+                        <TableHead className="text-center">Diferença</TableHead>
+                        <TableHead className="text-center">Divergência</TableHead>
+                        <TableHead className="text-center w-[60px]">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedDivergencias.length > 0 ? (
+                        paginatedDivergencias.map((item) => {
+                          const currentFisica =
+                            editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica;
+                          const diferencaCalculada = calcularDiferenca(
+                            item.estoque_teorico,
+                            currentFisica
+                          );
+
+                          return (
+                            <TableRow
+                              key={item.codigo_auxiliar}
+                              className={
+                                item.tipo !== 'ok'
+                                  ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5`
+                                  : ''
+                              }
+                            >
+                              <TableCell className="font-medium">
+                                {item.codigo_auxiliar}
+                              </TableCell>
+                              <TableCell className="text-center font-medium">
+                                {item.estoque_teorico}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Input
+                                  id={`edit-${item.codigo_auxiliar}`}
+                                  name={`quantidade_${item.codigo_auxiliar}`}
+                                  type="text"
+                                  value={currentFisica}
+                                  onChange={(e) =>
+                                    handleEditValue(item.codigo_auxiliar, e.target.value)
                                   }
+                                  className="w-20 h-8 text-center font-bold border-2 mx-auto"
+                                />
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span
+                                  className={`font-bold ${
+                                    diferencaCalculada > 0
+                                      ? 'text-blue-600'
+                                      : diferencaCalculada < 0
+                                        ? 'text-orange-600'
+                                        : 'text-muted-foreground'
+                                  }`}
                                 >
-                                  <TableCell className="font-medium">
-                                    {item.codigo_auxiliar}
-                                  </TableCell>
-                                  <TableCell className="text-center font-medium">
-                                    {item.estoque_teorico}
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <Input
-                                      id={`edit-${item.codigo_auxiliar}`}
-                                      name={`quantidade_${item.codigo_auxiliar}`}
-                                      type="text"
-                                      value={currentFisica}
-                                      onChange={(e) =>
-                                        handleEditValue(item.codigo_auxiliar, e.target.value)
-                                      }
-                                      className="w-20 h-8 text-center font-bold border-2 mx-auto"
-                                    />
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <span
-                                      className={`font-bold ${
-                                        diferencaCalculada > 0
-                                          ? 'text-blue-600'
-                                          : diferencaCalculada < 0
-                                            ? 'text-orange-600'
-                                            : 'text-muted-foreground'
-                                      }`}
-                                    >
-                                      {diferencaCalculada > 0
-                                        ? `+${diferencaCalculada}`
-                                        : diferencaCalculada}
-                                    </span>
-                                  </TableCell>
-                                  <TableCell
-                                    className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}
-                                  >
-                                    {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
-                                  </TableCell>
-                                  <TableCell className="text-center">
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => {
-                                        const inventarioItem =
-                                          selectedInventario?.itens_inventario.find(
-                                            (i) => i.codigo_auxiliar === item.codigo_auxiliar
-                                          );
-                                        if (inventarioItem) {
-                                          setDeletingItem({
-                                            codigo_auxiliar: item.codigo_auxiliar,
-                                            nome_produto: item.nome_produto,
-                                            itemId: inventarioItem.id,
-                                          });
-                                        }
-                                      }}
-                                    >
-                                      <Trash2 size={16} />
-                                    </Button>
-                                  </TableCell>
-                                </TableRow>
-                              );
-                            })
-                          ) : (
-                            <TableRow>
-                              <TableCell colSpan={6} className="h-24 text-center">
-                                Nenhum item corresponde ao filtro.
+                                  {diferencaCalculada > 0
+                                    ? `+${diferencaCalculada}`
+                                    : diferencaCalculada}
+                                </span>
+                              </TableCell>
+                              <TableCell
+                                className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}
+                              >
+                                {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => {
+                                    const inventarioItem =
+                                      selectedInventario?.itens_inventario.find(
+                                        (i) => i.codigo_auxiliar === item.codigo_auxiliar
+                                      );
+                                    if (inventarioItem) {
+                                      setDeletingItem({
+                                        codigo_auxiliar: item.codigo_auxiliar,
+                                        nome_produto: item.nome_produto,
+                                        itemId: inventarioItem.id,
+                                      });
+                                    }
+                                  }}
+                                >
+                                  <Trash2 size={16} />
+                                </Button>
                               </TableCell>
                             </TableRow>
-                          )}
-                        </TableBody>
-                      </Table>
-                    </div>
-                    {paginatedDivergencias.length > 0 && (
-                      <div className="pt-4">
-                        <Pagination {...paginationProps} />
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-
-                <div className="space-y-2">
-                  <label htmlFor="observacoes-gerente" className="font-medium">
-                    Observações para o Vendedor (opcional)
-                  </label>
-                  <Textarea
-                    id="observacoes-gerente"
-                    name="observacoes"
-                    value={observacoes}
-                    onChange={(e) => setObservacoes(e.target.value)}
-                    placeholder="Se não aprovar, explique o motivo aqui..."
-                  />
+                          );
+                        })
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={6} className="h-24 text-center">
+                            Nenhum item corresponde ao filtro.
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
+                {paginatedDivergencias.length > 0 && (
+                  <div className="pt-4">
+                    <Pagination {...paginationProps} />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
-                <div className="flex flex-col sm:flex-row gap-3">
-                  {hasEdits && (
-                    <Button
-                      onClick={handleSaveEdits}
-                      disabled={saving}
-                      className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
-                    >
-                      <Save size={16} className="mr-2" />
-                      {saving ? 'Salvando...' : 'Salvar Alterações'}
-                    </Button>
-                  )}
-                  <div className="flex-1" />
-                  <Button
-                    onClick={() => handleManagerAction('revisao')}
-                    disabled={saving}
-                    variant="destructive"
-                    className="w-full sm:w-auto"
-                  >
-                    <XCircle size={16} className="mr-2" />
-                    Não Aprovar
-                  </Button>
-                  <Button
-                    onClick={() => handleManagerAction('aprovar')}
-                    disabled={saving}
-                    className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
-                  >
-                    <CheckCircle size={16} className="mr-2" />
-                    {saving ? 'Processando...' : 'Aprovar e Ajustar'}
-                  </Button>
-                </div>
-              </div>
-            )}
+            <div className="space-y-2">
+              <label htmlFor="observacoes-gerente" className="font-medium">
+                Observações para o Vendedor (opcional)
+              </label>
+              <Textarea
+                id="observacoes-gerente"
+                name="observacoes"
+                value={observacoes}
+                onChange={(e) => setObservacoes(e.target.value)}
+                placeholder="Se não aprovar, explique o motivo aqui..."
+              />
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              {hasEdits && (
+                <Button
+                  onClick={handleSaveEdits}
+                  disabled={saving}
+                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+                >
+                  <Save size={16} className="mr-2" />
+                  {saving ? 'Salvando...' : 'Salvar Alterações'}
+                </Button>
+              )}
+              <div className="flex-1" />
+              <Button
+                onClick={() => handleManagerAction('revisao')}
+                disabled={saving}
+                variant="destructive"
+                className="w-full sm:w-auto"
+              >
+                <XCircle size={16} className="mr-2" />
+                Não Aprovar
+              </Button>
+              <Button
+                onClick={() => handleManagerAction('aprovar')}
+                disabled={saving}
+                className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+              >
+                <CheckCircle size={16} className="mr-2" />
+                {saving ? 'Processando...' : 'Aprovar e Ajustar'}
+              </Button>
+            </div>
           </div>
-        </div>
-      </div>
+        )}
 
       <AlertDialog open={!!deletingItem} onOpenChange={() => setDeletingItem(null)}>
         <AlertDialogContent>
