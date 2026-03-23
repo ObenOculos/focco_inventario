@@ -942,7 +942,6 @@ function CodigosCorrecaoTab() {
         </div>
       </div>
 
-      <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar código..." />
 
       {loading ? (
         <div className="text-center py-8 text-muted-foreground">Carregando...</div>
