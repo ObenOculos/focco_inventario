@@ -49,7 +49,15 @@ import {
   Trash2,
   ArrowRight,
   Tags,
+  ChevronDown,
 } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
 import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
@@ -433,56 +441,72 @@ function ProdutosTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-start gap-4">
-          <RefetchIndicator isFetching={isFetching && !loading} />
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" className="border-2" onClick={() => setImportDialogOpen(true)}>
-            <Upload className="mr-2" size={16} />
-            Importar Produtos
-          </Button>
-          <Button variant="outline" className="border-2" onClick={() => setUpdateDialogOpen(true)}>
-            <RefreshCw className="mr-2" size={16} />
-            Atualizar Valores
-          </Button>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2" size={16} />
-                Novo Produto
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
+        <RefetchIndicator isFetching={isFetching && !loading} />
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="border-2">
+                Ações
+                <ChevronDown className="ml-1" size={16} />
               </Button>
-            </DialogTrigger>
-            <DialogContent className="border-2">
-              <DialogHeader>
-                <DialogTitle>Cadastrar Produto</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label htmlFor="produto-codigo">Código do Produto</Label>
-                  <Input id="produto-codigo" name="codigo_produto" value={formData.codigo_produto} onChange={(e) => setFormData({ ...formData, codigo_produto: e.target.value })} className="border-2 font-mono" placeholder="Ex: OB1215" required />
-                </div>
-                <div>
-                  <Label htmlFor="produto-codigo-auxiliar">Código Auxiliar (QR Code)</Label>
-                  <Input id="produto-codigo-auxiliar" name="codigo_auxiliar" value={formData.codigo_auxiliar} onChange={(e) => setFormData({ ...formData, codigo_auxiliar: e.target.value.toUpperCase() })} className="border-2 font-mono" placeholder="Ex: OB1215 Q01" required />
-                  <p className="text-xs text-muted-foreground mt-1">Formato: MODELO COR (separados por espaço)</p>
-                </div>
-                <div>
-                  <Label htmlFor="produto-nome">Nome do Produto</Label>
-                  <Input id="produto-nome" name="nome_produto" value={formData.nome_produto} onChange={(e) => setFormData({ ...formData, nome_produto: e.target.value })} className="border-2" placeholder="Ex: ORX OB1215 O51-P19-H144" required />
-                </div>
-                <div>
-                  <Label htmlFor="produto-valor">Valor (R$)</Label>
-                  <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })} className="border-2" placeholder="0.00" />
-                </div>
-                <Button type="submit" className="w-full">Cadastrar Produto</Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem onClick={() => setImportDialogOpen(true)}>
+                <Upload className="mr-2" size={16} />
+                Importar Produtos
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setUpdateDialogOpen(true)}>
+                <RefreshCw className="mr-2" size={16} />
+                Atualizar Valores
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={downloadTemplate}>
+                <Download className="mr-2" size={16} />
+                Modelo Importação
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={downloadUpdateTemplate}>
+                <Download className="mr-2" size={16} />
+                Modelo Atualização
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          <Button onClick={() => setDialogOpen(true)}>
+            <Plus className="mr-2" size={16} />
+            Novo Produto
+          </Button>
         </div>
       </div>
 
-      <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
+      {/* New Product Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent className="border-2">
+          <DialogHeader>
+            <DialogTitle>Cadastrar Produto</DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="produto-codigo">Código do Produto</Label>
+              <Input id="produto-codigo" name="codigo_produto" value={formData.codigo_produto} onChange={(e) => setFormData({ ...formData, codigo_produto: e.target.value })} className="border-2 font-mono" placeholder="Ex: OB1215" required />
+            </div>
+            <div>
+              <Label htmlFor="produto-codigo-auxiliar">Código Auxiliar (QR Code)</Label>
+              <Input id="produto-codigo-auxiliar" name="codigo_auxiliar" value={formData.codigo_auxiliar} onChange={(e) => setFormData({ ...formData, codigo_auxiliar: e.target.value.toUpperCase() })} className="border-2 font-mono" placeholder="Ex: OB1215 Q01" required />
+              <p className="text-xs text-muted-foreground mt-1">Formato: MODELO COR (separados por espaço)</p>
+            </div>
+            <div>
+              <Label htmlFor="produto-nome">Nome do Produto</Label>
+              <Input id="produto-nome" name="nome_produto" value={formData.nome_produto} onChange={(e) => setFormData({ ...formData, nome_produto: e.target.value })} className="border-2" placeholder="Ex: ORX OB1215 O51-P19-H144" required />
+            </div>
+            <div>
+              <Label htmlFor="produto-valor">Valor (R$)</Label>
+              <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })} className="border-2" placeholder="0.00" />
+            </div>
+            <Button type="submit" className="w-full">Cadastrar Produto</Button>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) resetImport(); }}>
