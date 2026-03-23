@@ -22,7 +22,7 @@ import {
   User,
   Calendar,
   Package,
-  ChevronsRight,
+  
   Loader2,
   Download,
   Trash2,
