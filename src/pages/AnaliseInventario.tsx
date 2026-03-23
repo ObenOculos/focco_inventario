@@ -614,13 +614,11 @@ export default function AnaliseInventario() {
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
-                        size="sm"
+                        size="icon"
                         disabled={comparativo.length === 0}
-                        className="shrink-0"
+                        className="shrink-0 h-9 w-9"
                       >
-                        <Download className="h-4 w-4 sm:mr-1.5" />
-                        <span className="hidden sm:inline">Exportar</span>
-                        <ChevronDown className="ml-1 h-3 w-3" />
+                        <Download className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
