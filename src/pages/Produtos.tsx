@@ -897,20 +897,33 @@ function CodigosCorrecaoTab() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="flex items-start gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+        <div className="flex items-center gap-2 flex-1">
           <RefetchIndicator isFetching={isFetching && !loading} />
+          <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar código..." />
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={downloadTemplate} className="border-2"><Download className="mr-2" size={16} />Baixar Modelo</Button>
-          <Button variant="outline" onClick={() => fileInputRef.current?.click()} disabled={importing} className="border-2">
-            <Upload className="mr-2" size={16} />{importing ? 'Importando...' : 'Importar Excel'}
-          </Button>
+        <div className="flex items-center gap-2">
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="border-2">
+                Ações <ChevronDown className="ml-2" size={16} />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => fileInputRef.current?.click()} disabled={importing}>
+                <Upload className="mr-2" size={16} />{importing ? 'Importando...' : 'Importar Excel'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={downloadTemplate}>
+                <Download className="mr-2" size={16} />Baixar Modelo
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
           <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) resetForm(); }}>
-            <DialogTrigger asChild>
-              <Button><Plus className="mr-2" size={16} />Novo Mapeamento</Button>
-            </DialogTrigger>
+            <Button onClick={() => setDialogOpen(true)}>
+              <Plus className="mr-2" size={16} />Novo Mapeamento
+            </Button>
             <DialogContent className="border-2">
               <DialogHeader><DialogTitle>{editingItem ? 'Editar Mapeamento' : 'Novo Mapeamento'}</DialogTitle></DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
