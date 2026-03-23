@@ -159,14 +159,6 @@ const router = createBrowserRouter(
             </ProtectedRoute>
           ),
         },
-        {
-          path: '/codigos-correcao',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <CodigosCorrecao />
-            </ProtectedRoute>
-          ),
-        },
         { path: '*', element: <NotFound /> },
       ],
     },
