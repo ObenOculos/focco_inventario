@@ -619,7 +619,6 @@ export default function AnaliseInventario() {
                         className="shrink-0 h-9 w-9"
                       >
                         <Download className="h-4 w-4" />
-                        </Button>
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
