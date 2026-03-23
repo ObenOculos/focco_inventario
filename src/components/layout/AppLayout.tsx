@@ -19,7 +19,7 @@ import {
   FileText,
   UserCog,
   PackageSearch,
-  Undo2,
+  Tags,
   Tags,
 } from 'lucide-react';
 import { useState } from 'react';
