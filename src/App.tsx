@@ -23,7 +23,7 @@ const Pedidos = lazy(() => import('./pages/Pedidos'));
 const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
 const AnaliseInventario = lazy(() => import('./pages/AnaliseInventario'));
 const HistoricoEstoqueReal = lazy(() => import('./pages/HistoricoEstoqueReal'));
-const NotaRetorno = lazy(() => import('./pages/NotaRetorno'));
+
 const CodigosCorrecao = lazy(() => import('./pages/CodigosCorrecao'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
