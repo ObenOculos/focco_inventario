@@ -40,6 +40,10 @@ import {
   Trash2,
   TrendingUp,
   TrendingDown,
+  ArrowLeft,
+  User,
+  Calendar,
+  Clock,
 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
@@ -61,6 +65,8 @@ import {
   useVendedoresSimpleQuery,
   ComparativoItem,
 } from '@/hooks/useAnaliseInventarioQuery';
+import { format, formatDistanceToNow } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 // Função para calcular a diferença com lógica condicional
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
