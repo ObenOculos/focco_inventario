@@ -167,12 +167,7 @@ export default function AnaliseInventario() {
     setSelectedInventario(null);
   }, [selectedVendedor]);
 
-  // Auto-select first inventory when list changes
-  useEffect(() => {
-    if (inventarios.length > 0 && !selectedInventario) {
-      setSelectedInventario(inventarios[0].id);
-    }
-  }, [inventarios, selectedInventario]);
+  // No auto-select — user picks from the card list
 
   const filteredComparativo = useMemo(() => {
     let filteredData = comparativo;
