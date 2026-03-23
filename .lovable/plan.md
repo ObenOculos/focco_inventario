@@ -1,32 +1,23 @@
 
 
-# Análise de Inventário: layout de duas telas (como Conferência)
+# Melhorar UX dos filtros no "Comparativo de Estoque"
 
-## O que muda
+## Problema
 
-Atualmente a página usa um Card com dropdowns (Select) para escolher inventário. O usuário quer o mesmo padrão da Conferência: duas telas alternando no mesmo espaço.
+Os filtros (busca, divergência, diferença, exportar) estão em uma única linha flex que causa overflow em telas estreitas. São 4 elementos lado a lado que não cabem bem.
 
-- **Tela 1**: Lista de inventários como cards clicáveis (com filtro de vendedor para gerente), ocupando tela cheia
-- **Tela 2**: Detalhes do inventário selecionado (estatísticas, tabela comparativa, ações do gerente), com botão "Voltar para lista"
+## Solução
 
-## Alterações
+Reorganizar os filtros em layout responsivo com wrap, garantindo que quebrem graciosamente:
 
-### `src/pages/AnaliseInventario.tsx`
+### `src/pages/AnaliseInventario.tsx` (linhas 611-665)
 
-1. **Remover o Card "Selecione o Inventário"** com os dropdowns Select
-2. **Tela 1 — Lista de inventários**:
-   - Filtro de vendedor no topo (para gerente)
-   - Grid de cards clicáveis mostrando: número do inventário, data, vendedor, status (badge)
-   - Ao clicar, seta `selectedInventario` e vai para a Tela 2
-3. **Tela 2 — Detalhes**:
-   - Botão "Voltar para lista" no topo que faz `setSelectedInventario(null)` e limpa estados
-   - Info do inventário selecionado (vendedor, data, status) como header
-   - Todo o conteúdo atual: DivergenciaStats, ações do gerente, tabela comparativa
-4. **Remover auto-select** do primeiro inventário (useEffect linha 165-169) — agora o usuário escolhe clicando
+1. **Primeira linha**: Título "Comparativo de Estoque" + botão Exportar (alinhado à direita)
+2. **Segunda linha**: Filtros lado a lado com `flex-wrap` — SearchFilter, Select de divergência, Select de diferença
+3. Em mobile: todos os filtros ocupam largura total (`w-full`), empilhando verticalmente
+4. Em telas médias+: filtros ficam lado a lado com tamanhos fixos, quebrando linha se necessário via `flex-wrap`
 
-### `src/components/skeletons/PageSkeleton.tsx`
+Isso evita overflow horizontal e mantém os filtros acessíveis em qualquer viewport.
 
-- Atualizar `ConferenciaSkeleton` (se compartilhado) ou manter como está — impacto mínimo
-
-1 arquivo principal alterado.
+1 arquivo alterado, apenas reestruturação do layout dos filtros.
 
