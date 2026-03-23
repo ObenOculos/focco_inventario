@@ -607,62 +607,62 @@ export default function AnaliseInventario() {
 
             {/* Data Table */}
             <Card>
-              <CardHeader>
-                <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
+              <CardHeader className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
                   <CardTitle>Comparativo de Estoque</CardTitle>
-                  <div className="flex flex-col sm:flex-row gap-3 w-full lg:w-auto">
-                    <SearchFilter
-                      value={searchTerm}
-                      onChange={setSearchTerm}
-                      placeholder="Buscar por código..."
-                      className="w-full sm:w-64"
-                    />
-                    <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
-                      <SelectTrigger className="w-full sm:w-48">
-                        <SelectValue placeholder="Divergência" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todas divergências</SelectItem>
-                        <SelectItem value="com_divergencia">Com divergência</SelectItem>
-                        <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
-                        <SelectItem value="positiva">Sobras (+)</SelectItem>
-                        <SelectItem value="negativa">Faltas (-)</SelectItem>
-                        <SelectItem value="nao_contados">Não Contados</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <Select value={diferencaFilter} onValueChange={setDiferencaFilter}>
-                      <SelectTrigger className="w-full sm:w-44">
-                        <SelectValue placeholder="Diferença" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todos">Todas diferenças</SelectItem>
-                        <SelectItem value="positiva">Diferença (+)</SelectItem>
-                        <SelectItem value="negativa">Diferença (-)</SelectItem>
-                        <SelectItem value="zero">Diferença (0)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="outline"
-                          disabled={comparativo.length === 0}
-                          className="shrink-0"
-                        >
-                          <Download className="mr-2 h-4 w-4" />
-                          Exportar
-                          <ChevronDown className="ml-2 h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => handleExportDivergencias(false)}>
-                          Exportar Filtrado
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onClick={() => handleExportDivergencias(true)}>
-                          Exportar Tudo
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        disabled={comparativo.length === 0}
+                        className="shrink-0"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Exportar
+                        <ChevronDown className="ml-2 h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleExportDivergencias(false)}>
+                        Exportar Filtrado
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExportDivergencias(true)}>
+                        Exportar Tudo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="flex flex-wrap gap-3">
+                  <SearchFilter
+                    value={searchTerm}
+                    onChange={setSearchTerm}
+                    placeholder="Buscar por código..."
+                    className="w-full sm:w-64 sm:flex-none"
+                  />
+                  <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
+                    <SelectTrigger className="w-full sm:w-48">
+                      <SelectValue placeholder="Divergência" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas divergências</SelectItem>
+                      <SelectItem value="com_divergencia">Com divergência</SelectItem>
+                      <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
+                      <SelectItem value="positiva">Sobras (+)</SelectItem>
+                      <SelectItem value="negativa">Faltas (-)</SelectItem>
+                      <SelectItem value="nao_contados">Não Contados</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select value={diferencaFilter} onValueChange={setDiferencaFilter}>
+                    <SelectTrigger className="w-full sm:w-44">
+                      <SelectValue placeholder="Diferença" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas diferenças</SelectItem>
+                      <SelectItem value="positiva">Diferença (+)</SelectItem>
+                      <SelectItem value="negativa">Diferença (-)</SelectItem>
+                      <SelectItem value="zero">Diferença (0)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardHeader>
               <CardContent className="p-0">
