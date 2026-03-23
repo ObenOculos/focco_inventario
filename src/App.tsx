@@ -160,14 +160,6 @@ const router = createBrowserRouter(
           ),
         },
         {
-          path: '/nota-retorno',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <NotaRetorno />
-            </ProtectedRoute>
-          ),
-        },
-        {
           path: '/codigos-correcao',
           element: (
             <ProtectedRoute allowedRoles={['gerente']}>

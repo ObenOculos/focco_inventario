@@ -54,8 +54,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/controle-vendedores', icon: ClipboardList, label: 'Painel de Vendedores' },
     { to: '/vendedores', icon: UserCog, label: 'Cadastro de Vendedores' },
     // Dados
-    { to: '/pedidos', icon: FileText, label: 'Pedidos/Notas' },
-    { to: '/nota-retorno', icon: Undo2, label: 'Nota de Retorno' },
+    { to: '/pedidos', icon: FileText, label: 'Pedidos & Notas' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos' },
     { to: '/codigos-correcao', icon: Tags, label: 'Códigos de Correção' },
     { to: '/importar', icon: Upload, label: 'Importar' },
