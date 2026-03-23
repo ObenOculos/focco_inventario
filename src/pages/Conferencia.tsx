@@ -755,6 +755,7 @@ export default function Conferencia() {
             </div>
           </div>
         )}
+      </div>
 
       <AlertDialog open={!!deletingItem} onOpenChange={() => setDeletingItem(null)}>
         <AlertDialogContent>
