@@ -1,41 +1,51 @@
 
 
-# Consolidar Produtos + Códigos de Correção em página com Tabs
+# Melhorar UI/UX da Página Produtos - Dropdown de Ações
 
 ## Resumo
 
-Unificar as duas páginas em uma só (`/produtos`), com duas abas: **Produtos** (conteúdo atual) e **Códigos de Correção** (conteúdo atual de CodigosCorrecao). A rota `/codigos-correcao` será removida.
+Consolidar os botões "Importar Produtos", "Atualizar Valores" e "Novo Produto" em um layout mais limpo: manter "Novo Produto" como botão primário visível e agrupar as ações secundárias (importar, atualizar, baixar modelos) em um DropdownMenu. Posicionar tudo ao lado do título da página.
 
 ## Alterações
 
-### 1. `src/pages/Produtos.tsx` — Página unificada com Tabs
+### `src/pages/Produtos.tsx`
 
-- Importar `Tabs`, `TabsContent`, `TabsList`, `TabsTrigger`
-- Envolver o conteúdo atual de Produtos em `<TabsContent value="produtos">`
-- Mover todo o conteúdo de CodigosCorrecao para `<TabsContent value="codigos-correcao">`
-- Título da página muda para "Produtos & Correções" com subtítulo genérico
-- Importar hooks/dependências de CodigosCorrecao (`useCodigosCorrecaoQuery`, `useInvalidateCodigosCorrecao`, `usePagination`, `AlertDialog`, icons `Pencil`, `Trash2`, `ArrowRight`, `Tags`)
-- Tabs com ícones: `Package` para Produtos, `Tags` para Códigos de Correção
+**1. Mover ações para junto do título (componente principal, ~linha 970-975)**
+- Alterar o header para `flex` com título à esquerda e ações à direita (mesmo nível)
+- Adicionar botão "Novo Produto" e DropdownMenu no header
 
-### 2. `src/pages/CodigosCorrecao.tsx` — Remover
+**2. Criar DropdownMenu de ações secundárias (substituir botões das linhas 440-482)**
+- Importar `DropdownMenu`, `DropdownMenuContent`, `DropdownMenuItem`, `DropdownMenuTrigger`, `DropdownMenuSeparator`
+- Um botão trigger com ícone `MoreVertical` ou `ChevronDown` + texto "Ações"
+- Itens do dropdown:
+  - `Upload` Importar Produtos → abre `importDialogOpen`
+  - `RefreshCw` Atualizar Valores → abre `updateDialogOpen`
+  - Separador
+  - `Download` Baixar Modelo Importação → `downloadTemplate()`
+  - `Download` Baixar Modelo Atualização → `downloadUpdateTemplate()`
 
-- Deletar o arquivo
+**3. Remover bloco de botões antigo do ProdutosTab (linhas 436-483)**
+- Remover os 3 botões e o Dialog trigger inline do "Novo Produto"
+- Manter o Dialog do "Novo Produto" mas controlado via estado (sem DialogTrigger inline)
+- Os estados `importDialogOpen`, `updateDialogOpen`, `dialogOpen` continuam existindo, agora acionados pelo dropdown e pelo botão primário
 
-### 3. `src/App.tsx` — Remover rota `/codigos-correcao`
+**4. Elevar estados necessários**
+- Como o dropdown e o botão "Novo Produto" ficam no componente pai (`Produtos`), e os estados/dialogs vivem em `ProdutosTab`, há duas opções:
+  - **Opção escolhida**: Passar callbacks `onImport`, `onUpdate`, `onNewProduct` como props para `ProdutosTab` e expor os setters via ref, OU mais simplesmente, mover o DropdownMenu e o botão "Novo Produto" para dentro do `ProdutosTab` mas renderizá-los condicionalmente no header via um portal ou simplesmente manter no header do tab.
+  - **Solução mais simples**: Mover o título + ações para DENTRO de `ProdutosTab`, e no componente principal manter apenas o Tabs header. Assim não precisa elevar estado.
 
-- Remover import lazy de CodigosCorrecao
-- Remover a rota `/codigos-correcao` do router
+**Decisão**: Manter ações dentro de `ProdutosTab` mas reorganizar o layout. O título principal fica no componente pai, e cada tab tem seu próprio header com ações ao lado da barra de busca.
 
-### 4. `src/components/layout/AppLayout.tsx` — Atualizar menu
+### Layout final do ProdutosTab
 
-- Remover item de menu "Códigos de Correção" (`/codigos-correcao`)
-- Renomear item "Produtos" para "Produtos & Correções"
+```text
+[SearchFilter............] [Ações ▾] [+ Novo Produto]
+```
 
-### Detalhes técnicos
+- `Ações` é um DropdownMenu com as opções de importar/atualizar/baixar modelos
+- `+ Novo Produto` é o botão primário visível
 
-- `TabsContent` sem `forceMount` — cada aba só monta quando ativa, evitando queries desnecessárias
-- Estado de cada aba é independente (variáveis separadas para search, pagination, dialogs)
-- O conteúdo de CodigosCorrecao será integrado como bloco separado dentro do mesmo componente, mantendo toda sua lógica intacta
+### Arquivos alterados
 
-4 arquivos alterados (1 reescrito, 1 deletado, 2 editados).
+1 arquivo: `src/pages/Produtos.tsx`
 
