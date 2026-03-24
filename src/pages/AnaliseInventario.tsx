@@ -87,8 +87,8 @@ export default function AnaliseInventario() {
   const isGerente = profile?.role === 'gerente';
   const queryClient = useQueryClient();
 
-  const { data: vendedores = [] } = useVendedoresSimpleQuery(isGerente);
-  const { data: inventarios = [] } = useInventariosAnaliseQuery(
+  const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedoresSimpleQuery(isGerente);
+  const { data: inventarios = [], isLoading: isLoadingInventarios } = useInventariosAnaliseQuery(
     isGerente,
     profile?.codigo_vendedor,
     selectedVendedor,
