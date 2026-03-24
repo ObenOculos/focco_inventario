@@ -396,8 +396,13 @@ export default function AnaliseInventario() {
     toast.success('Arquivo exportado com sucesso!');
   };
 
+  const isInitialLoading = isLoadingInventarios || (isGerente && isLoadingVendedores);
+
   return (
     <AppLayout>
+      {isInitialLoading ? (
+        <AnaliseInventarioSkeleton />
+      ) : (
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
