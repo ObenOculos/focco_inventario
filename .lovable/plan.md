@@ -1,22 +1,19 @@
 
 
-# Atualizar skeletons de loading para layout novo
+# Remover card "Itens Não Contados" da Conferência
 
-## Problema
+## Resumo
 
-O `ConferenciaSkeleton` em `PageSkeleton.tsx` ainda usa o layout antigo com `grid-cols-3` e `border-l-2` (split-view). A página de Conferência foi refatorada para tela única, e a de Análise de Inventário segue o mesmo padrão, mas não tem skeleton dedicado — mostra conteúdo vazio durante o carregamento inicial.
+Remover o card expandível de "Itens Não Contados" da tela de detalhes. Os dados de itens não contados continuam sendo coletados e exportados no Excel (já existe lógica na linha 394), apenas o card visual será removido.
 
 ## Alterações
 
-### `src/components/skeletons/PageSkeleton.tsx`
+### `src/pages/Conferencia.tsx`
 
-1. **Atualizar `ConferenciaSkeleton`**: Remover o grid de colunas e renderizar skeleton de cards empilhados (3 cards com título, badge, data e vendedor), simulando a Tela 1 (lista de inventários). Sem `grid-cols-3`, sem `border-l-2`.
+1. **Remover o bloco do card** (linhas 530-567) — todo o `{itensNaoContados.length > 0 && (<Card ...>)}`
+2. **Remover estado `showItensNaoContados`** (linha 89) e seu setter nas linhas 131 e 535
+3. **Remover imports não mais usados**: `PackageX`, `ChevronDown`, `ChevronUp` (verificar se usados em outro lugar do arquivo antes de remover)
+4. Manter `itensNaoContados` e `setItensNaoContados` — ainda usados no export Excel e no cálculo
 
-2. **Criar `AnaliseInventarioSkeleton`**: Skeleton similar ao de Conferência — header com título, filtro de vendedor (skeleton de Select), e grid de cards representando inventários. Reflete a Tela 1 da página atual.
-
-### `src/pages/AnaliseInventario.tsx`
-
-3. **Adicionar estado de loading inicial**: Destructure `isLoading` dos hooks `useInventariosAnaliseQuery` e `useVendedoresSimpleQuery`, e mostrar o novo `AnaliseInventarioSkeleton` enquanto os dados iniciais carregam (antes de renderizar a lista vazia).
-
-3 arquivos alterados.
+1 arquivo alterado.
 
