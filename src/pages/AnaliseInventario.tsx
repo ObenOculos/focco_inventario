@@ -60,6 +60,7 @@ import {
 } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
+import { AnaliseInventarioSkeleton } from '@/components/skeletons/PageSkeleton';
 import {
   useInventariosAnaliseQuery,
   useVendedoresSimpleQuery,
@@ -87,8 +88,8 @@ export default function AnaliseInventario() {
   const isGerente = profile?.role === 'gerente';
   const queryClient = useQueryClient();
 
-  const { data: vendedores = [] } = useVendedoresSimpleQuery(isGerente);
-  const { data: inventarios = [] } = useInventariosAnaliseQuery(
+  const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedoresSimpleQuery(isGerente);
+  const { data: inventarios = [], isLoading: isLoadingInventarios } = useInventariosAnaliseQuery(
     isGerente,
     profile?.codigo_vendedor,
     selectedVendedor,
@@ -395,8 +396,13 @@ export default function AnaliseInventario() {
     toast.success('Arquivo exportado com sucesso!');
   };
 
+  const isInitialLoading = isLoadingInventarios || (isGerente && isLoadingVendedores);
+
   return (
     <AppLayout>
+      {isInitialLoading ? (
+        <AnaliseInventarioSkeleton />
+      ) : (
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -781,6 +787,7 @@ export default function AnaliseInventario() {
           </div>
         )}
       </div>
+      )}
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
