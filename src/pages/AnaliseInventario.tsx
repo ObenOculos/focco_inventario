@@ -787,6 +787,7 @@ export default function AnaliseInventario() {
           </div>
         )}
       </div>
+      )}
 
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
