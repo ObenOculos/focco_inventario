@@ -16,9 +16,6 @@ import {
   XCircle,
   AlertTriangle,
   Save,
-  PackageX,
-  ChevronDown,
-  ChevronUp,
   User,
   Calendar,
   Package,
@@ -86,7 +83,7 @@ export default function Conferencia() {
   const [observacoes, setObservacoes] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
-  const [showItensNaoContados, setShowItensNaoContados] = useState(false);
+  
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [deletingItem, setDeletingItem] = useState<{
     codigo_auxiliar: string;
@@ -128,7 +125,7 @@ export default function Conferencia() {
       setSearchTerm('');
       setFilterTipo('todos');
       setEditedValues({});
-      setShowItensNaoContados(false);
+      
 
       // Buscar comparativo em lotes para contornar limite de linhas do Supabase
       const fetchComparativoInBatches = async () => {
@@ -526,45 +523,6 @@ export default function Conferencia() {
             </Button>
 
             <DivergenciaStats {...stats} />
-
-            {itensNaoContados.length > 0 && (
-              <Card className="bg-amber-50 border-amber-300 shadow-none">
-                <CardHeader className="pb-3">
-                  <CardTitle
-                    className="text-base flex items-center justify-between cursor-pointer"
-                    onClick={() => setShowItensNaoContados(!showItensNaoContados)}
-                  >
-                    <span className="flex items-center gap-2 text-amber-800">
-                      <PackageX size={18} /> {itensNaoContados.length} Itens Não Contados
-                    </span>
-                    {showItensNaoContados ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
-                  </CardTitle>
-                </CardHeader>
-                {showItensNaoContados && (
-                  <CardContent>
-                    <p className="text-sm text-amber-700 mb-3">
-                      Estes itens possuem estoque teórico mas não foram contados.
-                    </p>
-                    <div className="max-h-40 overflow-y-auto space-y-1">
-                      {itensNaoContados.map((item) => (
-                        <div
-                          key={item.codigo_auxiliar}
-                          className="flex justify-between items-center text-sm bg-amber-100 p-2 rounded"
-                        >
-                          <span>
-                            <span className="font-mono font-bold">{item.codigo_auxiliar}</span>{' '}
-                            - {item.nome_produto}
-                          </span>
-                          <Badge className="bg-amber-600">
-                            Teórico: {item.estoque_teorico}
-                          </Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </CardContent>
-                )}
-              </Card>
-            )}
 
             <Card className="border-2 shadow-none">
               <CardHeader>
