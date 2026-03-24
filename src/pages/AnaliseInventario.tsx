@@ -60,6 +60,7 @@ import {
 } from '@/components/ui/table';
 import * as XLSX from 'xlsx';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
+import { AnaliseInventarioSkeleton } from '@/components/skeletons/PageSkeleton';
 import {
   useInventariosAnaliseQuery,
   useVendedoresSimpleQuery,
