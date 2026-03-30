@@ -895,7 +895,8 @@ export default function Conferencia() {
                             : (editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica);
                           const diferencaCalculada = calcularDiferenca(
                             item.estoque_teorico,
-                            currentFisica
+                            currentFisica,
+                            usaSomaParaNegativo
                           );
 
                           return (
