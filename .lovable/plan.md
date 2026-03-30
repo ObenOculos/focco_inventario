@@ -1,57 +1,37 @@
 
 
-# Inconsistências na lógica de Diferença vs Divergência
+# Clarificar Produtos vs Unidades nos cards de inventário
 
-## O que são os dois conceitos
+## Problema
 
-- **Divergência** = `quantidade_fisica - estoque_teorico` (subtração simples, vinda do RPC)
-- **Diferença** = `calcularDiferenca()` = lógica condicional:
-  - Se teórico <= 0: `teórico + físico`
-  - Se teórico > 0: `físico - teórico`
+Nos cards da lista de inventários, a informação mostrada é ambígua:
+- **Conferência**: mostra "X itens" (soma de `quantidade_fisica`), mas não distingue entre quantidade de produtos distintos e total de unidades
+- **Análise**: não mostra nenhuma contagem — só data
 
-Exemplo: teórico = **-5**, físico = **3**
-- Divergência = 3 - (-5) = **+8**
-- Diferença = -5 + 3 = **-2**
+O usuário quer ver algo como: **738 produtos · 779 unidades**
 
-## Problemas encontrados
+## Alterações
 
-### 1. Conferência — `tipo` e stats usam lógica errada
+### 1. `src/pages/Conferencia.tsx` (~linhas 474-482)
 
-Na **linha 184**, o campo `diferenca` do `DivergenciaItem` é calculado como subtração simples (`física - teórica`), que é idêntica à divergência. Depois:
-- **Tipo** (sobra/falta/ok) nas linhas 192-194 usa esse valor
-- **Stats** (linhas 361-368) usam `d.diferenca` para contar sobras/faltas
+Substituir a linha que mostra apenas o total de unidades por duas informações:
+- **Produtos**: `inv.itens_inventario.length` (quantidade de SKUs/linhas)
+- **Unidades**: `inv.itens_inventario.reduce(sum + quantidade_fisica)` (soma total)
 
-Mas a coluna "Diferença" na tabela (linha 576) usa `calcularDiferenca()`. Resultado: os cards de estatísticas podem dizer "Sobra" enquanto a coluna Diferença mostra valor negativo para o mesmo item.
+Formato: `738 produtos · 779 un.`
 
-### 2. Análise — stats também usam divergência em vez de diferença
+### 2. `src/hooks/useAnaliseInventarioQuery.ts`
 
-Nas linhas 282-288, `itensSobra` e `itensFalta` são classificados por `item.divergencia`, não por `calcularDiferenca()`. Mesma inconsistência.
+Adicionar `itens_inventario(codigo_auxiliar, quantidade_fisica)` ao select da query para trazer os itens junto com cada inventário. Atualizar a interface `InventarioInfo` para incluir:
+```
+total_produtos: number;
+total_unidades: number;
+```
+Calcular esses valores no mapeamento dos dados (sem trazer todos os campos dos itens — apenas o necessário para a contagem).
 
-### 3. Conferência — campo `diferenca` no DivergenciaItem é redundante com divergência
+### 3. `src/pages/AnaliseInventario.tsx` (~linhas 479-485)
 
-O `item.diferenca` armazenado no state é `física - teórica` (linha 184), que é exatamente a divergência. Mas o campo se chama "diferenca", gerando confusão.
+Adicionar no `CardContent` a mesma informação de produtos e unidades, usando os novos campos de `InventarioInfo`.
 
-## Correções propostas
-
-### `src/pages/Conferencia.tsx`
-
-1. **Classificação `tipo`** (linhas 192-194): usar `calcularDiferenca()` em vez de subtração simples
-2. **Campo `diferenca` no DivergenciaItem** (linha 184): calcular usando `calcularDiferenca()` para que stats e tabela sejam consistentes
-3. **Stats** (linhas 361-368): já usam `d.diferenca`, ficarão corretos se o campo for calculado com `calcularDiferenca()`
-
-### `src/pages/AnaliseInventario.tsx`
-
-4. **Stats** (linhas 282-288): classificar sobra/falta usando `calcularDiferenca(item.estoque_teorico, item.quantidade_fisica)` em vez de `item.divergencia`
-5. **Filtro de divergência** (linhas 177-184): manter usando `item.divergencia` — correto, é o filtro de divergência
-6. **Row highlight** (linhas 704-709): avaliar se deve seguir divergência ou diferença para colorir linhas — sugiro manter divergência para consistência visual com a coluna
-
-### `src/types/app.ts`
-
-7. Nenhuma mudança necessária na interface `DivergenciaItem` — o campo `diferenca` passa a representar o valor calculado pela fórmula condicional
-
-## Resumo
-
-A regra de negócio diz que **Diferença** determina sobra/falta. Hoje, stats e classificação usam divergência (subtração simples). A correção alinha stats, tipo, e tabela para todos usarem `calcularDiferenca()`.
-
-3 pontos de mudança em 2 arquivos.
+3 arquivos alterados.
 
