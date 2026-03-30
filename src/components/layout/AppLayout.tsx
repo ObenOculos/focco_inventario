@@ -19,8 +19,6 @@ import {
   FileText,
   UserCog,
 } from 'lucide-react';
-  Tags,
-} from 'lucide-react';
 import { useState } from 'react';
 
 interface AppLayoutProps {
