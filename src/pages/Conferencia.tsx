@@ -180,7 +180,7 @@ export default function Conferencia() {
         nome_produto: item.nome_produto,
         estoque_teorico: item.estoque_teorico,
         quantidade_fisica: 0,
-        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
         percentual: 0,
         tipo: 'falta' as const,
         nao_contado: true,
