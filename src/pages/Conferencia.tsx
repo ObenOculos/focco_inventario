@@ -122,36 +122,34 @@ export default function Conferencia() {
   }, [selectedVendedor, statusFilter]);
 
   const filteredDivergencias = useMemo(() => {
+    if (filtroResultado === 'nao_contados') return [];
+
     let filtered = divergencias;
 
-    // Filtro de divergência
-    if (divergenceFilter === 'com_divergencia') {
-      filtered = filtered.filter((item) => item.diferenca !== 0);
-    } else if (divergenceFilter === 'sem_divergencia') {
-      filtered = filtered.filter((item) => item.diferenca === 0);
-    } else if (divergenceFilter === 'positiva') {
-      filtered = filtered.filter((item) => item.diferenca > 0);
-    } else if (divergenceFilter === 'negativa') {
-      filtered = filtered.filter((item) => item.diferenca < 0);
-    } else if (divergenceFilter === 'nao_contados') {
-      // Special: show uncounted items instead
-      return [];
-    }
-    // "todos" shows all counted items
-
-    // Filtro de diferença
-    if (diferencaFilter !== 'todos') {
+    if (filtroResultado === 'com_diferenca') {
       filtered = filtered.filter((item) => {
-        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
-        if (diferencaFilter === 'positiva') return diferenca > 0;
-        if (diferencaFilter === 'negativa') return diferenca < 0;
-        if (diferencaFilter === 'zero') return diferenca === 0;
-        return true;
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif !== 0;
+      });
+    } else if (filtroResultado === 'sobras') {
+      filtered = filtered.filter((item) => {
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif > 0;
+      });
+    } else if (filtroResultado === 'faltas') {
+      filtered = filtered.filter((item) => {
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif < 0;
+      });
+    } else if (filtroResultado === 'corretos') {
+      filtered = filtered.filter((item) => {
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif === 0;
       });
     }
 
     return filtered;
-  }, [divergencias, divergenceFilter, diferencaFilter]);
+  }, [divergencias, filtroResultado]);
 
   // For "nao_contados" filter, show those items in the table
   const tableData = useMemo(() => {
