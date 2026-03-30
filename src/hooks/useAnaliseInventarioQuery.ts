@@ -7,6 +7,8 @@ interface InventarioInfo {
   status: string;
   codigo_vendedor: string;
   vendedor_nome?: string;
+  total_produtos: number;
+  total_unidades: number;
 }
 
 interface ComparativoItem {
