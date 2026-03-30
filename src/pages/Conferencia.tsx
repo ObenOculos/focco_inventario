@@ -257,7 +257,7 @@ export default function Conferencia() {
           foi_contado: rawItem.foi_contado,
         };
 
-        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         const percentual =
           item.estoque_teorico !== 0
             ? (diferenca / item.estoque_teorico) * 100
