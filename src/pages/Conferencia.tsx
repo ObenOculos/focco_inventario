@@ -274,6 +274,28 @@ export default function Conferencia() {
       setDivergencias(
         divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca))
       );
+
+      // Buscar custos dos produtos em lotes
+      const todosCodigos = [
+        ...divergenciasList.map((item) => item.codigo_auxiliar),
+        ...itensNaoContadosList.map((item) => item.codigo_auxiliar),
+      ];
+      const TAMANHO_LOTE = 100;
+      const novoCustosMap: Record<string, number> = {};
+      for (let i = 0; i < todosCodigos.length; i += TAMANHO_LOTE) {
+        const lote = todosCodigos.slice(i, i + TAMANHO_LOTE);
+        const { data: produtosCusto } = await supabase
+          .from('produtos')
+          .select('codigo_auxiliar, valor_produto')
+          .in('codigo_auxiliar', lote);
+        if (produtosCusto) {
+          produtosCusto.forEach((p) => {
+            novoCustosMap[p.codigo_auxiliar] = p.valor_produto || 0;
+          });
+        }
+      }
+      setCustosMap(novoCustosMap);
+
       setIsDetailLoading(false);
     },
     [selectedInventario]
