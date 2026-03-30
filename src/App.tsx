@@ -79,14 +79,7 @@ const router = createBrowserRouter(
             </ProtectedRoute>
           ),
         },
-        {
-          path: '/analise-inventario',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <AnaliseInventario />
-            </ProtectedRoute>
-          ),
-        },
+        
         {
           path: '/inventario',
           element: (

@@ -20,9 +20,9 @@ export const useInventariosPendentesQuery = (
         .order('created_at', { ascending: false });
 
       if (statusFilter === 'pendentes') {
-        query = query.in('status', ['pendente', 'revisao']);
+        query = query.in('status', ['pendente', 'revisao'] as any);
       } else if (statusFilter !== 'todos') {
-        query = query.eq('status', statusFilter);
+        query = query.eq('status', statusFilter as any);
       }
 
       if (vendedorFilter !== 'todos') {
