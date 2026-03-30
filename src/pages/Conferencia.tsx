@@ -892,9 +892,14 @@ export default function Conferencia() {
                       onCheckedChange={setUsaSomaParaNegativo}
                       className="shadow-none"
                     />
-                    <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
-                      {usaSomaParaNegativo ? 'Somando quando teórico negativo' : 'Subtraindo sempre'}
-                    </Label>
+                    <div className="flex flex-col">
+                      <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                        {usaSomaParaNegativo ? 'Somando quando teórico negativo' : 'Subtraindo sempre'}
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground/70">
+                        {usaSomaParaNegativo ? 'Ex: -3 + 5 = 2' : 'Ex: 5 - (-3) = 8'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </CardHeader>
