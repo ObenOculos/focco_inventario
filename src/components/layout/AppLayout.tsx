@@ -45,7 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     // Ações de inventário
     { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
-    { to: '/analise-inventario', icon: PackageSearch, label: 'Análise de Inventário' },
+    
     // Estoque
     { to: '/estoque-teorico', icon: Package, label: 'Estoque ERP' },
     { to: '/historico-estoque-real', icon: History, label: 'Hist. de Inventários' },
