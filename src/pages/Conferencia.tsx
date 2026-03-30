@@ -24,7 +24,15 @@ import {
   Trash2,
   Minus,
   ArrowLeft,
+  Settings,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
