@@ -805,7 +805,6 @@ export default function Conferencia() {
                         <TableHead className="text-center">Teórico</TableHead>
                         <TableHead className="text-center">Físico</TableHead>
                         <TableHead className="text-center">Diferença</TableHead>
-                        <TableHead className="text-center">Divergência</TableHead>
                         {isPendingOrRevisao && <TableHead className="text-center w-[60px]">Ações</TableHead>}
                       </TableRow>
                     </TableHeader>
