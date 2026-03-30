@@ -153,7 +153,7 @@ export default function Conferencia() {
 
   // For "nao_contados" filter, show those items in the table
   const tableData = useMemo(() => {
-    if (divergenceFilter === 'nao_contados') {
+    if (filtroResultado === 'nao_contados') {
       return itensNaoContados.map((item) => ({
         codigo_auxiliar: item.codigo_auxiliar,
         nome_produto: item.nome_produto,
