@@ -508,7 +508,7 @@ export default function Conferencia() {
       .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     return { totalFaltas, totalSobras, saldoDevedor: totalFaltas + totalSobras };
-  }, [divergencias, itensNaoContados, custosMap]);
+  }, [divergencias, itensNaoContados, custosMap, usaSomaParaNegativo]);
 
   const handleExportExcel = async (exportAll: boolean = false) => {
     if (!selectedInventario || (divergencias.length === 0 && itensNaoContados.length === 0)) {
