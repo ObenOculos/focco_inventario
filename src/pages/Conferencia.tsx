@@ -497,7 +497,7 @@ export default function Conferencia() {
         custo: custosMap[d.codigo_auxiliar] || 0,
       })),
       ...itensNaoContados.map((item) => ({
-        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
         custo: custosMap[item.codigo_auxiliar] || 0,
       })),
     ];
