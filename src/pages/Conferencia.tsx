@@ -876,9 +876,10 @@ export default function Conferencia() {
                       id="soma-negativo"
                       checked={usaSomaParaNegativo}
                       onCheckedChange={setUsaSomaParaNegativo}
+                      className="shadow-none"
                     />
                     <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
-                      Somar quando teórico negativo
+                      {usaSomaParaNegativo ? 'Somando quando teórico negativo' : 'Subtraindo sempre'}
                     </Label>
                   </div>
                 </div>
