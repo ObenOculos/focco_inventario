@@ -183,8 +183,7 @@ export default function Conferencia() {
       setSelectedInventario(inventario);
       setObservacoes('');
       setSearchTerm('');
-      setDivergenceFilter('com_divergencia');
-      setDiferencaFilter('todos');
+      setFiltroResultado('com_diferenca');
       setEditedValues({});
 
       const fetchComparativoInBatches = async () => {
