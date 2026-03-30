@@ -708,6 +708,36 @@ export default function Conferencia() {
 
             <DivergenciaStats {...stats} />
 
+            {/* Resumo Financeiro */}
+            {(financeiro.totalFaltas > 0 || financeiro.totalSobras > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Card className="border-2 shadow-none">
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground mb-1">Total Faltas (R$)</p>
+                    <p className="text-2xl font-bold text-destructive">
+                      {financeiro.totalFaltas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-2 shadow-none">
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground mb-1">Total Sobras (R$)</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {financeiro.totalSobras.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-2 shadow-none">
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground mb-1">Saldo Devedor (R$)</p>
+                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                      {financeiro.saldoDevedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* Manager Actions */}
             {isGerente && (
               <Card className="border-2 shadow-none">
