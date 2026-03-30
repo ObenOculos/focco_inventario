@@ -1,48 +1,28 @@
 
 
-# Remover página Análise de Inventário e absorver na Conferência
+# Remover lógica de Divergência — manter apenas Diferença
 
-## Resumo
+## Contexto
 
-Eliminar `AnaliseInventario.tsx` e migrar seus recursos exclusivos para `Conferencia.tsx`. A Conferência passará a mostrar **todos** os inventários (não só pendentes) e ganhará os filtros e funcionalidades que só existiam na Análise.
+Atualmente a tabela tem **duas colunas** de comparação: "Diferença" (cálculo condicional) e "Divergência" (física - teórica simples). Além disso há **dois filtros** separados para cada conceito. O usuário quer simplificar: manter apenas **Diferença = Estoque Teórico vs Estoque Real (Físico)**.
 
-## Recursos a migrar para Conferência
+## Alterações
 
-1. **Filtro por vendedor** — Select de vendedores no topo da lista (apenas para gerentes)
-2. **Mostrar todos os status** — Hoje filtra só pendente/revisão; passará a mostrar também aprovados
-3. **Filtros granulares na tabela** — Filtro de divergência (com/sem/positiva/negativa/não contados) e filtro de diferença (positiva/negativa/zero)
-4. **Export com custo** — Buscar `valor_produto` dos produtos e incluir coluna "Custo Produto" no Excel
-5. **Excluir inventário inteiro** — Botão de exclusão do inventário (não só de itens individuais)
-6. **Botão Aprovar simplificado** — Manter o fluxo atual de aprovar + o novo de excluir no mesmo card de ações
+### 1. `src/pages/Conferencia.tsx`
+- **Remover coluna "Divergência"** da tabela (linhas 827, 899-919) — manter apenas a coluna "Diferença"
+- **Unificar filtros**: remover o Select de "Divergência" (`divergenceFilter`) e o Select de "Diferença" (`diferencaFilter`). Substituir por um único filtro com opções: Todos, Sobras (+), Faltas (-), Corretos (0), Não Contados
+- **Remover state** `divergenceFilter` e `diferencaFilter`; criar um único `filtroResultado`
+- **Atualizar `filteredDivergencias`** para usar o filtro unificado baseado em `calcularDiferenca`
+- **Coloração das linhas** da tabela: usar o resultado da diferença (azul/laranja) em vez da divergência
+- **Excel**: remover coluna "Divergência", manter "Diferença" e "Status"
+- **Textos**: trocar referências a "divergência" por "diferença" nos labels e subtítulo da página
 
-## Alterações por arquivo
+### 2. `src/components/DivergenciaStats.tsx`
+- Renomear para focar em "Diferença": trocar "Análise de Divergências" → "Análise de Diferenças", "Total Divergente" → "Total com Diferença", "sem divergência" → "sem diferença"
+- Manter a mesma estrutura visual (Corretos / Sobras / Faltas)
 
-### `src/pages/Conferencia.tsx`
-- Substituir `useInventariosPendentesQuery` por uma query que busca todos os inventários (ou adicionar parâmetro de status)
-- Adicionar `useVendedoresSimpleQuery` para o filtro por vendedor
-- Adicionar states: `selectedVendedor`, `divergenceFilter`, `diferencaFilter`, `showDeleteDialog`
-- Na tela de lista: adicionar Select de vendedor antes dos cards
-- Na tela de detalhes: substituir o filtro simples (ok/sobra/falta) pelos filtros granulares de divergência + diferença
-- Adicionar botão "Excluir Inventário" ao lado dos botões de ação do gerente
-- Atualizar export Excel para buscar custos em lotes e incluir coluna "Custo Produto"
-- Badges de status: mostrar "Aprovado" em verde além de Revisão/Pendente
+### 3. `src/types/app.ts`
+- Manter `DivergenciaItem` como está (o campo `diferenca` já existe e é o que será usado)
 
-### `src/hooks/useConferenciaQuery.ts`
-- Remover filtro `.in('status', ['pendente', 'revisao'])` ou torná-lo opcional via parâmetro
-- Adicionar filtro por `codigo_vendedor` quando selecionado
-
-### `src/App.tsx`
-- Remover import e rota de `/analise-inventario`
-
-### `src/components/layout/AppLayout.tsx`
-- Remover link "Análise de Inventário" do menu de gerente
-
-### Arquivos a excluir
-- `src/pages/AnaliseInventario.tsx`
-- `src/hooks/useAnaliseInventarioQuery.ts`
-- Remover `AnaliseInventarioSkeleton` de `src/components/skeletons/PageSkeleton.tsx`
-
-## Resultado
-
-Uma única página "Conferência" que serve tanto para conferir/aprovar inventários pendentes quanto para consultar o histórico completo com filtros avançados. ~6 arquivos alterados, 2 excluídos.
+3 arquivos alterados.
 
