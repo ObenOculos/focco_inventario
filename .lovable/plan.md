@@ -1,27 +1,52 @@
 
 
-# Diferença condicional: Teórico negativo usa soma
+# Incluir itens não contados na pesquisa
 
 ## Problema
-Quando o estoque teórico é negativo (ex: -2), a subtração `Físico - Teórico` dá `1 - (-2) = 3`, mas o usuário espera `-2 + 1 = -1`.
+A pesquisa (`searchTerm`) filtra apenas o `tableData`, que só inclui itens não contados quando o filtro está em "nao_contados". Ao pesquisar com outro filtro ativo (ex: "com_diferenca"), os itens não contados nunca aparecem nos resultados.
 
-## Alteração
+## Solução
 
 **Arquivo:** `src/pages/Conferencia.tsx`
 
-### Função `calcularDiferenca` (linha ~78)
-Adicionar condição: se teórico < 0, retornar `teórico + físico`; caso contrário, manter `físico - teórico`.
+### Alterar `tableData` (linhas ~157-171)
+Quando há um `searchTerm` ativo, incluir os itens não contados junto com os itens filtrados, independentemente do filtro selecionado. Assim a pesquisa busca em todos os itens.
 
 ```typescript
-const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
-  if (estoqueTeor < 0) {
-    return estoqueTeor + estoqFisico;
+const tableData = useMemo(() => {
+  if (filtroResultado === 'nao_contados') {
+    return itensNaoContados.map((item) => ({
+      codigo_auxiliar: item.codigo_auxiliar,
+      nome_produto: item.nome_produto,
+      estoque_teorico: item.estoque_teorico,
+      quantidade_fisica: 0,
+      diferenca: calcularDiferenca(item.estoque_teorico, 0),
+      percentual: 0,
+      tipo: 'falta' as const,
+      nao_contado: true,
+    }));
   }
-  return estoqFisico - estoqueTeor;
-};
+
+  const contados = filteredDivergencias.map((item) => ({ ...item, nao_contado: false }));
+
+  // Se há pesquisa ativa, incluir não contados para que apareçam nos resultados
+  if (searchTerm.trim()) {
+    const naoContados = itensNaoContados.map((item) => ({
+      codigo_auxiliar: item.codigo_auxiliar,
+      nome_produto: item.nome_produto,
+      estoque_teorico: item.estoque_teorico,
+      quantidade_fisica: 0,
+      diferenca: calcularDiferenca(item.estoque_teorico, 0),
+      percentual: 0,
+      tipo: 'falta' as const,
+      nao_contado: true,
+    }));
+    return [...contados, ...naoContados];
+  }
+
+  return contados;
+}, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm]);
 ```
 
-Como toda a página já usa essa função centralizada, a mudança se propaga automaticamente para: tabela, filtros, exportação Excel, resumo financeiro e estatísticas.
-
-1 arquivo, 3 linhas alteradas.
+1 arquivo, ~15 linhas adicionadas.
 
