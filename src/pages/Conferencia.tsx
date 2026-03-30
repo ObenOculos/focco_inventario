@@ -730,7 +730,7 @@ export default function Conferencia() {
                 <Card className="border-2 shadow-none">
                   <CardContent className="pt-4 pb-4">
                     <p className="text-xs text-muted-foreground mb-1">Saldo Devedor (R$)</p>
-                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor < 0 ? 'text-destructive' : 'text-green-600'}`}>
                       {financeiro.saldoDevedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
                   </CardContent>
