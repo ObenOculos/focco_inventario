@@ -112,6 +112,7 @@ export default function Conferencia() {
     itemId: string;
   } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showManagerActions, setShowManagerActions] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
