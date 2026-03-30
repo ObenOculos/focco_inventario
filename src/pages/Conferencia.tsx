@@ -189,7 +189,7 @@ export default function Conferencia() {
     }
 
     return contados;
-  }, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm]);
+  }, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm, usaSomaParaNegativo]);
 
   const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
     data: tableData,
