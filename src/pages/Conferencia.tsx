@@ -519,7 +519,7 @@ export default function Conferencia() {
     const dataToExport = exportAll ? divergencias : filteredDivergencias;
 
     const exportData = dataToExport.map((item) => {
-      const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+      const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
       const custo = custosMap[item.codigo_auxiliar] || 0;
       return {
         'Código Auxiliar': item.codigo_auxiliar,
