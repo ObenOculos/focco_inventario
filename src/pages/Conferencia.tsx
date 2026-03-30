@@ -930,10 +930,10 @@ export default function Conferencia() {
                               <TableCell className="text-center">
                                 {(() => {
                                   const custo = custosMap[item.codigo_auxiliar] || 0;
-                                  const valorDif = Math.abs(diferencaCalculada) * custo;
+                                  const valorDif = diferencaCalculada * custo;
                                   if (diferencaCalculada === 0 || custo === 0) return <span className="text-muted-foreground">-</span>;
                                   return (
-                                    <span className={`font-semibold ${diferencaCalculada < 0 ? 'text-destructive' : 'text-blue-600'}`}>
+                                    <span className={`font-semibold ${valorDif < 0 ? 'text-destructive' : 'text-blue-600'}`}>
                                       {valorDif.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                     </span>
                                   );
