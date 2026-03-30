@@ -479,11 +479,11 @@ export default function Conferencia() {
     ];
     const totalFaltas = allItems
       .filter((i) => i.diferenca < 0)
-      .reduce((acc, i) => acc + Math.abs(i.diferenca) * i.custo, 0);
+      .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     const totalSobras = allItems
       .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
-    return { totalFaltas, totalSobras, saldoDevedor: totalFaltas - totalSobras };
+    return { totalFaltas, totalSobras, saldoDevedor: totalFaltas + totalSobras };
   }, [divergencias, itensNaoContados, custosMap]);
 
   const handleExportExcel = async (exportAll: boolean = false) => {
@@ -504,7 +504,7 @@ export default function Conferencia() {
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': item.quantidade_fisica,
         Diferença: diferencaCalculada,
-        'Valor Diferença': Math.abs(diferencaCalculada) * custo,
+        'Valor Diferença': diferencaCalculada * custo,
         Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
       };
     });
@@ -519,7 +519,7 @@ export default function Conferencia() {
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
         Diferença: dif,
-        'Valor Diferença': Math.abs(dif) * custo,
+        'Valor Diferença': dif * custo,
         Status: 'Não Contado',
       });
     });
@@ -709,7 +709,7 @@ export default function Conferencia() {
             <DivergenciaStats {...stats} />
 
             {/* Resumo Financeiro */}
-            {(financeiro.totalFaltas > 0 || financeiro.totalSobras > 0) && (
+            {(financeiro.totalFaltas !== 0 || financeiro.totalSobras !== 0) && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Card className="border-2 shadow-none">
                   <CardContent className="pt-4 pb-4">
@@ -730,7 +730,7 @@ export default function Conferencia() {
                 <Card className="border-2 shadow-none">
                   <CardContent className="pt-4 pb-4">
                     <p className="text-xs text-muted-foreground mb-1">Saldo Devedor (R$)</p>
-                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor < 0 ? 'text-destructive' : 'text-green-600'}`}>
                       {financeiro.saldoDevedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
                   </CardContent>
@@ -930,10 +930,10 @@ export default function Conferencia() {
                               <TableCell className="text-center">
                                 {(() => {
                                   const custo = custosMap[item.codigo_auxiliar] || 0;
-                                  const valorDif = Math.abs(diferencaCalculada) * custo;
+                                  const valorDif = diferencaCalculada * custo;
                                   if (diferencaCalculada === 0 || custo === 0) return <span className="text-muted-foreground">-</span>;
                                   return (
-                                    <span className={`font-semibold ${diferencaCalculada < 0 ? 'text-destructive' : 'text-blue-600'}`}>
+                                    <span className={`font-semibold ${valorDif < 0 ? 'text-destructive' : 'text-blue-600'}`}>
                                       {valorDif.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                                     </span>
                                   );
