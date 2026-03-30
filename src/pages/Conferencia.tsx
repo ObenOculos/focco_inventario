@@ -534,7 +534,7 @@ export default function Conferencia() {
     });
 
     itensNaoContados.forEach((item) => {
-      const dif = calcularDiferenca(item.estoque_teorico, 0);
+      const dif = calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo);
       const custo = custosMap[item.codigo_auxiliar] || 0;
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
