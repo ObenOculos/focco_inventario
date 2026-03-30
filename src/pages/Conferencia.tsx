@@ -22,8 +22,6 @@ import {
   Loader2,
   Download,
   Trash2,
-  TrendingUp,
-  TrendingDown,
   Minus,
   ArrowLeft,
 } from 'lucide-react';
