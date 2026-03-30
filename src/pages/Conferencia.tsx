@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { DivergenciaItem } from '@/types/app';
@@ -19,10 +19,13 @@ import {
   User,
   Calendar,
   Package,
-  
   Loader2,
   Download,
   Trash2,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+  ArrowLeft,
 } from 'lucide-react';
 import {
   AlertDialog,
@@ -34,6 +37,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import * as XLSX from 'xlsx';
 import { DivergenciaStats } from '@/components/DivergenciaStats';
 import { ConferenciaSkeleton } from '@/components/skeletons/PageSkeleton';
@@ -58,6 +67,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
+import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 
 type ItemNaoContado = {
@@ -79,37 +89,90 @@ export default function Conferencia() {
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
   const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [filterTipo, setFilterTipo] = useState<string>('todos');
+  const [divergenceFilter, setDivergenceFilter] = useState<string>('com_divergencia');
+  const [diferencaFilter, setDiferencaFilter] = useState<string>('todos');
   const [observacoes, setObservacoes] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
-  
   const [isDetailLoading, setIsDetailLoading] = useState(false);
   const [deletingItem, setDeletingItem] = useState<{
     codigo_auxiliar: string;
     nome_produto: string;
     itemId: string;
   } | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
+  const [statusFilter, setStatusFilter] = useState<string>('todos');
 
   const queryClient = useQueryClient();
 
+  const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedoresSimpleQuery(isGerente);
   const {
     data: inventarios = [],
     isLoading: loading,
     isFetching,
     refetch: refetchInventarios,
-  } = useInventariosPendentesQuery();
+  } = useInventariosPendentesQuery(statusFilter, selectedVendedor);
+
+  // Reset selection when filters change
+  useEffect(() => {
+    setSelectedInventario(null);
+    setDivergencias([]);
+    setItensNaoContados([]);
+  }, [selectedVendedor, statusFilter]);
 
   const filteredDivergencias = useMemo(() => {
     let filtered = divergencias;
-    if (filterTipo === 'ok') filtered = filtered.filter((item) => item.tipo === 'ok');
-    if (filterTipo === 'sobra') filtered = filtered.filter((item) => item.tipo === 'sobra');
-    if (filterTipo === 'falta') filtered = filtered.filter((item) => item.tipo === 'falta');
-    return filtered;
-  }, [divergencias, filterTipo]);
 
-  const { paginatedData: paginatedDivergencias, ...paginationProps } = usePagination({
-    data: filteredDivergencias,
+    // Filtro de divergência
+    if (divergenceFilter === 'com_divergencia') {
+      filtered = filtered.filter((item) => item.diferenca !== 0);
+    } else if (divergenceFilter === 'sem_divergencia') {
+      filtered = filtered.filter((item) => item.diferenca === 0);
+    } else if (divergenceFilter === 'positiva') {
+      filtered = filtered.filter((item) => item.diferenca > 0);
+    } else if (divergenceFilter === 'negativa') {
+      filtered = filtered.filter((item) => item.diferenca < 0);
+    } else if (divergenceFilter === 'nao_contados') {
+      // Special: show uncounted items instead
+      return [];
+    }
+    // "todos" shows all counted items
+
+    // Filtro de diferença
+    if (diferencaFilter !== 'todos') {
+      filtered = filtered.filter((item) => {
+        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        if (diferencaFilter === 'positiva') return diferenca > 0;
+        if (diferencaFilter === 'negativa') return diferenca < 0;
+        if (diferencaFilter === 'zero') return diferenca === 0;
+        return true;
+      });
+    }
+
+    return filtered;
+  }, [divergencias, divergenceFilter, diferencaFilter]);
+
+  // For "nao_contados" filter, show those items in the table
+  const tableData = useMemo(() => {
+    if (divergenceFilter === 'nao_contados') {
+      return itensNaoContados.map((item) => ({
+        codigo_auxiliar: item.codigo_auxiliar,
+        nome_produto: item.nome_produto,
+        estoque_teorico: item.estoque_teorico,
+        quantidade_fisica: 0,
+        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        percentual: 0,
+        tipo: 'falta' as const,
+        nao_contado: true,
+      }));
+    }
+    return filteredDivergencias.map((item) => ({ ...item, nao_contado: false }));
+  }, [filteredDivergencias, itensNaoContados, divergenceFilter]);
+
+  const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
+    data: tableData,
     searchTerm,
     searchFields: ['codigo_auxiliar', 'nome_produto'],
     itemsPerPage: 10,
@@ -123,11 +186,10 @@ export default function Conferencia() {
       setSelectedInventario(inventario);
       setObservacoes('');
       setSearchTerm('');
-      setFilterTipo('todos');
+      setDivergenceFilter('com_divergencia');
+      setDiferencaFilter('todos');
       setEditedValues({});
-      
 
-      // Buscar comparativo em lotes para contornar limite de linhas do Supabase
       const fetchComparativoInBatches = async () => {
         const allData: any[] = [];
         let offset = 0;
@@ -167,17 +229,12 @@ export default function Conferencia() {
       const itensNaoContadosList: ItemNaoContado[] = [];
 
       for (const rawItem of comparativo || []) {
-        // Mapeia campos para compatibilidade com tipos antigos/novos
         const item = {
           codigo_auxiliar: rawItem.codigo_auxiliar,
           nome_produto: rawItem.nome_produto,
-          estoque_teorico: Number(
-            (rawItem as any).estoque_teorico ?? (rawItem as any).quantidade_inventario ?? 0
-          ),
-          quantidade_fisica: Number(
-            (rawItem as any).quantidade_fisica ?? (rawItem as any).quantidade_contada ?? 0
-          ),
-          divergencia: Number((rawItem as any).divergencia ?? (rawItem as any).diferenca ?? 0),
+          estoque_teorico: Number(rawItem.estoque_teorico ?? 0),
+          quantidade_fisica: Number(rawItem.quantidade_fisica ?? 0),
+          divergencia: Number(rawItem.divergencia ?? 0),
           foi_contado: rawItem.foi_contado,
         };
 
@@ -357,7 +414,29 @@ export default function Conferencia() {
     }
   };
 
+  const handleDeleteInventario = async () => {
+    if (!selectedInventario || !isGerente) return;
+    setIsDeleting(true);
+    try {
+      const { error } = await supabase.from('inventarios').delete().eq('id', selectedInventario.id);
+      if (error) throw error;
+
+      toast.success('Inventário excluído com sucesso.');
+      setSelectedInventario(null);
+      queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    } catch (err: any) {
+      console.error('Erro ao excluir inventário:', err);
+      toast.error('Erro ao excluir inventário');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteDialog(false);
+    }
+  };
+
   const hasEdits = Object.keys(editedValues).length > 0;
+  const isPendingOrRevisao = selectedInventario && ['pendente', 'revisao'].includes(selectedInventario.status);
   const stats = useMemo(
     () => ({
       itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
@@ -369,17 +448,43 @@ export default function Conferencia() {
     [divergencias]
   );
 
-  const handleExportExcel = () => {
-    if (!selectedInventario || divergencias.length === 0) {
+  const handleExportExcel = async (exportAll: boolean = false) => {
+    if (!selectedInventario || (divergencias.length === 0 && itensNaoContados.length === 0)) {
       toast.error('Não há dados para exportar.');
       return;
     }
 
-    const exportData = divergencias.map((item) => {
+    const dataToExport = exportAll ? divergencias : filteredDivergencias;
+
+    // Buscar custos dos produtos em lotes
+    const todosCodigos = [
+      ...dataToExport.map((item) => item.codigo_auxiliar),
+      ...itensNaoContados.map((item) => item.codigo_auxiliar),
+    ];
+
+    const TAMANHO_LOTE = 100;
+    const custosMap: Record<string, number> = {};
+
+    for (let i = 0; i < todosCodigos.length; i += TAMANHO_LOTE) {
+      const lote = todosCodigos.slice(i, i + TAMANHO_LOTE);
+      const { data: produtosCusto } = await supabase
+        .from('produtos')
+        .select('codigo_auxiliar, valor_produto')
+        .in('codigo_auxiliar', lote);
+
+      if (produtosCusto) {
+        produtosCusto.forEach((p) => {
+          custosMap[p.codigo_auxiliar] = p.valor_produto || 0;
+        });
+      }
+    }
+
+    const exportData = dataToExport.map((item) => {
       const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
       return {
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
+        'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': item.quantidade_fisica,
         Divergência: item.diferenca,
@@ -392,6 +497,7 @@ export default function Conferencia() {
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
+        'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
         Divergência: -item.estoque_teorico,
@@ -406,13 +512,16 @@ export default function Conferencia() {
 
     const vendorName = selectedInventario.profiles?.nome || selectedInventario.codigo_vendedor;
     const dateStr = format(new Date(selectedInventario.data_inventario), 'dd-MM-yyyy');
-    const fileName = `conferencia_${vendorName}_${dateStr}.xlsx`;
+    const suffix = exportAll ? '_completo' : '_filtrado';
+    const fileName = `conferencia_${vendorName}_${dateStr}${suffix}.xlsx`;
 
     XLSX.writeFile(wb, fileName);
     toast.success(`Arquivo ${fileName} baixado com sucesso.`);
   };
 
-  if (loading) {
+  const isInitialLoading = loading || (isGerente && isLoadingVendedores);
+
+  if (isInitialLoading) {
     return (
       <AppLayout>
         <ConferenciaSkeleton />
@@ -435,6 +544,37 @@ export default function Conferencia() {
 
         {!selectedInventario ? (
           <div>
+            {/* Filters */}
+            {isGerente && (
+              <div className="flex flex-col sm:flex-row gap-3 mb-4">
+                <Select value={selectedVendedor} onValueChange={setSelectedVendedor}>
+                  <SelectTrigger className="w-full sm:w-72">
+                    <SelectValue placeholder="Filtrar por vendedor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os vendedores</SelectItem>
+                    {vendedores.map((v) => (
+                      <SelectItem key={v.codigo_vendedor} value={v.codigo_vendedor}>
+                        {v.nome} ({v.codigo_vendedor})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full sm:w-48">
+                    <SelectValue placeholder="Status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os status</SelectItem>
+                    <SelectItem value="pendentes">Pendentes / Revisão</SelectItem>
+                    <SelectItem value="pendente">Pendente</SelectItem>
+                    <SelectItem value="revisao">Revisão</SelectItem>
+                    <SelectItem value="aprovado">Aprovado</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <h2 className="text-lg font-semibold flex items-center gap-2 mb-4">
               <ClipboardList size={20} />
               Inventários para Análise
@@ -444,18 +584,19 @@ export default function Conferencia() {
               <Card className="border-2 shadow-none">
                 <CardContent className="py-12 text-center">
                   <CheckCircle size={48} className="mx-auto mb-4 text-green-500" />
-                  <h2 className="text-xl font-bold mb-2">Nenhum inventário pendente</h2>
-                  <p className="text-muted-foreground">Não há nada para conferir no momento.</p>
+                  <h2 className="text-xl font-bold mb-2">Nenhum inventário encontrado</h2>
+                  <p className="text-muted-foreground">Ajuste os filtros ou aguarde novos inventários.</p>
                 </CardContent>
               </Card>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                 {inventarios.map((inv) => {
                   const isRevisao = inv.status === 'revisao';
+                  const isAprovado = inv.status === 'aprovado';
                   return (
                     <Card
                       key={inv.id}
-                      className={`border-2 transition-all cursor-pointer group shadow-none hover:border-blue-300`}
+                      className="border-2 transition-all cursor-pointer group shadow-none hover:border-blue-300"
                       onClick={() => handleSelectInventario(inv)}
                     >
                       <CardHeader className="pb-3">
@@ -463,8 +604,10 @@ export default function Conferencia() {
                           <CardTitle className="text-base flex items-center gap-2">
                             <User size={16} /> {inv.profiles?.nome || 'Vendedor'}
                           </CardTitle>
-                          <Badge variant={isRevisao ? 'destructive' : 'outline'}>
-                            {isRevisao ? 'Revisão' : 'Pendente'}
+                          <Badge
+                            variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
+                          >
+                            <span className="capitalize">{inv.status}</span>
                           </Badge>
                         </div>
                         <p className="font-mono text-xs text-muted-foreground pt-1">
@@ -505,53 +648,170 @@ export default function Conferencia() {
           </div>
         ) : (
           <div className="space-y-4">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setSelectedInventario(null);
-                setDivergencias([]);
-                setItensNaoContados([]);
-                setSearchTerm('');
-                setFilterTipo('todos');
-                setObservacoes('');
-                setEditedValues({});
-              }}
-            >
-              ← Voltar para lista
-            </Button>
+            {/* Back button + inventory info */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setSelectedInventario(null);
+                  setDivergencias([]);
+                  setItensNaoContados([]);
+                  setSearchTerm('');
+                  setDivergenceFilter('com_divergencia');
+                  setDiferencaFilter('todos');
+                  setObservacoes('');
+                  setEditedValues({});
+                }}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Voltar para lista
+              </Button>
+              <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                <span className="flex items-center gap-1.5">
+                  <User size={14} /> {selectedInventario.profiles?.nome || selectedInventario.codigo_vendedor}
+                </span>
+                <span className="flex items-center gap-1.5">
+                  <Calendar size={14} />{' '}
+                  {format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
+                </span>
+                <Badge
+                  variant={
+                    selectedInventario.status === 'revisao'
+                      ? 'destructive'
+                      : selectedInventario.status === 'aprovado'
+                        ? 'default'
+                        : 'outline'
+                  }
+                >
+                  <span className="capitalize">{selectedInventario.status}</span>
+                </Badge>
+              </div>
+            </div>
 
             <DivergenciaStats {...stats} />
 
+            {/* Manager Actions */}
+            {isGerente && (
+              <Card className="border-2 shadow-none">
+                <CardContent className="pt-6">
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-semibold text-lg mb-1">Ações do Gerente</h3>
+                      <p className="text-sm text-muted-foreground">
+                        Gerencie este inventário. A aprovação é irreversível.
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        variant="destructive"
+                        onClick={() => setShowDeleteDialog(true)}
+                        disabled={isDeleting || saving}
+                        size="sm"
+                      >
+                        <Trash2 className="mr-2 h-4 w-4" />
+                        Excluir
+                      </Button>
+                      {isPendingOrRevisao && (
+                        <>
+                          <Button
+                            onClick={() => handleManagerAction('revisao')}
+                            disabled={saving}
+                            variant="outline"
+                            size="sm"
+                          >
+                            <XCircle size={16} className="mr-2" />
+                            Não Aprovar
+                          </Button>
+                          <Button
+                            onClick={() => handleManagerAction('aprovar')}
+                            disabled={saving}
+                            size="sm"
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle size={16} className="mr-2" />
+                            {saving ? 'Processando...' : 'Aprovar e Ajustar'}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {isPendingOrRevisao && (
+                    <div className="mt-4 space-y-2">
+                      <label htmlFor="observacoes-gerente" className="text-sm font-medium">
+                        Observações para o Vendedor (obrigatório para não aprovação)
+                      </label>
+                      <Textarea
+                        id="observacoes-gerente"
+                        name="observacoes"
+                        value={observacoes}
+                        onChange={(e) => setObservacoes(e.target.value)}
+                        placeholder="Se não aprovar, explique o motivo aqui..."
+                      />
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
             <Card className="border-2 shadow-none">
               <CardHeader>
-                <div className="flex flex-col md:flex-row gap-3">
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-lg">Comparativo de Estoque</CardTitle>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        disabled={divergencias.length === 0}
+                        className="shrink-0 h-9 w-9"
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleExportExcel(false)}>
+                        Exportar Filtrado
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExportExcel(true)}>
+                        Exportar Tudo
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 pt-2">
                   <SearchFilter
                     value={searchTerm}
                     onChange={setSearchTerm}
                     placeholder="Buscar produto..."
+                    className="min-w-0 flex-1 basis-40"
                   />
-                  <Select value={filterTipo} onValueChange={setFilterTipo}>
-                    <SelectTrigger className="w-full md:w-48">
-                      <SelectValue />
+                  <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
+                    <SelectTrigger className="w-full basis-40 sm:w-44">
+                      <AlertTriangle className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="Divergência" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todos os Itens</SelectItem>
-                      <SelectItem value="ok">Apenas OK</SelectItem>
-                      <SelectItem value="sobra">Apenas Sobras</SelectItem>
-                      <SelectItem value="falta">Apenas Faltas</SelectItem>
+                      <SelectItem value="todos">Todas divergências</SelectItem>
+                      <SelectItem value="com_divergencia">Com divergência</SelectItem>
+                      <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
+                      <SelectItem value="positiva">Sobras (+)</SelectItem>
+                      <SelectItem value="negativa">Faltas (-)</SelectItem>
+                      <SelectItem value="nao_contados">Não Contados</SelectItem>
                     </SelectContent>
                   </Select>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleExportExcel}
-                    disabled={divergencias.length === 0}
-                    className="ml-auto"
-                  >
-                    <Download size={16} className="mr-2" />
-                    Exportar
-                  </Button>
+                  <Select value={diferencaFilter} onValueChange={setDiferencaFilter}>
+                    <SelectTrigger className="w-full basis-36 sm:w-40">
+                      <TrendingDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <SelectValue placeholder="Diferença" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="todos">Todas diferenças</SelectItem>
+                      <SelectItem value="positiva">Diferença (+)</SelectItem>
+                      <SelectItem value="negativa">Diferença (-)</SelectItem>
+                      <SelectItem value="zero">Diferença (0)</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
               </CardHeader>
               <CardContent>
@@ -559,50 +819,66 @@ export default function Conferencia() {
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[40%]">Produto</TableHead>
+                        <TableHead className="w-[35%]">Produto</TableHead>
                         <TableHead className="text-center">Teórico</TableHead>
                         <TableHead className="text-center">Físico</TableHead>
                         <TableHead className="text-center">Diferença</TableHead>
                         <TableHead className="text-center">Divergência</TableHead>
-                        <TableHead className="text-center w-[60px]">Ações</TableHead>
+                        {isPendingOrRevisao && <TableHead className="text-center w-[60px]">Ações</TableHead>}
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paginatedDivergencias.length > 0 ? (
-                        paginatedDivergencias.map((item) => {
-                          const currentFisica =
-                            editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica;
+                      {paginatedItems.length > 0 ? (
+                        paginatedItems.map((item) => {
+                          const isNaoContado = item.nao_contado;
+                          const currentFisica = isNaoContado
+                            ? 0
+                            : (editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica);
                           const diferencaCalculada = calcularDiferenca(
                             item.estoque_teorico,
                             currentFisica
                           );
+                          const divergencia = isNaoContado
+                            ? -item.estoque_teorico
+                            : item.diferenca;
 
                           return (
                             <TableRow
                               key={item.codigo_auxiliar}
                               className={
-                                item.tipo !== 'ok'
-                                  ? `bg-${item.tipo === 'sobra' ? 'yellow' : 'red'}-500/5`
-                                  : ''
+                                isNaoContado
+                                  ? 'bg-muted/30'
+                                  : divergencia > 0
+                                    ? 'bg-yellow-500/5'
+                                    : divergencia < 0
+                                      ? 'bg-red-500/5'
+                                      : ''
                               }
                             >
                               <TableCell className="font-medium">
-                                {item.codigo_auxiliar}
+                                <span className="font-mono text-sm">{item.codigo_auxiliar}</span>
+                                {isNaoContado && (
+                                  <Badge variant="outline" className="ml-2 text-xs">
+                                    Não contado
+                                  </Badge>
+                                )}
                               </TableCell>
                               <TableCell className="text-center font-medium">
                                 {item.estoque_teorico}
                               </TableCell>
                               <TableCell className="text-center">
-                                <Input
-                                  id={`edit-${item.codigo_auxiliar}`}
-                                  name={`quantidade_${item.codigo_auxiliar}`}
-                                  type="text"
-                                  value={currentFisica}
-                                  onChange={(e) =>
-                                    handleEditValue(item.codigo_auxiliar, e.target.value)
-                                  }
-                                  className="w-20 h-8 text-center font-bold border-2 mx-auto"
-                                />
+                                {isPendingOrRevisao && !isNaoContado ? (
+                                  <Input
+                                    type="text"
+                                    value={currentFisica}
+                                    onChange={(e) =>
+                                      handleEditValue(item.codigo_auxiliar, e.target.value)
+                                    }
+                                    className="w-20 h-8 text-center font-bold border-2 mx-auto"
+                                  />
+                                ) : (
+                                  <span className="font-semibold">{currentFisica}</span>
+                                )}
                               </TableCell>
                               <TableCell className="text-center">
                                 <span
@@ -619,47 +895,73 @@ export default function Conferencia() {
                                     : diferencaCalculada}
                                 </span>
                               </TableCell>
-                              <TableCell
-                                className={`text-center font-bold text-lg ${item.diferenca > 0 ? 'text-yellow-600' : item.diferenca < 0 ? 'text-destructive' : 'text-green-600'}`}
-                              >
-                                {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
-                              </TableCell>
                               <TableCell className="text-center">
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => {
-                                    const inventarioItem =
-                                      selectedInventario?.itens_inventario.find(
-                                        (i) => i.codigo_auxiliar === item.codigo_auxiliar
-                                      );
-                                    if (inventarioItem) {
-                                      setDeletingItem({
-                                        codigo_auxiliar: item.codigo_auxiliar,
-                                        nome_produto: item.nome_produto,
-                                        itemId: inventarioItem.id,
-                                      });
-                                    }
-                                  }}
-                                >
-                                  <Trash2 size={16} />
-                                </Button>
+                                <div className="flex items-center justify-center gap-2">
+                                  {divergencia > 0 ? (
+                                    <TrendingUp className="h-4 w-4 text-yellow-600" />
+                                  ) : divergencia < 0 ? (
+                                    <TrendingDown className="h-4 w-4 text-red-600" />
+                                  ) : (
+                                    <Minus className="h-4 w-4 text-green-600" />
+                                  )}
+                                  <span
+                                    className={`font-bold ${
+                                      divergencia > 0
+                                        ? 'text-yellow-600'
+                                        : divergencia < 0
+                                          ? 'text-destructive'
+                                          : 'text-green-600'
+                                    }`}
+                                  >
+                                    {divergencia > 0 ? `+${divergencia}` : divergencia}
+                                  </span>
+                                </div>
                               </TableCell>
+                              {isPendingOrRevisao && (
+                                <TableCell className="text-center">
+                                  {!isNaoContado && (
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => {
+                                        const inventarioItem =
+                                          selectedInventario?.itens_inventario.find(
+                                            (i) => i.codigo_auxiliar === item.codigo_auxiliar
+                                          );
+                                        if (inventarioItem) {
+                                          setDeletingItem({
+                                            codigo_auxiliar: item.codigo_auxiliar,
+                                            nome_produto: item.nome_produto,
+                                            itemId: inventarioItem.id,
+                                          });
+                                        }
+                                      }}
+                                    >
+                                      <Trash2 size={16} />
+                                    </Button>
+                                  )}
+                                </TableCell>
+                              )}
                             </TableRow>
                           );
                         })
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={6} className="h-24 text-center">
-                            Nenhum item corresponde ao filtro.
+                          <TableCell colSpan={isPendingOrRevisao ? 6 : 5} className="h-24 text-center">
+                            <div className="flex flex-col items-center gap-2">
+                              <Minus className="h-8 w-8 text-muted-foreground/50" />
+                              <p className="text-sm text-muted-foreground">
+                                Nenhum item encontrado com os filtros aplicados
+                              </p>
+                            </div>
                           </TableCell>
                         </TableRow>
                       )}
                     </TableBody>
                   </Table>
                 </div>
-                {paginatedDivergencias.length > 0 && (
+                {paginatedItems.length > 0 && (
                   <div className="pt-4">
                     <Pagination {...paginationProps} />
                   </div>
@@ -667,53 +969,24 @@ export default function Conferencia() {
               </CardContent>
             </Card>
 
-            <div className="space-y-2">
-              <label htmlFor="observacoes-gerente" className="font-medium">
-                Observações para o Vendedor (opcional)
-              </label>
-              <Textarea
-                id="observacoes-gerente"
-                name="observacoes"
-                value={observacoes}
-                onChange={(e) => setObservacoes(e.target.value)}
-                placeholder="Se não aprovar, explique o motivo aqui..."
-              />
-            </div>
-
-            <div className="flex flex-col sm:flex-row gap-3">
-              {hasEdits && (
+            {/* Save edits button */}
+            {hasEdits && isPendingOrRevisao && (
+              <div className="flex justify-end">
                 <Button
                   onClick={handleSaveEdits}
                   disabled={saving}
-                  className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700"
+                  className="bg-blue-600 hover:bg-blue-700"
                 >
                   <Save size={16} className="mr-2" />
                   {saving ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
-              )}
-              <div className="flex-1" />
-              <Button
-                onClick={() => handleManagerAction('revisao')}
-                disabled={saving}
-                variant="destructive"
-                className="w-full sm:w-auto"
-              >
-                <XCircle size={16} className="mr-2" />
-                Não Aprovar
-              </Button>
-              <Button
-                onClick={() => handleManagerAction('aprovar')}
-                disabled={saving}
-                className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
-              >
-                <CheckCircle size={16} className="mr-2" />
-                {saving ? 'Processando...' : 'Aprovar e Ajustar'}
-              </Button>
-            </div>
+              </div>
+            )}
           </div>
         )}
       </div>
 
+      {/* Delete item dialog */}
       <AlertDialog open={!!deletingItem} onOpenChange={() => setDeletingItem(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -721,10 +994,8 @@ export default function Conferencia() {
             <AlertDialogDescription>
               Tem certeza que deseja remover o item{' '}
               <span className="font-bold">{deletingItem?.codigo_auxiliar}</span> do inventário?
-              <br />
-              <br />
-              Esta ação não pode ser desfeita. O vendedor não verá mais este item quando o
-              inventário for enviado para revisão.
+              <br /><br />
+              Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -734,6 +1005,29 @@ export default function Conferencia() {
               className="bg-destructive hover:bg-destructive/90"
             >
               {saving ? 'Removendo...' : 'Remover Item'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete inventory dialog */}
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Tem certeza absoluta?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Essa ação não pode ser desfeita. Isso excluirá permanentemente o inventário e todos os
+              seus itens.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteInventario}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? 'Excluindo...' : 'Excluir Inventário'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

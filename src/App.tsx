@@ -21,7 +21,7 @@ const Importar = lazy(() => import('./pages/Importar'));
 const Conferencia = lazy(() => import('./pages/Conferencia'));
 const Pedidos = lazy(() => import('./pages/Pedidos'));
 const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
-const AnaliseInventario = lazy(() => import('./pages/AnaliseInventario'));
+
 const HistoricoEstoqueReal = lazy(() => import('./pages/HistoricoEstoqueReal'));
 
 
@@ -79,14 +79,7 @@ const router = createBrowserRouter(
             </ProtectedRoute>
           ),
         },
-        {
-          path: '/analise-inventario',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <AnaliseInventario />
-            </ProtectedRoute>
-          ),
-        },
+        
         {
           path: '/inventario',
           element: (
