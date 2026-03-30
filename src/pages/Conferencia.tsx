@@ -504,7 +504,7 @@ export default function Conferencia() {
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': item.quantidade_fisica,
         Diferença: diferencaCalculada,
-        'Valor Diferença': Math.abs(diferencaCalculada) * custo,
+        'Valor Diferença': diferencaCalculada * custo,
         Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
       };
     });
