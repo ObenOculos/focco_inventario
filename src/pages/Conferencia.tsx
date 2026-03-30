@@ -494,50 +494,32 @@ export default function Conferencia() {
 
     const dataToExport = exportAll ? divergencias : filteredDivergencias;
 
-    // Buscar custos dos produtos em lotes
-    const todosCodigos = [
-      ...dataToExport.map((item) => item.codigo_auxiliar),
-      ...itensNaoContados.map((item) => item.codigo_auxiliar),
-    ];
-
-    const TAMANHO_LOTE = 100;
-    const custosMap: Record<string, number> = {};
-
-    for (let i = 0; i < todosCodigos.length; i += TAMANHO_LOTE) {
-      const lote = todosCodigos.slice(i, i + TAMANHO_LOTE);
-      const { data: produtosCusto } = await supabase
-        .from('produtos')
-        .select('codigo_auxiliar, valor_produto')
-        .in('codigo_auxiliar', lote);
-
-      if (produtosCusto) {
-        produtosCusto.forEach((p) => {
-          custosMap[p.codigo_auxiliar] = p.valor_produto || 0;
-        });
-      }
-    }
-
     const exportData = dataToExport.map((item) => {
       const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+      const custo = custosMap[item.codigo_auxiliar] || 0;
       return {
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
-        'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
+        'Custo Produto': custo,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': item.quantidade_fisica,
         Diferença: diferencaCalculada,
+        'Valor Diferença': Math.abs(diferencaCalculada) * custo,
         Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
       };
     });
 
     itensNaoContados.forEach((item) => {
+      const dif = calcularDiferenca(item.estoque_teorico, 0);
+      const custo = custosMap[item.codigo_auxiliar] || 0;
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
-        'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
+        'Custo Produto': custo,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
-        Diferença: calcularDiferenca(item.estoque_teorico, 0),
+        Diferença: dif,
+        'Valor Diferença': Math.abs(dif) * custo,
         Status: 'Não Contado',
       });
     });
