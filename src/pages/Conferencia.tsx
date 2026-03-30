@@ -485,6 +485,8 @@ export default function Conferencia() {
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     return { totalFaltas, totalSobras, saldoDevedor: totalFaltas - totalSobras };
   }, [divergencias, itensNaoContados, custosMap]);
+
+  const handleExportExcel = async (exportAll: boolean = false) => {
     if (!selectedInventario || (divergencias.length === 0 && itensNaoContados.length === 0)) {
       toast.error('Não há dados para exportar.');
       return;
