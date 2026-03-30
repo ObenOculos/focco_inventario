@@ -279,15 +279,15 @@ export default function AnaliseInventario() {
     // Filtrar apenas itens que foram contados (igual à Conferência)
     const itensContados = comparativo.filter((item) => item.foi_contado);
     // Contagem de itens corretos (sem divergência)
-    const itensCorretos = itensContados.filter((item) => item.divergencia === 0).length;
+    const itensCorretos = itensContados.filter((item) => calcularDiferenca(item.estoque_teorico, item.quantidade_fisica) === 0).length;
     // Total de itens contados
     const totalItens = itensContados.length;
-    // Contagem de produtos com sobra
-    const itensSobra = itensContados.filter((item) => item.divergencia > 0).length;
+    // Contagem de produtos com sobra (usando calcularDiferenca para consistência)
+    const itensSobra = itensContados.filter((item) => calcularDiferenca(item.estoque_teorico, item.quantidade_fisica) > 0).length;
     // Contagem de produtos com falta
-    const itensFalta = itensContados.filter((item) => item.divergencia < 0).length;
-    // Soma total das divergências (positivas e negativas)
-    const valorTotalDivergencia = itensContados.reduce((sum, item) => sum + item.divergencia, 0);
+    const itensFalta = itensContados.filter((item) => calcularDiferenca(item.estoque_teorico, item.quantidade_fisica) < 0).length;
+    // Soma total das diferenças
+    const valorTotalDivergencia = itensContados.reduce((sum, item) => sum + calcularDiferenca(item.estoque_teorico, item.quantidade_fisica), 0);
 
     return { itensCorretos, itensSobra, itensFalta, totalItens, valorTotalDivergencia };
   }, [comparativo]);
