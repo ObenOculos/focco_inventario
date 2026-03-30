@@ -36,7 +36,7 @@ export const useInventariosAnaliseQuery = (
     queryFn: async () => {
       let query = supabase
         .from('inventarios')
-        .select('id, data_inventario, status, codigo_vendedor')
+        .select('id, data_inventario, status, codigo_vendedor, itens_inventario(codigo_auxiliar, quantidade_fisica)')
         .order('data_inventario', { ascending: false });
 
       if (!isGerente) {
