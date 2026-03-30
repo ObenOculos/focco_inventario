@@ -496,7 +496,6 @@ export default function Conferencia() {
         'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
-        Divergência: -item.estoque_teorico,
         Diferença: calcularDiferenca(item.estoque_teorico, 0),
         Status: 'Não Contado',
       });
