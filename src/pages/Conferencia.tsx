@@ -780,30 +780,18 @@ export default function Conferencia() {
                     placeholder="Buscar produto..."
                     className="min-w-0 flex-1 basis-40"
                   />
-                  <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
-                    <SelectTrigger className="w-full basis-40 sm:w-44">
+                  <Select value={filtroResultado} onValueChange={setFiltroResultado}>
+                    <SelectTrigger className="w-full basis-44 sm:w-48">
                       <AlertTriangle className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <SelectValue placeholder="Divergência" />
+                      <SelectValue placeholder="Filtrar resultado" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todas divergências</SelectItem>
-                      <SelectItem value="com_divergencia">Com divergência</SelectItem>
-                      <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
-                      <SelectItem value="positiva">Sobras (+)</SelectItem>
-                      <SelectItem value="negativa">Faltas (-)</SelectItem>
+                      <SelectItem value="todos">Todos os itens</SelectItem>
+                      <SelectItem value="com_diferenca">Com diferença</SelectItem>
+                      <SelectItem value="sobras">Sobras (+)</SelectItem>
+                      <SelectItem value="faltas">Faltas (-)</SelectItem>
+                      <SelectItem value="corretos">Corretos (0)</SelectItem>
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={diferencaFilter} onValueChange={setDiferencaFilter}>
-                    <SelectTrigger className="w-full basis-36 sm:w-40">
-                      <TrendingDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <SelectValue placeholder="Diferença" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todas diferenças</SelectItem>
-                      <SelectItem value="positiva">Diferença (+)</SelectItem>
-                      <SelectItem value="negativa">Diferença (-)</SelectItem>
-                      <SelectItem value="zero">Diferença (0)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
