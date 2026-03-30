@@ -1,21 +1,27 @@
 
 
-# Valor negativo quando diferença é negativa
+# Diferença condicional: Teórico negativo usa soma
 
 ## Problema
-Atualmente o "Valor (R$)" usa `Math.abs(diferencaCalculada) * custo`, sempre mostrando valor positivo. O usuário quer que o valor reflita o sinal da diferença: negativo quando há falta, positivo quando há sobra.
+Quando o estoque teórico é negativo (ex: -2), a subtração `Físico - Teórico` dá `1 - (-2) = 3`, mas o usuário espera `-2 + 1 = -1`.
 
-## Alteração em `src/pages/Conferencia.tsx`
+## Alteração
 
-### 1. Coluna "Valor (R$)" na tabela (linha ~933)
-- Trocar `Math.abs(diferencaCalculada) * custo` por `diferencaCalculada * custo`
-- Manter as cores: vermelho para negativo, azul para positivo
+**Arquivo:** `src/pages/Conferencia.tsx`
 
-### 2. Export Excel (linhas ~500 e ~514)
-- Garantir que "Valor Diferença" também use `diferença * custo` sem `Math.abs`
+### Função `calcularDiferenca` (linha ~78)
+Adicionar condição: se teórico < 0, retornar `teórico + físico`; caso contrário, manter `físico - teórico`.
 
-### 3. Resumo financeiro (linhas ~480-486)
-- Ajustar o cálculo de `totalFaltas` e `totalSobras` para que os valores reflitam corretamente os sinais (faltas como valores negativos)
+```typescript
+const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
+  if (estoqueTeor < 0) {
+    return estoqueTeor + estoqFisico;
+  }
+  return estoqFisico - estoqueTeor;
+};
+```
 
-1 arquivo alterado.
+Como toda a página já usa essa função centralizada, a mudança se propaga automaticamente para: tabela, filtros, exportação Excel, resumo financeiro e estatísticas.
+
+1 arquivo, 3 linhas alteradas.
 
