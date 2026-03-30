@@ -40,7 +40,7 @@ export function DivergenciaStats({
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-medium flex items-center gap-2">
             <PackageSearch size={16} />
-            Análise de Divergências
+            Análise de Diferenças
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-3 gap-3 items-center pt-1">
