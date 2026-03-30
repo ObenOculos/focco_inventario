@@ -18,7 +18,7 @@ import {
   History,
   FileText,
   UserCog,
-  PackageSearch,
+} from 'lucide-react';
   Tags,
 } from 'lucide-react';
 import { useState } from 'react';
