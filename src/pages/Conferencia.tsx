@@ -167,8 +167,26 @@ export default function Conferencia() {
         nao_contado: true,
       }));
     }
-    return filteredDivergencias.map((item) => ({ ...item, nao_contado: false }));
-  }, [filteredDivergencias, itensNaoContados, filtroResultado]);
+
+    const contados = filteredDivergencias.map((item) => ({ ...item, nao_contado: false }));
+
+    // Se há pesquisa ativa, incluir não contados para que apareçam nos resultados
+    if (searchTerm.trim()) {
+      const naoContados = itensNaoContados.map((item) => ({
+        codigo_auxiliar: item.codigo_auxiliar,
+        nome_produto: item.nome_produto,
+        estoque_teorico: item.estoque_teorico,
+        quantidade_fisica: 0,
+        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        percentual: 0,
+        tipo: 'falta' as const,
+        nao_contado: true,
+      }));
+      return [...contados, ...naoContados];
+    }
+
+    return contados;
+  }, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm]);
 
   const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
     data: tableData,
