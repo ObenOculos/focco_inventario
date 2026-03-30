@@ -363,7 +363,7 @@ export default function AnaliseInventario() {
       'Estoque Físico': item.quantidade_fisica,
       Diferença: calcularDiferenca(item.estoque_teorico, item.quantidade_fisica),
       Divergência: item.divergencia,
-      Status: item.divergencia === 0 ? 'OK' : item.divergencia > 0 ? 'Sobra' : 'Falta',
+      Status: (() => { const d = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica); return d === 0 ? 'OK' : d > 0 ? 'Sobra' : 'Falta'; })(),
     }));
 
     // Adicionar itens não contados ao export
