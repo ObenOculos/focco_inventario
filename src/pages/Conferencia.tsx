@@ -67,6 +67,8 @@ import {
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
 import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 type ItemNaoContado = {
   codigo_auxiliar: string;
@@ -75,8 +77,8 @@ type ItemNaoContado = {
 };
 
 // Função para calcular a diferença com lógica condicional
-const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
-  if (estoqueTeor < 0) {
+const calcularDiferenca = (estoqueTeor: number, estoqFisico: number, usaSoma: boolean = true): number => {
+  if (usaSoma && estoqueTeor < 0) {
     return estoqueTeor + estoqFisico;
   }
   return estoqFisico - estoqueTeor;
@@ -105,6 +107,7 @@ export default function Conferencia() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
+  const [usaSomaParaNegativo, setUsaSomaParaNegativo] = useState(true);
 
   const queryClient = useQueryClient();
 
@@ -130,28 +133,28 @@ export default function Conferencia() {
 
     if (filtroResultado === 'com_diferenca') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif !== 0;
       });
     } else if (filtroResultado === 'sobras') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif > 0;
       });
     } else if (filtroResultado === 'faltas') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif < 0;
       });
     } else if (filtroResultado === 'corretos') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif === 0;
       });
     }
 
     return filtered;
-  }, [divergencias, filtroResultado]);
+  }, [divergencias, filtroResultado, usaSomaParaNegativo]);
 
   // For "nao_contados" filter, show those items in the table
   const tableData = useMemo(() => {
@@ -161,7 +164,7 @@ export default function Conferencia() {
         nome_produto: item.nome_produto,
         estoque_teorico: item.estoque_teorico,
         quantidade_fisica: 0,
-        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
         percentual: 0,
         tipo: 'falta' as const,
         nao_contado: true,
@@ -177,7 +180,7 @@ export default function Conferencia() {
         nome_produto: item.nome_produto,
         estoque_teorico: item.estoque_teorico,
         quantidade_fisica: 0,
-        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
         percentual: 0,
         tipo: 'falta' as const,
         nao_contado: true,
@@ -186,7 +189,7 @@ export default function Conferencia() {
     }
 
     return contados;
-  }, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm]);
+  }, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm, usaSomaParaNegativo]);
 
   const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
     data: tableData,
@@ -254,7 +257,7 @@ export default function Conferencia() {
           foi_contado: rawItem.foi_contado,
         };
 
-        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         const percentual =
           item.estoque_teorico !== 0
             ? (diferenca / item.estoque_teorico) * 100
@@ -399,7 +402,7 @@ export default function Conferencia() {
         prev.map((d) => {
           if (editedValues[d.codigo_auxiliar] !== undefined) {
             const novaQuantidade = editedValues[d.codigo_auxiliar];
-            const diferenca = calcularDiferenca(d.estoque_teorico, novaQuantidade);
+            const diferenca = calcularDiferenca(d.estoque_teorico, novaQuantidade, usaSomaParaNegativo);
             const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'sobra' : diferenca < 0 ? 'falta' : 'ok';
             return { ...d, quantidade_fisica: novaQuantidade, diferenca, tipo };
           }
@@ -490,11 +493,11 @@ export default function Conferencia() {
   const financeiro = useMemo(() => {
     const allItems = [
       ...divergencias.map((d) => ({
-        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica),
+        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica, usaSomaParaNegativo),
         custo: custosMap[d.codigo_auxiliar] || 0,
       })),
       ...itensNaoContados.map((item) => ({
-        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
         custo: custosMap[item.codigo_auxiliar] || 0,
       })),
     ];
@@ -505,7 +508,7 @@ export default function Conferencia() {
       .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     return { totalFaltas, totalSobras, saldoDevedor: totalFaltas + totalSobras };
-  }, [divergencias, itensNaoContados, custosMap]);
+  }, [divergencias, itensNaoContados, custosMap, usaSomaParaNegativo]);
 
   const handleExportExcel = async (exportAll: boolean = false) => {
     if (!selectedInventario || (divergencias.length === 0 && itensNaoContados.length === 0)) {
@@ -516,7 +519,7 @@ export default function Conferencia() {
     const dataToExport = exportAll ? divergencias : filteredDivergencias;
 
     const exportData = dataToExport.map((item) => {
-      const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+      const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
       const custo = custosMap[item.codigo_auxiliar] || 0;
       return {
         'Código Auxiliar': item.codigo_auxiliar,
@@ -531,7 +534,7 @@ export default function Conferencia() {
     });
 
     itensNaoContados.forEach((item) => {
-      const dif = calcularDiferenca(item.estoque_teorico, 0);
+      const dif = calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo);
       const custo = custosMap[item.codigo_auxiliar] || 0;
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
@@ -868,6 +871,16 @@ export default function Conferencia() {
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
                     </SelectContent>
                   </Select>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="soma-negativo"
+                      checked={usaSomaParaNegativo}
+                      onCheckedChange={setUsaSomaParaNegativo}
+                    />
+                    <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                      Somar quando teórico negativo
+                    </Label>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -892,7 +905,8 @@ export default function Conferencia() {
                             : (editedValues[item.codigo_auxiliar] ?? item.quantidade_fisica);
                           const diferencaCalculada = calcularDiferenca(
                             item.estoque_teorico,
-                            currentFisica
+                            currentFisica,
+                            usaSomaParaNegativo
                           );
 
                           return (
