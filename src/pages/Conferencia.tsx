@@ -531,7 +531,7 @@ export default function Conferencia() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Conferência de Inventários</h1>
             <p className="text-muted-foreground">
-              Compare inventários físicos com o estoque teórico e analise divergências
+              Compare inventários físicos com o estoque teórico e analise diferenças
             </p>
           </div>
           <RefetchIndicator isFetching={isFetching && !loading} />
