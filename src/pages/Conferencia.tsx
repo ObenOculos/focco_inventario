@@ -940,6 +940,7 @@ export default function Conferencia() {
                                 })()}
                               </TableCell>
                               {isPendingOrRevisao && (
+                                <TableCell className="text-center">
                                   {!isNaoContado && (
                                     <Button
                                       variant="ghost"
