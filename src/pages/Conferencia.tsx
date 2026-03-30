@@ -86,6 +86,7 @@ export default function Conferencia() {
   const [selectedInventario, setSelectedInventario] = useState<InventarioComItens | null>(null);
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
   const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
+  const [custosMap, setCustosMap] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroResultado, setFiltroResultado] = useState<string>('com_diferenca');
   const [observacoes, setObservacoes] = useState('');
@@ -273,6 +274,28 @@ export default function Conferencia() {
       setDivergencias(
         divergenciasList.sort((a, b) => Math.abs(b.diferenca) - Math.abs(a.diferenca))
       );
+
+      // Buscar custos dos produtos em lotes
+      const todosCodigos = [
+        ...divergenciasList.map((item) => item.codigo_auxiliar),
+        ...itensNaoContadosList.map((item) => item.codigo_auxiliar),
+      ];
+      const TAMANHO_LOTE = 100;
+      const novoCustosMap: Record<string, number> = {};
+      for (let i = 0; i < todosCodigos.length; i += TAMANHO_LOTE) {
+        const lote = todosCodigos.slice(i, i + TAMANHO_LOTE);
+        const { data: produtosCusto } = await supabase
+          .from('produtos')
+          .select('codigo_auxiliar, valor_produto')
+          .in('codigo_auxiliar', lote);
+        if (produtosCusto) {
+          produtosCusto.forEach((p) => {
+            novoCustosMap[p.codigo_auxiliar] = p.valor_produto || 0;
+          });
+        }
+      }
+      setCustosMap(novoCustosMap);
+
       setIsDetailLoading(false);
     },
     [selectedInventario]
@@ -443,6 +466,26 @@ export default function Conferencia() {
     [divergencias]
   );
 
+  const financeiro = useMemo(() => {
+    const allItems = [
+      ...divergencias.map((d) => ({
+        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica),
+        custo: custosMap[d.codigo_auxiliar] || 0,
+      })),
+      ...itensNaoContados.map((item) => ({
+        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        custo: custosMap[item.codigo_auxiliar] || 0,
+      })),
+    ];
+    const totalFaltas = allItems
+      .filter((i) => i.diferenca < 0)
+      .reduce((acc, i) => acc + Math.abs(i.diferenca) * i.custo, 0);
+    const totalSobras = allItems
+      .filter((i) => i.diferenca > 0)
+      .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
+    return { totalFaltas, totalSobras, saldoDevedor: totalFaltas - totalSobras };
+  }, [divergencias, itensNaoContados, custosMap]);
+
   const handleExportExcel = async (exportAll: boolean = false) => {
     if (!selectedInventario || (divergencias.length === 0 && itensNaoContados.length === 0)) {
       toast.error('Não há dados para exportar.');
@@ -451,50 +494,32 @@ export default function Conferencia() {
 
     const dataToExport = exportAll ? divergencias : filteredDivergencias;
 
-    // Buscar custos dos produtos em lotes
-    const todosCodigos = [
-      ...dataToExport.map((item) => item.codigo_auxiliar),
-      ...itensNaoContados.map((item) => item.codigo_auxiliar),
-    ];
-
-    const TAMANHO_LOTE = 100;
-    const custosMap: Record<string, number> = {};
-
-    for (let i = 0; i < todosCodigos.length; i += TAMANHO_LOTE) {
-      const lote = todosCodigos.slice(i, i + TAMANHO_LOTE);
-      const { data: produtosCusto } = await supabase
-        .from('produtos')
-        .select('codigo_auxiliar, valor_produto')
-        .in('codigo_auxiliar', lote);
-
-      if (produtosCusto) {
-        produtosCusto.forEach((p) => {
-          custosMap[p.codigo_auxiliar] = p.valor_produto || 0;
-        });
-      }
-    }
-
     const exportData = dataToExport.map((item) => {
       const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+      const custo = custosMap[item.codigo_auxiliar] || 0;
       return {
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
-        'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
+        'Custo Produto': custo,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': item.quantidade_fisica,
         Diferença: diferencaCalculada,
+        'Valor Diferença': Math.abs(diferencaCalculada) * custo,
         Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
       };
     });
 
     itensNaoContados.forEach((item) => {
+      const dif = calcularDiferenca(item.estoque_teorico, 0);
+      const custo = custosMap[item.codigo_auxiliar] || 0;
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
-        'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
+        'Custo Produto': custo,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
-        Diferença: calcularDiferenca(item.estoque_teorico, 0),
+        Diferença: dif,
+        'Valor Diferença': Math.abs(dif) * custo,
         Status: 'Não Contado',
       });
     });
@@ -683,6 +708,36 @@ export default function Conferencia() {
 
             <DivergenciaStats {...stats} />
 
+            {/* Resumo Financeiro */}
+            {(financeiro.totalFaltas > 0 || financeiro.totalSobras > 0) && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Card className="border-2 shadow-none">
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground mb-1">Total Faltas (R$)</p>
+                    <p className="text-2xl font-bold text-destructive">
+                      {financeiro.totalFaltas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-2 shadow-none">
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground mb-1">Total Sobras (R$)</p>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {financeiro.totalSobras.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card className="border-2 shadow-none">
+                  <CardContent className="pt-4 pb-4">
+                    <p className="text-xs text-muted-foreground mb-1">Saldo Devedor (R$)</p>
+                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                      {financeiro.saldoDevedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
             {/* Manager Actions */}
             {isGerente && (
               <Card className="border-2 shadow-none">
@@ -803,6 +858,7 @@ export default function Conferencia() {
                         <TableHead className="text-center">Teórico</TableHead>
                         <TableHead className="text-center">Físico</TableHead>
                         <TableHead className="text-center">Diferença</TableHead>
+                        <TableHead className="text-center">Valor (R$)</TableHead>
                         {isPendingOrRevisao && <TableHead className="text-center w-[60px]">Ações</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -871,6 +927,18 @@ export default function Conferencia() {
                                     : diferencaCalculada}
                                 </span>
                               </TableCell>
+                              <TableCell className="text-center">
+                                {(() => {
+                                  const custo = custosMap[item.codigo_auxiliar] || 0;
+                                  const valorDif = Math.abs(diferencaCalculada) * custo;
+                                  if (diferencaCalculada === 0 || custo === 0) return <span className="text-muted-foreground">-</span>;
+                                  return (
+                                    <span className={`font-semibold ${diferencaCalculada < 0 ? 'text-destructive' : 'text-blue-600'}`}>
+                                      {valorDif.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                                    </span>
+                                  );
+                                })()}
+                              </TableCell>
                               {isPendingOrRevisao && (
                                 <TableCell className="text-center">
                                   {!isNaoContado && (
@@ -902,7 +970,7 @@ export default function Conferencia() {
                         })
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={isPendingOrRevisao ? 5 : 4} className="h-24 text-center">
+                          <TableCell colSpan={isPendingOrRevisao ? 6 : 5} className="h-24 text-center">
                             <div className="flex flex-col items-center gap-2">
                               <Minus className="h-8 w-8 text-muted-foreground/50" />
                               <p className="text-sm text-muted-foreground">
