@@ -519,7 +519,7 @@ export default function Conferencia() {
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
         Diferença: dif,
-        'Valor Diferença': Math.abs(dif) * custo,
+        'Valor Diferença': dif * custo,
         Status: 'Não Contado',
       });
     });
