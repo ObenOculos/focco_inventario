@@ -1,27 +1,18 @@
 
 
-# Toggle para lógica de cálculo de diferença
+# Mover "Ações do Gerente" para um Dialog/Modal
 
 ## O que muda
-Adicionar um **Switch** na página de Conferência que permite ao gerente escolher entre dois modos de cálculo quando o estoque teórico é negativo:
-
-- **Ativado (padrão):** Teórico + Físico (lógica atual)
-- **Desativado:** Físico - Teórico (subtração padrão sempre)
+O card "Ações do Gerente" (linhas 766-826) será substituído por um **botão** que abre um **Dialog** contendo todo o conteúdo atual: botões Excluir, Não Aprovar, Aprovar e Ajustar, e o campo de observações.
 
 ## Alterações
 
 **Arquivo:** `src/pages/Conferencia.tsx`
 
-1. **Novo estado:** `usaSomaParaNegativo` (boolean, default `true`)
-2. **Atualizar `calcularDiferenca`:** receber o flag como parâmetro ou ler do estado — se ativado, usa soma quando teórico < 0; se desativado, sempre subtrai.
-3. **Renderizar Switch:** ao lado dos filtros existentes, visível apenas quando um inventário está selecionado. Label: "Somar quando teórico negativo". Usar o componente `Switch` já existente no projeto (`src/components/ui/switch.tsx`).
+1. **Novo estado:** `showManagerActions` (boolean, default `false`)
+2. **Importar** `Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription` do componente existente
+3. **Substituir o Card** (linhas 766-826) por um botão "Ações do Gerente" que seta `showManagerActions = true`
+4. **Adicionar um `<Dialog>`** com o conteúdo dos botões de ação e o textarea de observações dentro do `DialogContent`
 
-### Exemplo visual
-```text
-[Filtros existentes...]   🔘 Somar quando teórico negativo
-```
-
-O switch afeta automaticamente tabela, estatísticas, exportação Excel e resumo financeiro, pois todos usam a mesma função `calcularDiferenca`.
-
-1 arquivo editado, ~15 linhas adicionadas.
+1 arquivo, ~30 linhas alteradas.
 
