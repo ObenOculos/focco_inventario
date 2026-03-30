@@ -709,7 +709,7 @@ export default function Conferencia() {
             <DivergenciaStats {...stats} />
 
             {/* Resumo Financeiro */}
-            {(financeiro.totalFaltas > 0 || financeiro.totalSobras > 0) && (
+            {(financeiro.totalFaltas !== 0 || financeiro.totalSobras !== 0) && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <Card className="border-2 shadow-none">
                   <CardContent className="pt-4 pb-4">
