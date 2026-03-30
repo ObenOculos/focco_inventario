@@ -76,6 +76,9 @@ type ItemNaoContado = {
 
 // Função para calcular a diferença com lógica condicional
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
+  if (estoqueTeor < 0) {
+    return estoqueTeor + estoqFisico;
+  }
   return estoqFisico - estoqueTeor;
 };
 
