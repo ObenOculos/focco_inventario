@@ -479,6 +479,10 @@ export default function AnaliseInventario() {
                       <CardContent className="text-sm space-y-2">
                         <div className="flex justify-between items-center text-muted-foreground">
                           <span className="flex items-center gap-1.5">
+                            <Package size={14} />
+                            {inv.total_produtos} produtos · {inv.total_unidades} un.
+                          </span>
+                          <span className="flex items-center gap-1.5">
                             <Calendar size={14} />{' '}
                             {format(new Date(inv.data_inventario), 'dd/MM/yy')}
                           </span>
