@@ -29,7 +29,7 @@ export function DivergenciaStats({
         </CardHeader>
         <CardContent>
           <p className="text-3xl font-bold text-green-600">{itensCorretos}</p>
-          <p className="text-xs text-muted-foreground">sem divergência</p>
+          <p className="text-xs text-muted-foreground">sem diferença</p>
           {typeof totalItens === 'number' && (
             <p className="text-[10px] text-muted-foreground mt-1">de {totalItens} itens</p>
           )}

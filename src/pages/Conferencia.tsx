@@ -904,7 +904,7 @@ export default function Conferencia() {
                         })
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={isPendingOrRevisao ? 6 : 5} className="h-24 text-center">
+                          <TableCell colSpan={isPendingOrRevisao ? 5 : 4} className="h-24 text-center">
                             <div className="flex flex-col items-center gap-2">
                               <Minus className="h-8 w-8 text-muted-foreground/50" />
                               <p className="text-sm text-muted-foreground">
