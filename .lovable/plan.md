@@ -1,28 +1,29 @@
 
 
-# Remover lógica de Divergência — manter apenas Diferença
+# Calcular débito do vendedor na Conferência
 
-## Contexto
+## Objetivo
 
-Atualmente a tabela tem **duas colunas** de comparação: "Diferença" (cálculo condicional) e "Divergência" (física - teórica simples). Além disso há **dois filtros** separados para cada conceito. O usuário quer simplificar: manter apenas **Diferença = Estoque Teórico vs Estoque Real (Físico)**.
+Ao abrir o detalhe de um inventário, calcular e exibir o **valor monetário que o vendedor deve à empresa** — ou seja, somar `|diferença| × custo_unitário` para todos os itens com **falta** (diferença negativa).
 
-## Alterações
+## Como funciona
 
-### 1. `src/pages/Conferencia.tsx`
-- **Remover coluna "Divergência"** da tabela (linhas 827, 899-919) — manter apenas a coluna "Diferença"
-- **Unificar filtros**: remover o Select de "Divergência" (`divergenceFilter`) e o Select de "Diferença" (`diferencaFilter`). Substituir por um único filtro com opções: Todos, Sobras (+), Faltas (-), Corretos (0), Não Contados
-- **Remover state** `divergenceFilter` e `diferencaFilter`; criar um único `filtroResultado`
-- **Atualizar `filteredDivergencias`** para usar o filtro unificado baseado em `calcularDiferenca`
-- **Coloração das linhas** da tabela: usar o resultado da diferença (azul/laranja) em vez da divergência
-- **Excel**: remover coluna "Divergência", manter "Diferença" e "Status"
-- **Textos**: trocar referências a "divergência" por "diferença" nos labels e subtítulo da página
+- Os dados de diferença já existem em `divergencias[]` (itens contados) e `itensNaoContados[]`
+- O custo unitário já é buscado no export Excel (`valor_produto` da tabela `produtos`)
+- Basta **mover a busca de custos** para o momento de carregar o inventário (em `handleSelectInventario`) e calcular o débito
 
-### 2. `src/components/DivergenciaStats.tsx`
-- Renomear para focar em "Diferença": trocar "Análise de Divergências" → "Análise de Diferenças", "Total Divergente" → "Total com Diferença", "sem divergência" → "sem diferença"
-- Manter a mesma estrutura visual (Corretos / Sobras / Faltas)
+## Alterações em `src/pages/Conferencia.tsx`
 
-### 3. `src/types/app.ts`
-- Manter `DivergenciaItem` como está (o campo `diferenca` já existe e é o que será usado)
+1. **Novo state**: `custosMap: Record<string, number>` — armazena `codigo_auxiliar → valor_produto`
+2. **Em `handleSelectInventario`**: após montar `divergenciasList` e `itensNaoContadosList`, buscar custos em lotes (reutilizar a lógica que já existe no `handleExportExcel`) e salvar em `custosMap`
+3. **Novo card de resumo** (abaixo do `DivergenciaStats`): exibir:
+   - **Total Faltas (R$)**: soma de `|diferença| × custo` para itens com diferença < 0 (contados + não contados)
+   - **Total Sobras (R$)**: soma de `diferença × custo` para itens com diferença > 0
+   - **Saldo Devedor (R$)**: Faltas - Sobras (o que o vendedor deve líquido)
+4. **Coluna "Valor" na tabela**: adicionar coluna opcional mostrando `|diferença| × custo` por linha, com cor vermelha para falta e azul para sobra
+5. **Export Excel**: reutilizar o `custosMap` já carregado (sem buscar novamente), adicionar coluna "Valor Diferença"
 
-3 arquivos alterados.
+## Resultado
+
+O gerente verá, ao abrir qualquer inventário, um card destacado com o valor monetário das faltas — permitindo saber exatamente quanto o vendedor deve. A informação também aparece por linha na tabela e no export Excel.
 
