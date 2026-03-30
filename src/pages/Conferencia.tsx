@@ -479,7 +479,7 @@ export default function Conferencia() {
     ];
     const totalFaltas = allItems
       .filter((i) => i.diferenca < 0)
-      .reduce((acc, i) => acc + Math.abs(i.diferenca) * i.custo, 0);
+      .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     const totalSobras = allItems
       .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
