@@ -361,8 +361,9 @@ export default function Conferencia() {
         prev.map((d) => {
           if (editedValues[d.codigo_auxiliar] !== undefined) {
             const novaQuantidade = editedValues[d.codigo_auxiliar];
-            const diferenca = novaQuantidade - d.estoque_teorico;
-            return { ...d, quantidade_fisica: novaQuantidade, diferenca };
+            const diferenca = calcularDiferenca(d.estoque_teorico, novaQuantidade);
+            const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'sobra' : diferenca < 0 ? 'falta' : 'ok';
+            return { ...d, quantidade_fisica: novaQuantidade, diferenca, tipo };
           }
           return d;
         })
