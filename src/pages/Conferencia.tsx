@@ -653,8 +653,7 @@ export default function Conferencia() {
                   setDivergencias([]);
                   setItensNaoContados([]);
                   setSearchTerm('');
-                  setDivergenceFilter('com_divergencia');
-                  setDiferencaFilter('todos');
+                  setFiltroResultado('com_diferenca');
                   setObservacoes('');
                   setEditedValues({});
                 }}
