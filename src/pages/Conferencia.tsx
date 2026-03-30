@@ -89,8 +89,7 @@ export default function Conferencia() {
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
   const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [divergenceFilter, setDivergenceFilter] = useState<string>('com_divergencia');
-  const [diferencaFilter, setDiferencaFilter] = useState<string>('todos');
+  const [filtroResultado, setFiltroResultado] = useState<string>('com_diferenca');
   const [observacoes, setObservacoes] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
