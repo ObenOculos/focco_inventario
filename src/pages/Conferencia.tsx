@@ -483,7 +483,7 @@ export default function Conferencia() {
     const totalSobras = allItems
       .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
-    return { totalFaltas, totalSobras, saldoDevedor: totalFaltas - totalSobras };
+    return { totalFaltas, totalSobras, saldoDevedor: totalFaltas + totalSobras };
   }, [divergencias, itensNaoContados, custosMap]);
 
   const handleExportExcel = async (exportAll: boolean = false) => {
