@@ -871,6 +871,16 @@ export default function Conferencia() {
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
                     </SelectContent>
                   </Select>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      id="soma-negativo"
+                      checked={usaSomaParaNegativo}
+                      onCheckedChange={setUsaSomaParaNegativo}
+                    />
+                    <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                      Somar quando teórico negativo
+                    </Label>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
