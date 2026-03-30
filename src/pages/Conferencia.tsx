@@ -493,7 +493,7 @@ export default function Conferencia() {
   const financeiro = useMemo(() => {
     const allItems = [
       ...divergencias.map((d) => ({
-        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica),
+        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica, usaSomaParaNegativo),
         custo: custosMap[d.codigo_auxiliar] || 0,
       })),
       ...itensNaoContados.map((item) => ({
