@@ -29,7 +29,7 @@ export function DivergenciaStats({
         </CardHeader>
         <CardContent>
           <p className="text-3xl font-bold text-green-600">{itensCorretos}</p>
-          <p className="text-xs text-muted-foreground">sem divergência</p>
+          <p className="text-xs text-muted-foreground">sem diferença</p>
           {typeof totalItens === 'number' && (
             <p className="text-[10px] text-muted-foreground mt-1">de {totalItens} itens</p>
           )}
@@ -40,13 +40,13 @@ export function DivergenciaStats({
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-medium flex items-center gap-2">
             <PackageSearch size={16} />
-            Análise de Divergências
+            Análise de Diferenças
           </CardTitle>
         </CardHeader>
         <CardContent className="grid grid-cols-3 gap-3 items-center pt-1">
           <div className="col-span-1 flex flex-col items-center justify-center border-r-2 pr-3">
             <p className="text-3xl font-bold text-destructive">{totalDivergencias}</p>
-            <p className="text-xs text-muted-foreground text-center">Total Divergente</p>
+            <p className="text-xs text-muted-foreground text-center">Total com Diferença</p>
             {typeof valorTotalDivergencia === 'number' && (
               <p className="text-[10px] text-muted-foreground mt-1">
                 Valor total: {valorTotalDivergencia}

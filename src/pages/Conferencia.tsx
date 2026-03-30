@@ -22,8 +22,6 @@ import {
   Loader2,
   Download,
   Trash2,
-  TrendingUp,
-  TrendingDown,
   Minus,
   ArrowLeft,
 } from 'lucide-react';
@@ -89,8 +87,7 @@ export default function Conferencia() {
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
   const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [divergenceFilter, setDivergenceFilter] = useState<string>('com_divergencia');
-  const [diferencaFilter, setDiferencaFilter] = useState<string>('todos');
+  const [filtroResultado, setFiltroResultado] = useState<string>('com_diferenca');
   const [observacoes, setObservacoes] = useState('');
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [saving, setSaving] = useState(false);
@@ -123,40 +120,38 @@ export default function Conferencia() {
   }, [selectedVendedor, statusFilter]);
 
   const filteredDivergencias = useMemo(() => {
+    if (filtroResultado === 'nao_contados') return [];
+
     let filtered = divergencias;
 
-    // Filtro de divergência
-    if (divergenceFilter === 'com_divergencia') {
-      filtered = filtered.filter((item) => item.diferenca !== 0);
-    } else if (divergenceFilter === 'sem_divergencia') {
-      filtered = filtered.filter((item) => item.diferenca === 0);
-    } else if (divergenceFilter === 'positiva') {
-      filtered = filtered.filter((item) => item.diferenca > 0);
-    } else if (divergenceFilter === 'negativa') {
-      filtered = filtered.filter((item) => item.diferenca < 0);
-    } else if (divergenceFilter === 'nao_contados') {
-      // Special: show uncounted items instead
-      return [];
-    }
-    // "todos" shows all counted items
-
-    // Filtro de diferença
-    if (diferencaFilter !== 'todos') {
+    if (filtroResultado === 'com_diferenca') {
       filtered = filtered.filter((item) => {
-        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
-        if (diferencaFilter === 'positiva') return diferenca > 0;
-        if (diferencaFilter === 'negativa') return diferenca < 0;
-        if (diferencaFilter === 'zero') return diferenca === 0;
-        return true;
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif !== 0;
+      });
+    } else if (filtroResultado === 'sobras') {
+      filtered = filtered.filter((item) => {
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif > 0;
+      });
+    } else if (filtroResultado === 'faltas') {
+      filtered = filtered.filter((item) => {
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif < 0;
+      });
+    } else if (filtroResultado === 'corretos') {
+      filtered = filtered.filter((item) => {
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif === 0;
       });
     }
 
     return filtered;
-  }, [divergencias, divergenceFilter, diferencaFilter]);
+  }, [divergencias, filtroResultado]);
 
   // For "nao_contados" filter, show those items in the table
   const tableData = useMemo(() => {
-    if (divergenceFilter === 'nao_contados') {
+    if (filtroResultado === 'nao_contados') {
       return itensNaoContados.map((item) => ({
         codigo_auxiliar: item.codigo_auxiliar,
         nome_produto: item.nome_produto,
@@ -169,7 +164,7 @@ export default function Conferencia() {
       }));
     }
     return filteredDivergencias.map((item) => ({ ...item, nao_contado: false }));
-  }, [filteredDivergencias, itensNaoContados, divergenceFilter]);
+  }, [filteredDivergencias, itensNaoContados, filtroResultado]);
 
   const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
     data: tableData,
@@ -186,8 +181,7 @@ export default function Conferencia() {
       setSelectedInventario(inventario);
       setObservacoes('');
       setSearchTerm('');
-      setDivergenceFilter('com_divergencia');
-      setDiferencaFilter('todos');
+      setFiltroResultado('com_diferenca');
       setEditedValues({});
 
       const fetchComparativoInBatches = async () => {
@@ -488,7 +482,6 @@ export default function Conferencia() {
         'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': item.quantidade_fisica,
-        Divergência: item.diferenca,
         Diferença: diferencaCalculada,
         Status: item.tipo === 'ok' ? 'OK' : item.tipo === 'sobra' ? 'Sobra' : 'Falta',
       };
@@ -501,7 +494,6 @@ export default function Conferencia() {
         'Custo Produto': custosMap[item.codigo_auxiliar] || 0,
         'Estoque Teórico': item.estoque_teorico,
         'Quantidade Física': 0,
-        Divergência: -item.estoque_teorico,
         Diferença: calcularDiferenca(item.estoque_teorico, 0),
         Status: 'Não Contado',
       });
@@ -537,7 +529,7 @@ export default function Conferencia() {
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Conferência de Inventários</h1>
             <p className="text-muted-foreground">
-              Compare inventários físicos com o estoque teórico e analise divergências
+              Compare inventários físicos com o estoque teórico e analise diferenças
             </p>
           </div>
           <RefetchIndicator isFetching={isFetching && !loading} />
@@ -659,8 +651,7 @@ export default function Conferencia() {
                   setDivergencias([]);
                   setItensNaoContados([]);
                   setSearchTerm('');
-                  setDivergenceFilter('com_divergencia');
-                  setDiferencaFilter('todos');
+                  setFiltroResultado('com_diferenca');
                   setObservacoes('');
                   setEditedValues({});
                 }}
@@ -787,30 +778,18 @@ export default function Conferencia() {
                     placeholder="Buscar produto..."
                     className="min-w-0 flex-1 basis-40"
                   />
-                  <Select value={divergenceFilter} onValueChange={setDivergenceFilter}>
-                    <SelectTrigger className="w-full basis-40 sm:w-44">
+                  <Select value={filtroResultado} onValueChange={setFiltroResultado}>
+                    <SelectTrigger className="w-full basis-44 sm:w-48">
                       <AlertTriangle className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <SelectValue placeholder="Divergência" />
+                      <SelectValue placeholder="Filtrar resultado" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="todos">Todas divergências</SelectItem>
-                      <SelectItem value="com_divergencia">Com divergência</SelectItem>
-                      <SelectItem value="sem_divergencia">Sem divergência</SelectItem>
-                      <SelectItem value="positiva">Sobras (+)</SelectItem>
-                      <SelectItem value="negativa">Faltas (-)</SelectItem>
+                      <SelectItem value="todos">Todos os itens</SelectItem>
+                      <SelectItem value="com_diferenca">Com diferença</SelectItem>
+                      <SelectItem value="sobras">Sobras (+)</SelectItem>
+                      <SelectItem value="faltas">Faltas (-)</SelectItem>
+                      <SelectItem value="corretos">Corretos (0)</SelectItem>
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select value={diferencaFilter} onValueChange={setDiferencaFilter}>
-                    <SelectTrigger className="w-full basis-36 sm:w-40">
-                      <TrendingDown className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <SelectValue placeholder="Diferença" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="todos">Todas diferenças</SelectItem>
-                      <SelectItem value="positiva">Diferença (+)</SelectItem>
-                      <SelectItem value="negativa">Diferença (-)</SelectItem>
-                      <SelectItem value="zero">Diferença (0)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -824,7 +803,6 @@ export default function Conferencia() {
                         <TableHead className="text-center">Teórico</TableHead>
                         <TableHead className="text-center">Físico</TableHead>
                         <TableHead className="text-center">Diferença</TableHead>
-                        <TableHead className="text-center">Divergência</TableHead>
                         {isPendingOrRevisao && <TableHead className="text-center w-[60px]">Ações</TableHead>}
                       </TableRow>
                     </TableHeader>
@@ -839,9 +817,6 @@ export default function Conferencia() {
                             item.estoque_teorico,
                             currentFisica
                           );
-                          const divergencia = isNaoContado
-                            ? -item.estoque_teorico
-                            : item.diferenca;
 
                           return (
                             <TableRow
@@ -849,10 +824,10 @@ export default function Conferencia() {
                               className={
                                 isNaoContado
                                   ? 'bg-muted/30'
-                                  : divergencia > 0
-                                    ? 'bg-yellow-500/5'
-                                    : divergencia < 0
-                                      ? 'bg-red-500/5'
+                                  : diferencaCalculada > 0
+                                    ? 'bg-blue-500/5'
+                                    : diferencaCalculada < 0
+                                      ? 'bg-orange-500/5'
                                       : ''
                               }
                             >
@@ -896,28 +871,6 @@ export default function Conferencia() {
                                     : diferencaCalculada}
                                 </span>
                               </TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                  {divergencia > 0 ? (
-                                    <TrendingUp className="h-4 w-4 text-yellow-600" />
-                                  ) : divergencia < 0 ? (
-                                    <TrendingDown className="h-4 w-4 text-red-600" />
-                                  ) : (
-                                    <Minus className="h-4 w-4 text-green-600" />
-                                  )}
-                                  <span
-                                    className={`font-bold ${
-                                      divergencia > 0
-                                        ? 'text-yellow-600'
-                                        : divergencia < 0
-                                          ? 'text-destructive'
-                                          : 'text-green-600'
-                                    }`}
-                                  >
-                                    {divergencia > 0 ? `+${divergencia}` : divergencia}
-                                  </span>
-                                </div>
-                              </TableCell>
                               {isPendingOrRevisao && (
                                 <TableCell className="text-center">
                                   {!isNaoContado && (
@@ -949,7 +902,7 @@ export default function Conferencia() {
                         })
                       ) : (
                         <TableRow>
-                          <TableCell colSpan={isPendingOrRevisao ? 6 : 5} className="h-24 text-center">
+                          <TableCell colSpan={isPendingOrRevisao ? 5 : 4} className="h-24 text-center">
                             <div className="flex flex-col items-center gap-2">
                               <Minus className="h-8 w-8 text-muted-foreground/50" />
                               <p className="text-sm text-muted-foreground">
