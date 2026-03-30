@@ -819,9 +819,6 @@ export default function Conferencia() {
                             item.estoque_teorico,
                             currentFisica
                           );
-                          const divergencia = isNaoContado
-                            ? -item.estoque_teorico
-                            : item.diferenca;
 
                           return (
                             <TableRow
@@ -829,10 +826,10 @@ export default function Conferencia() {
                               className={
                                 isNaoContado
                                   ? 'bg-muted/30'
-                                  : divergencia > 0
-                                    ? 'bg-yellow-500/5'
-                                    : divergencia < 0
-                                      ? 'bg-red-500/5'
+                                  : diferencaCalculada > 0
+                                    ? 'bg-blue-500/5'
+                                    : diferencaCalculada < 0
+                                      ? 'bg-orange-500/5'
                                       : ''
                               }
                             >
