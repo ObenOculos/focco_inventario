@@ -166,7 +166,7 @@ export default function Conferencia() {
       }));
     }
     return filteredDivergencias.map((item) => ({ ...item, nao_contado: false }));
-  }, [filteredDivergencias, itensNaoContados, divergenceFilter]);
+  }, [filteredDivergencias, itensNaoContados, filtroResultado]);
 
   const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
     data: tableData,
