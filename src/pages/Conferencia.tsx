@@ -873,28 +873,6 @@ export default function Conferencia() {
                                     : diferencaCalculada}
                                 </span>
                               </TableCell>
-                              <TableCell className="text-center">
-                                <div className="flex items-center justify-center gap-2">
-                                  {divergencia > 0 ? (
-                                    <TrendingUp className="h-4 w-4 text-yellow-600" />
-                                  ) : divergencia < 0 ? (
-                                    <TrendingDown className="h-4 w-4 text-red-600" />
-                                  ) : (
-                                    <Minus className="h-4 w-4 text-green-600" />
-                                  )}
-                                  <span
-                                    className={`font-bold ${
-                                      divergencia > 0
-                                        ? 'text-yellow-600'
-                                        : divergencia < 0
-                                          ? 'text-destructive'
-                                          : 'text-green-600'
-                                    }`}
-                                  >
-                                    {divergencia > 0 ? `+${divergencia}` : divergencia}
-                                  </span>
-                                </div>
-                              </TableCell>
                               {isPendingOrRevisao && (
                                 <TableCell className="text-center">
                                   {!isNaoContado && (
