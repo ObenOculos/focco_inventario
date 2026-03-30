@@ -133,28 +133,28 @@ export default function Conferencia() {
 
     if (filtroResultado === 'com_diferenca') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif !== 0;
       });
     } else if (filtroResultado === 'sobras') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif > 0;
       });
     } else if (filtroResultado === 'faltas') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif < 0;
       });
     } else if (filtroResultado === 'corretos') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
         return dif === 0;
       });
     }
 
     return filtered;
-  }, [divergencias, filtroResultado]);
+  }, [divergencias, filtroResultado, usaSomaParaNegativo]);
 
   // For "nao_contados" filter, show those items in the table
   const tableData = useMemo(() => {
