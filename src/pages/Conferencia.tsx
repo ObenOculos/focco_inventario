@@ -24,7 +24,15 @@ import {
   Trash2,
   Minus,
   ArrowLeft,
+  Settings,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -104,6 +112,7 @@ export default function Conferencia() {
     itemId: string;
   } | null>(null);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [showManagerActions, setShowManagerActions] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
@@ -764,66 +773,71 @@ export default function Conferencia() {
 
             {/* Manager Actions */}
             {isGerente && (
-              <Card className="border-2 shadow-none">
-                <CardContent className="pt-6">
-                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-                    <div>
-                      <h3 className="font-semibold text-lg mb-1">Ações do Gerente</h3>
-                      <p className="text-sm text-muted-foreground">
-                        Gerencie este inventário. A aprovação é irreversível.
-                      </p>
-                    </div>
-                    <div className="flex gap-2">
+              <div className="flex justify-end">
+                <Button onClick={() => setShowManagerActions(true)} variant="outline">
+                  <Settings className="mr-2 h-4 w-4" />
+                  Ações do Gerente
+                </Button>
+              </div>
+            )}
+
+            <Dialog open={showManagerActions} onOpenChange={setShowManagerActions}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Ações do Gerente</DialogTitle>
+                  <DialogDescription>
+                    Gerencie este inventário. A aprovação é irreversível.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="destructive"
+                    onClick={() => { setShowManagerActions(false); setShowDeleteDialog(true); }}
+                    disabled={isDeleting || saving}
+                    size="sm"
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Excluir
+                  </Button>
+                  {isPendingOrRevisao && (
+                    <>
                       <Button
-                        variant="destructive"
-                        onClick={() => setShowDeleteDialog(true)}
-                        disabled={isDeleting || saving}
+                        onClick={() => { setShowManagerActions(false); handleManagerAction('revisao'); }}
+                        disabled={saving}
+                        variant="outline"
                         size="sm"
                       >
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Excluir
+                        <XCircle size={16} className="mr-2" />
+                        Não Aprovar
                       </Button>
-                      {isPendingOrRevisao && (
-                        <>
-                          <Button
-                            onClick={() => handleManagerAction('revisao')}
-                            disabled={saving}
-                            variant="outline"
-                            size="sm"
-                          >
-                            <XCircle size={16} className="mr-2" />
-                            Não Aprovar
-                          </Button>
-                          <Button
-                            onClick={() => handleManagerAction('aprovar')}
-                            disabled={saving}
-                            size="sm"
-                            className="bg-green-600 hover:bg-green-700"
-                          >
-                            <CheckCircle size={16} className="mr-2" />
-                            {saving ? 'Processando...' : 'Aprovar e Ajustar'}
-                          </Button>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                  {isPendingOrRevisao && (
-                    <div className="mt-4 space-y-2">
-                      <label htmlFor="observacoes-gerente" className="text-sm font-medium">
-                        Observações para o Vendedor (obrigatório para não aprovação)
-                      </label>
-                      <Textarea
-                        id="observacoes-gerente"
-                        name="observacoes"
-                        value={observacoes}
-                        onChange={(e) => setObservacoes(e.target.value)}
-                        placeholder="Se não aprovar, explique o motivo aqui..."
-                      />
-                    </div>
+                      <Button
+                        onClick={() => { setShowManagerActions(false); handleManagerAction('aprovar'); }}
+                        disabled={saving}
+                        size="sm"
+                        className="bg-green-600 hover:bg-green-700"
+                      >
+                        <CheckCircle size={16} className="mr-2" />
+                        {saving ? 'Processando...' : 'Aprovar e Ajustar'}
+                      </Button>
+                    </>
                   )}
-                </CardContent>
-              </Card>
-            )}
+                </div>
+                {isPendingOrRevisao && (
+                  <div className="space-y-2">
+                    <label htmlFor="observacoes-gerente" className="text-sm font-medium">
+                      Observações para o Vendedor (obrigatório para não aprovação)
+                    </label>
+                    <Textarea
+                      id="observacoes-gerente"
+                      name="observacoes"
+                      value={observacoes}
+                      onChange={(e) => setObservacoes(e.target.value)}
+                      placeholder="Se não aprovar, explique o motivo aqui..."
+                    />
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
 
             <Card className="border-2 shadow-none">
               <CardHeader>
