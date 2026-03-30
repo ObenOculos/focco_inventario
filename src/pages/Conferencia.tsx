@@ -474,12 +474,11 @@ export default function Conferencia() {
                       <CardContent className="text-sm space-y-2">
                         <div className="flex justify-between items-center text-muted-foreground">
                           <span className="flex items-center gap-1.5">
-                            <Package size={14} />{' '}
-                            {inv.itens_inventario.reduce(
+                            <Package size={14} />
+                            {inv.itens_inventario.length} produtos · {inv.itens_inventario.reduce(
                               (sum, item) => sum + item.quantidade_fisica,
                               0
-                            )}{' '}
-                            itens
+                            )} un.
                           </span>
                           <span className="flex items-center gap-1.5">
                             <Calendar size={14} />{' '}

@@ -7,6 +7,8 @@ interface InventarioInfo {
   status: string;
   codigo_vendedor: string;
   vendedor_nome?: string;
+  total_produtos: number;
+  total_unidades: number;
 }
 
 interface ComparativoItem {
@@ -34,7 +36,7 @@ export const useInventariosAnaliseQuery = (
     queryFn: async () => {
       let query = supabase
         .from('inventarios')
-        .select('id, data_inventario, status, codigo_vendedor')
+        .select('id, data_inventario, status, codigo_vendedor, itens_inventario(codigo_auxiliar, quantidade_fisica)')
         .order('data_inventario', { ascending: false });
 
       if (!isGerente) {
@@ -50,12 +52,18 @@ export const useInventariosAnaliseQuery = (
         throw error;
       }
 
-      // Enrich inventories with seller names
+      // Enrich inventories with seller names and item counts
       return (data || []).map((inv) => {
         const vendedor = vendedores.find((v) => v.codigo_vendedor === inv.codigo_vendedor);
+        const itens = (inv as any).itens_inventario || [];
         return {
-          ...inv,
+          id: inv.id,
+          data_inventario: inv.data_inventario,
+          status: inv.status,
+          codigo_vendedor: inv.codigo_vendedor,
           vendedor_nome: vendedor?.nome || inv.codigo_vendedor,
+          total_produtos: itens.length,
+          total_unidades: itens.reduce((sum: number, i: any) => sum + Number(i.quantidade_fisica || 0), 0),
         };
       });
     },
