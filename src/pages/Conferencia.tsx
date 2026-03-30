@@ -86,6 +86,7 @@ export default function Conferencia() {
   const [selectedInventario, setSelectedInventario] = useState<InventarioComItens | null>(null);
   const [divergencias, setDivergencias] = useState<DivergenciaItem[]>([]);
   const [itensNaoContados, setItensNaoContados] = useState<ItemNaoContado[]>([]);
+  const [custosMap, setCustosMap] = useState<Record<string, number>>({});
   const [searchTerm, setSearchTerm] = useState('');
   const [filtroResultado, setFiltroResultado] = useState<string>('com_diferenca');
   const [observacoes, setObservacoes] = useState('');
