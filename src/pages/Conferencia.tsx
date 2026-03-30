@@ -466,7 +466,25 @@ export default function Conferencia() {
     [divergencias]
   );
 
-  const handleExportExcel = async (exportAll: boolean = false) => {
+  const financeiro = useMemo(() => {
+    const allItems = [
+      ...divergencias.map((d) => ({
+        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica),
+        custo: custosMap[d.codigo_auxiliar] || 0,
+      })),
+      ...itensNaoContados.map((item) => ({
+        diferenca: calcularDiferenca(item.estoque_teorico, 0),
+        custo: custosMap[item.codigo_auxiliar] || 0,
+      })),
+    ];
+    const totalFaltas = allItems
+      .filter((i) => i.diferenca < 0)
+      .reduce((acc, i) => acc + Math.abs(i.diferenca) * i.custo, 0);
+    const totalSobras = allItems
+      .filter((i) => i.diferenca > 0)
+      .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
+    return { totalFaltas, totalSobras, saldoDevedor: totalFaltas - totalSobras };
+  }, [divergencias, itensNaoContados, custosMap]);
     if (!selectedInventario || (divergencias.length === 0 && itensNaoContados.length === 0)) {
       toast.error('Não há dados para exportar.');
       return;
