@@ -486,8 +486,8 @@ export default function Conferencia() {
   const stats = useMemo(
     () => ({
       itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
-      itensSobra: divergencias.filter((d) => d.diferenca > 0).length,
-      itensFalta: divergencias.filter((d) => d.diferenca < 0).length,
+      itensSobra: divergencias.filter((d) => d.diferenca < 0).length,
+      itensFalta: divergencias.filter((d) => d.diferenca > 0).length,
       totalItens: divergencias.length,
       valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
     }),
