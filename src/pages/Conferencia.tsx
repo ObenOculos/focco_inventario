@@ -82,12 +82,9 @@ type ItemNaoContado = {
   estoque_teorico: number;
 };
 
-// Função para calcular a diferença com lógica condicional
-const calcularDiferenca = (estoqueTeor: number, estoqFisico: number, usaSoma: boolean = true): number => {
-  if (usaSoma && estoqueTeor < 0) {
-    return estoqueTeor + estoqFisico;
-  }
-  return estoqFisico - estoqueTeor;
+// Diferença = Teórico - Físico (positivo = falta, negativo = sobra)
+const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
+  return estoqueTeor - estoqFisico;
 };
 
 export default function Conferencia() {
