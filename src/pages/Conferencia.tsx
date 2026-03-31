@@ -143,12 +143,12 @@ export default function Conferencia() {
     } else if (filtroResultado === 'sobras') {
       filtered = filtered.filter((item) => {
         const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
-        return dif < 0;
+        return dif > 0;
       });
     } else if (filtroResultado === 'faltas') {
       filtered = filtered.filter((item) => {
         const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
-        return dif > 0;
+        return dif < 0;
       });
     } else if (filtroResultado === 'corretos') {
       filtered = filtered.filter((item) => {
