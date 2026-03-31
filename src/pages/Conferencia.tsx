@@ -111,7 +111,7 @@ export default function Conferencia() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
-  const [usaSomaParaNegativo, setUsaSomaParaNegativo] = useState(true);
+  
 
   const queryClient = useQueryClient();
 
