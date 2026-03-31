@@ -506,10 +506,10 @@ export default function Conferencia() {
       })),
     ];
     const totalFaltas = allItems
-      .filter((i) => i.diferenca < 0)
+      .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     const totalSobras = allItems
-      .filter((i) => i.diferenca > 0)
+      .filter((i) => i.diferenca < 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     return { totalFaltas, totalSobras, saldoDevedor: totalFaltas + totalSobras };
   }, [divergencias, itensNaoContados, custosMap]);
