@@ -407,7 +407,7 @@ export default function Conferencia() {
           if (editedValues[d.codigo_auxiliar] !== undefined) {
             const novaQuantidade = editedValues[d.codigo_auxiliar];
             const diferenca = calcularDiferenca(d.estoque_teorico, novaQuantidade);
-            const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'sobra' : diferenca < 0 ? 'falta' : 'ok';
+            const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'falta' : diferenca < 0 ? 'sobra' : 'ok';
             return { ...d, quantidade_fisica: novaQuantidade, diferenca, tipo };
           }
           return d;
