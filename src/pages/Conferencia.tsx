@@ -82,9 +82,9 @@ type ItemNaoContado = {
   estoque_teorico: number;
 };
 
-// Diferença = Teórico - Físico (positivo = falta, negativo = sobra)
+// Diferença = Físico - Teórico (positivo = sobra, negativo = falta)
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
-  return estoqueTeor - estoqFisico;
+  return estoqFisico - estoqueTeor;
 };
 
 export default function Conferencia() {
