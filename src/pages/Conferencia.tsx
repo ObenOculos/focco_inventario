@@ -914,9 +914,9 @@ export default function Conferencia() {
                                 isNaoContado
                                   ? 'bg-muted/30'
                                   : diferencaCalculada > 0
-                                    ? 'bg-orange-500/5'
+                                    ? 'bg-blue-500/5'
                                     : diferencaCalculada < 0
-                                      ? 'bg-blue-500/5'
+                                      ? 'bg-orange-500/5'
                                       : ''
                               }
                             >
