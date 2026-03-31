@@ -880,18 +880,6 @@ export default function Conferencia() {
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      id="soma-negativo"
-                      className="shadow-none"
-                    />
-                    <div className="flex flex-col">
-                      <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
-                      </Label>
-                      <span className="text-[10px] text-muted-foreground/70">
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </CardHeader>
               <CardContent>
