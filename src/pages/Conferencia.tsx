@@ -490,10 +490,10 @@ export default function Conferencia() {
   const isPendingOrRevisao = selectedInventario && ['pendente', 'revisao'].includes(selectedInventario.status);
   const stats = useMemo(
     () => ({
-      itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
-      itensSobra: divergencias.filter((d) => d.diferenca > 0).length,
-      itensFalta: divergencias.filter((d) => d.diferenca < 0).length,
-      totalItens: divergencias.length,
+      itensCorretos: divergencias.filter((d) => d.diferenca === 0).reduce((acc, d) => acc + d.quantidade_fisica, 0),
+      itensSobra: divergencias.filter((d) => d.diferenca > 0).reduce((acc, d) => acc + d.diferenca, 0),
+      itensFalta: divergencias.filter((d) => d.diferenca < 0).reduce((acc, d) => acc + Math.abs(d.diferenca), 0),
+      totalItens: divergencias.reduce((acc, d) => acc + d.quantidade_fisica, 0),
       valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
     }),
     [divergencias]
