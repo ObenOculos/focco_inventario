@@ -82,9 +82,9 @@ type ItemNaoContado = {
   estoque_teorico: number;
 };
 
-// Diferença = Teórico - Físico (positivo = falta, negativo = sobra)
+// Diferença = Físico - Teórico (positivo = sobra, negativo = falta)
 const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
-  return estoqueTeor - estoqFisico;
+  return estoqFisico - estoqueTeor;
 };
 
 export default function Conferencia() {
@@ -143,12 +143,12 @@ export default function Conferencia() {
     } else if (filtroResultado === 'sobras') {
       filtered = filtered.filter((item) => {
         const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
-        return dif < 0;
+        return dif > 0;
       });
     } else if (filtroResultado === 'faltas') {
       filtered = filtered.filter((item) => {
         const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
-        return dif > 0;
+        return dif < 0;
       });
     } else if (filtroResultado === 'corretos') {
       filtered = filtered.filter((item) => {
@@ -270,8 +270,8 @@ export default function Conferencia() {
               : 0;
 
         let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
-        if (diferenca > 0) tipo = 'falta';
-        else if (diferenca < 0) tipo = 'sobra';
+        if (diferenca > 0) tipo = 'sobra';
+        else if (diferenca < 0) tipo = 'falta';
 
         if (item.foi_contado) {
           divergenciasList.push({
@@ -407,7 +407,7 @@ export default function Conferencia() {
           if (editedValues[d.codigo_auxiliar] !== undefined) {
             const novaQuantidade = editedValues[d.codigo_auxiliar];
             const diferenca = calcularDiferenca(d.estoque_teorico, novaQuantidade);
-            const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'falta' : diferenca < 0 ? 'sobra' : 'ok';
+            const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'sobra' : diferenca < 0 ? 'falta' : 'ok';
             return { ...d, quantidade_fisica: novaQuantidade, diferenca, tipo };
           }
           return d;
@@ -486,8 +486,8 @@ export default function Conferencia() {
   const stats = useMemo(
     () => ({
       itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
-      itensSobra: divergencias.filter((d) => d.diferenca < 0).length,
-      itensFalta: divergencias.filter((d) => d.diferenca > 0).length,
+      itensSobra: divergencias.filter((d) => d.diferenca > 0).length,
+      itensFalta: divergencias.filter((d) => d.diferenca < 0).length,
       totalItens: divergencias.length,
       valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
     }),
@@ -506,10 +506,10 @@ export default function Conferencia() {
       })),
     ];
     const totalFaltas = allItems
-      .filter((i) => i.diferenca > 0)
+      .filter((i) => i.diferenca < 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     const totalSobras = allItems
-      .filter((i) => i.diferenca < 0)
+      .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     return { totalFaltas, totalSobras, saldoDevedor: totalFaltas + totalSobras };
   }, [divergencias, itensNaoContados, custosMap]);
@@ -874,8 +874,8 @@ export default function Conferencia() {
                     <SelectContent>
                       <SelectItem value="todos">Todos os itens</SelectItem>
                       <SelectItem value="com_diferenca">Com diferença</SelectItem>
-                      <SelectItem value="sobras">Sobras (-)</SelectItem>
-                      <SelectItem value="faltas">Faltas (+)</SelectItem>
+                      <SelectItem value="sobras">Sobras (+)</SelectItem>
+                      <SelectItem value="faltas">Faltas (-)</SelectItem>
                       <SelectItem value="corretos">Corretos (0)</SelectItem>
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
                     </SelectContent>
@@ -914,9 +914,9 @@ export default function Conferencia() {
                                 isNaoContado
                                   ? 'bg-muted/30'
                                   : diferencaCalculada > 0
-                                    ? 'bg-orange-500/5'
+                                    ? 'bg-blue-500/5'
                                     : diferencaCalculada < 0
-                                      ? 'bg-blue-500/5'
+                                      ? 'bg-orange-500/5'
                                       : ''
                               }
                             >
@@ -949,9 +949,9 @@ export default function Conferencia() {
                                 <span
                                   className={`font-bold ${
                                     diferencaCalculada > 0
-                                      ? 'text-orange-600'
+                                      ? 'text-blue-600'
                                       : diferencaCalculada < 0
-                                        ? 'text-blue-600'
+                                        ? 'text-orange-600'
                                         : 'text-muted-foreground'
                                   }`}
                                 >
