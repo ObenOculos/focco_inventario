@@ -75,8 +75,6 @@ import {
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
 import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 
 type ItemNaoContado = {
   codigo_auxiliar: string;
