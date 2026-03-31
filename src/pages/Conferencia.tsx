@@ -270,8 +270,8 @@ export default function Conferencia() {
               : 0;
 
         let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
-        if (diferenca > 0) tipo = 'sobra';
-        else if (diferenca < 0) tipo = 'falta';
+        if (diferenca > 0) tipo = 'falta';
+        else if (diferenca < 0) tipo = 'sobra';
 
         if (item.foi_contado) {
           divergenciasList.push({
