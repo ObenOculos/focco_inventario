@@ -949,9 +949,9 @@ export default function Conferencia() {
                                 <span
                                   className={`font-bold ${
                                     diferencaCalculada > 0
-                                      ? 'text-orange-600'
+                                      ? 'text-blue-600'
                                       : diferencaCalculada < 0
-                                        ? 'text-blue-600'
+                                        ? 'text-orange-600'
                                         : 'text-muted-foreground'
                                   }`}
                                 >
