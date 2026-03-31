@@ -874,8 +874,8 @@ export default function Conferencia() {
                     <SelectContent>
                       <SelectItem value="todos">Todos os itens</SelectItem>
                       <SelectItem value="com_diferenca">Com diferença</SelectItem>
-                      <SelectItem value="sobras">Sobras (+)</SelectItem>
-                      <SelectItem value="faltas">Faltas (-)</SelectItem>
+                      <SelectItem value="sobras">Sobras (-)</SelectItem>
+                      <SelectItem value="faltas">Faltas (+)</SelectItem>
                       <SelectItem value="corretos">Corretos (0)</SelectItem>
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
                     </SelectContent>
