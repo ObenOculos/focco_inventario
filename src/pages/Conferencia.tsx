@@ -75,8 +75,6 @@ import {
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
 import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
-import { Switch } from '@/components/ui/switch';
-import { Label } from '@/components/ui/label';
 
 type ItemNaoContado = {
   codigo_auxiliar: string;
@@ -84,12 +82,9 @@ type ItemNaoContado = {
   estoque_teorico: number;
 };
 
-// Função para calcular a diferença com lógica condicional
-const calcularDiferenca = (estoqueTeor: number, estoqFisico: number, usaSoma: boolean = true): number => {
-  if (usaSoma && estoqueTeor < 0) {
-    return estoqueTeor + estoqFisico;
-  }
-  return estoqFisico - estoqueTeor;
+// Diferença = Teórico - Físico (positivo = falta, negativo = sobra)
+const calcularDiferenca = (estoqueTeor: number, estoqFisico: number): number => {
+  return estoqueTeor - estoqFisico;
 };
 
 export default function Conferencia() {
@@ -116,7 +111,7 @@ export default function Conferencia() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
-  const [usaSomaParaNegativo, setUsaSomaParaNegativo] = useState(true);
+  
 
   const queryClient = useQueryClient();
 
@@ -142,28 +137,28 @@ export default function Conferencia() {
 
     if (filtroResultado === 'com_diferenca') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
         return dif !== 0;
       });
     } else if (filtroResultado === 'sobras') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
-        return dif > 0;
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif < 0;
       });
     } else if (filtroResultado === 'faltas') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
-        return dif < 0;
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
+        return dif > 0;
       });
     } else if (filtroResultado === 'corretos') {
       filtered = filtered.filter((item) => {
-        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
+        const dif = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
         return dif === 0;
       });
     }
 
     return filtered;
-  }, [divergencias, filtroResultado, usaSomaParaNegativo]);
+  }, [divergencias, filtroResultado]);
 
   // For "nao_contados" filter, show those items in the table
   const tableData = useMemo(() => {
@@ -173,7 +168,7 @@ export default function Conferencia() {
         nome_produto: item.nome_produto,
         estoque_teorico: item.estoque_teorico,
         quantidade_fisica: 0,
-        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0),
         percentual: 0,
         tipo: 'falta' as const,
         nao_contado: true,
@@ -189,7 +184,7 @@ export default function Conferencia() {
         nome_produto: item.nome_produto,
         estoque_teorico: item.estoque_teorico,
         quantidade_fisica: 0,
-        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0),
         percentual: 0,
         tipo: 'falta' as const,
         nao_contado: true,
@@ -198,7 +193,7 @@ export default function Conferencia() {
     }
 
     return contados;
-  }, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm, usaSomaParaNegativo]);
+  }, [filteredDivergencias, itensNaoContados, filtroResultado, searchTerm]);
 
   const { paginatedData: paginatedItems, ...paginationProps } = usePagination({
     data: tableData,
@@ -266,7 +261,7 @@ export default function Conferencia() {
           foi_contado: rawItem.foi_contado,
         };
 
-        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
+        const diferenca = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
         const percentual =
           item.estoque_teorico !== 0
             ? (diferenca / item.estoque_teorico) * 100
@@ -275,8 +270,8 @@ export default function Conferencia() {
               : 0;
 
         let tipo: 'ok' | 'sobra' | 'falta' = 'ok';
-        if (diferenca > 0) tipo = 'sobra';
-        else if (diferenca < 0) tipo = 'falta';
+        if (diferenca > 0) tipo = 'falta';
+        else if (diferenca < 0) tipo = 'sobra';
 
         if (item.foi_contado) {
           divergenciasList.push({
@@ -411,8 +406,8 @@ export default function Conferencia() {
         prev.map((d) => {
           if (editedValues[d.codigo_auxiliar] !== undefined) {
             const novaQuantidade = editedValues[d.codigo_auxiliar];
-            const diferenca = calcularDiferenca(d.estoque_teorico, novaQuantidade, usaSomaParaNegativo);
-            const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'sobra' : diferenca < 0 ? 'falta' : 'ok';
+            const diferenca = calcularDiferenca(d.estoque_teorico, novaQuantidade);
+            const tipo: 'ok' | 'sobra' | 'falta' = diferenca > 0 ? 'falta' : diferenca < 0 ? 'sobra' : 'ok';
             return { ...d, quantidade_fisica: novaQuantidade, diferenca, tipo };
           }
           return d;
@@ -491,8 +486,8 @@ export default function Conferencia() {
   const stats = useMemo(
     () => ({
       itensCorretos: divergencias.filter((d) => d.diferenca === 0).length,
-      itensSobra: divergencias.filter((d) => d.diferenca > 0).length,
-      itensFalta: divergencias.filter((d) => d.diferenca < 0).length,
+      itensSobra: divergencias.filter((d) => d.diferenca < 0).length,
+      itensFalta: divergencias.filter((d) => d.diferenca > 0).length,
       totalItens: divergencias.length,
       valorTotalDivergencia: divergencias.reduce((acc, d) => acc + d.diferenca, 0),
     }),
@@ -502,22 +497,22 @@ export default function Conferencia() {
   const financeiro = useMemo(() => {
     const allItems = [
       ...divergencias.map((d) => ({
-        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica, usaSomaParaNegativo),
+        diferenca: calcularDiferenca(d.estoque_teorico, d.quantidade_fisica),
         custo: custosMap[d.codigo_auxiliar] || 0,
       })),
       ...itensNaoContados.map((item) => ({
-        diferenca: calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo),
+        diferenca: calcularDiferenca(item.estoque_teorico, 0),
         custo: custosMap[item.codigo_auxiliar] || 0,
       })),
     ];
     const totalFaltas = allItems
-      .filter((i) => i.diferenca < 0)
-      .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
-    const totalSobras = allItems
       .filter((i) => i.diferenca > 0)
       .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
+    const totalSobras = allItems
+      .filter((i) => i.diferenca < 0)
+      .reduce((acc, i) => acc + i.diferenca * i.custo, 0);
     return { totalFaltas, totalSobras, saldoDevedor: totalFaltas + totalSobras };
-  }, [divergencias, itensNaoContados, custosMap, usaSomaParaNegativo]);
+  }, [divergencias, itensNaoContados, custosMap]);
 
   const handleExportExcel = async (exportAll: boolean = false) => {
     if (!selectedInventario || (divergencias.length === 0 && itensNaoContados.length === 0)) {
@@ -528,7 +523,7 @@ export default function Conferencia() {
     const dataToExport = exportAll ? divergencias : filteredDivergencias;
 
     const exportData = dataToExport.map((item) => {
-      const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica, usaSomaParaNegativo);
+      const diferencaCalculada = calcularDiferenca(item.estoque_teorico, item.quantidade_fisica);
       const custo = custosMap[item.codigo_auxiliar] || 0;
       return {
         'Código Auxiliar': item.codigo_auxiliar,
@@ -543,7 +538,7 @@ export default function Conferencia() {
     });
 
     itensNaoContados.forEach((item) => {
-      const dif = calcularDiferenca(item.estoque_teorico, 0, usaSomaParaNegativo);
+      const dif = calcularDiferenca(item.estoque_teorico, 0);
       const custo = custosMap[item.codigo_auxiliar] || 0;
       exportData.push({
         'Código Auxiliar': item.codigo_auxiliar,
@@ -879,28 +874,12 @@ export default function Conferencia() {
                     <SelectContent>
                       <SelectItem value="todos">Todos os itens</SelectItem>
                       <SelectItem value="com_diferenca">Com diferença</SelectItem>
-                      <SelectItem value="sobras">Sobras (+)</SelectItem>
-                      <SelectItem value="faltas">Faltas (-)</SelectItem>
+                      <SelectItem value="sobras">Sobras (-)</SelectItem>
+                      <SelectItem value="faltas">Faltas (+)</SelectItem>
                       <SelectItem value="corretos">Corretos (0)</SelectItem>
                       <SelectItem value="nao_contados">Não Contados</SelectItem>
                     </SelectContent>
                   </Select>
-                  <div className="flex items-center gap-2">
-                    <Switch
-                      id="soma-negativo"
-                      checked={usaSomaParaNegativo}
-                      onCheckedChange={setUsaSomaParaNegativo}
-                      className="shadow-none"
-                    />
-                    <div className="flex flex-col">
-                      <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
-                        {usaSomaParaNegativo ? 'Somando quando teórico negativo' : 'Subtraindo sempre'}
-                      </Label>
-                      <span className="text-[10px] text-muted-foreground/70">
-                        {usaSomaParaNegativo ? 'Ex: -3 + 5 = 2' : 'Ex: 5 - (-3) = 8'}
-                      </span>
-                    </div>
-                  </div>
                 </div>
               </CardHeader>
               <CardContent>
@@ -926,7 +905,6 @@ export default function Conferencia() {
                           const diferencaCalculada = calcularDiferenca(
                             item.estoque_teorico,
                             currentFisica,
-                            usaSomaParaNegativo
                           );
 
                           return (
@@ -936,9 +914,9 @@ export default function Conferencia() {
                                 isNaoContado
                                   ? 'bg-muted/30'
                                   : diferencaCalculada > 0
-                                    ? 'bg-blue-500/5'
+                                    ? 'bg-orange-500/5'
                                     : diferencaCalculada < 0
-                                      ? 'bg-orange-500/5'
+                                      ? 'bg-blue-500/5'
                                       : ''
                               }
                             >
@@ -971,9 +949,9 @@ export default function Conferencia() {
                                 <span
                                   className={`font-bold ${
                                     diferencaCalculada > 0
-                                      ? 'text-blue-600'
+                                      ? 'text-orange-600'
                                       : diferencaCalculada < 0
-                                        ? 'text-orange-600'
+                                        ? 'text-blue-600'
                                         : 'text-muted-foreground'
                                   }`}
                                 >
