@@ -154,17 +154,14 @@ serve(async (req: Request) => {
       throw new Error('Falha ao aprovar inventário.');
     }
 
-    // Correção 4: Manter histórico de estoque_real - não deletar registros antigos
-    // Prepara dados para estoque_real usando o comparativo
-    // - Itens contados (foi_contado=true): usa quantidade_fisica (mesmo se 0)
-    // - Itens não contados (foi_contado=false): mantém estoque_teorico
+    // Salva apenas itens efetivamente contados pelo vendedor.
+    // A contagem física é a verdade absoluta: itens não contados não vão pro estoque_real.
     const estoqueRealData = (comparativo || [])
-      .filter((item: DivergenciaItem) => item.foi_contado || item.estoque_teorico !== 0)
+      .filter((item: DivergenciaItem) => item.foi_contado)
       .map((item: DivergenciaItem) => ({
         codigo_vendedor: inventario.codigo_vendedor,
         codigo_auxiliar: item.codigo_auxiliar,
-        // Se foi contado, usa a contagem física (mesmo se 0); senão, mantém o teórico
-        quantidade_real: item.foi_contado ? item.quantidade_fisica : item.estoque_teorico,
+        quantidade_real: item.quantidade_fisica,
         inventario_id: inventario_id,
         data_atualizacao: inventario.data_inventario,
       }));
