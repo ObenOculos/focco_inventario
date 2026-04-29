@@ -255,7 +255,7 @@ function ProdutosTab() {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
       const errors: ImportError[] = [];
-      const produtosMap = new Map<string, { codigo_produto: string; codigo_auxiliar: string; nome_produto: string; modelo: string; cor: string; valor_produto: number }>();
+      const produtosMap = new Map<string, { codigo_produto: string; codigo_auxiliar: string; nome_produto: string; modelo: string; cor: string; valor_produto: number; valor_remessa: number }>();
 
       rows.forEach((row, index) => {
         const linha = index + 2;
@@ -273,6 +273,7 @@ function ProdutosTab() {
             modelo: parts[0] || codigoProduto,
             cor: parts.slice(1).join(' ') || '',
             valor_produto: parseFloat(String(row.valor_produto || 0)) || 0,
+            valor_remessa: parseFloat(String(row.valor_remessa || 0)) || 0,
           });
         }
       });
