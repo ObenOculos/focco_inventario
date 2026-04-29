@@ -131,6 +131,7 @@ function ProdutosTab() {
     codigo_auxiliar: '',
     nome_produto: '',
     valor_produto: '',
+    valor_remessa: '',
   });
 
   // Import states (novos produtos)
