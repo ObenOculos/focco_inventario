@@ -677,7 +677,7 @@ function ProdutosTab() {
                 <label htmlFor="update-file-input" className="cursor-pointer">
                   <RefreshCw className="mx-auto mb-2 text-muted-foreground" size={32} />
                   <p className="font-medium">Selecione arquivo com valores</p>
-                  <p className="text-sm text-muted-foreground">Apenas codigo_auxiliar e valor_produto são necessários</p>
+                  <p className="text-sm text-muted-foreground">codigo_auxiliar + valor_produto e/ou valor_remessa</p>
                 </label>
               ) : (
                 <div>
