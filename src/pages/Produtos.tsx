@@ -574,6 +574,7 @@ function ProdutosTab() {
                         <TableHead>codigo_auxiliar</TableHead>
                         <TableHead>nome_produto</TableHead>
                         <TableHead>valor_produto</TableHead>
+                        <TableHead>valor_remessa</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
