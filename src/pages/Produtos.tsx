@@ -189,6 +189,7 @@ function ProdutosTab() {
       modelo: modelo || formData.codigo_produto,
       cor: cor || '',
       valor_produto: parseFloat(formData.valor_produto) || 0,
+      valor_remessa: parseFloat(formData.valor_remessa) || 0,
     });
     if (error) {
       if (error.code === '23505') toast.error('Código auxiliar já existe');
@@ -197,7 +198,7 @@ function ProdutosTab() {
       toast.success('Produto cadastrado!');
       invalidateProdutos();
       setDialogOpen(false);
-      setFormData({ codigo_produto: '', codigo_auxiliar: '', nome_produto: '', valor_produto: '' });
+      setFormData({ codigo_produto: '', codigo_auxiliar: '', nome_produto: '', valor_produto: '', valor_remessa: '' });
     }
   };
 
