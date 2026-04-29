@@ -698,7 +698,8 @@ function ProdutosTab() {
                       {updatePreview.map((row, i) => (
                         <TableRow key={i}>
                           <TableCell className="font-mono">{String(row.codigo_auxiliar || '')}</TableCell>
-                          <TableCell>{String(row.valor_produto || '0')}</TableCell>
+                          <TableCell>{String(row.valor_produto ?? '')}</TableCell>
+                          <TableCell>{String(row.valor_remessa ?? '')}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
