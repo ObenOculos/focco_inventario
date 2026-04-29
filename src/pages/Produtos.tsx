@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { supabase } from '@/integrations/supabase/client';
 import { Produto } from '@/types/app';
+import type { Json } from '@/integrations/supabase/types';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -94,8 +95,14 @@ interface ImportValidation {
       modelo: string;
       cor: string;
       valor_produto: number;
+      valor_remessa: number;
     }
   >;
+}
+
+interface UpdateRow {
+  valor_produto?: number;
+  valor_remessa?: number;
 }
 
 interface UpdateValidation {
@@ -103,7 +110,7 @@ interface UpdateValidation {
   errors: { linha: number; codigo: string; mensagem: string }[];
   matchedProducts: number;
   notFoundProducts: string[];
-  updateMap: Map<string, number>;
+  updateMap: Map<string, UpdateRow>;
 }
 
 type ImportStatus = 'idle' | 'validating' | 'validated' | 'importing' | 'completed' | 'error';
@@ -125,6 +132,7 @@ function ProdutosTab() {
     codigo_auxiliar: '',
     nome_produto: '',
     valor_produto: '',
+    valor_remessa: '',
   });
 
   // Import states (novos produtos)
@@ -182,6 +190,7 @@ function ProdutosTab() {
       modelo: modelo || formData.codigo_produto,
       cor: cor || '',
       valor_produto: parseFloat(formData.valor_produto) || 0,
+      valor_remessa: parseFloat(formData.valor_remessa) || 0,
     });
     if (error) {
       if (error.code === '23505') toast.error('Código auxiliar já existe');
@@ -190,7 +199,7 @@ function ProdutosTab() {
       toast.success('Produto cadastrado!');
       invalidateProdutos();
       setDialogOpen(false);
-      setFormData({ codigo_produto: '', codigo_auxiliar: '', nome_produto: '', valor_produto: '' });
+      setFormData({ codigo_produto: '', codigo_auxiliar: '', nome_produto: '', valor_produto: '', valor_remessa: '' });
     }
   };
 
@@ -247,7 +256,7 @@ function ProdutosTab() {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
       const errors: ImportError[] = [];
-      const produtosMap = new Map<string, { codigo_produto: string; codigo_auxiliar: string; nome_produto: string; modelo: string; cor: string; valor_produto: number }>();
+      const produtosMap = new Map<string, { codigo_produto: string; codigo_auxiliar: string; nome_produto: string; modelo: string; cor: string; valor_produto: number; valor_remessa: number }>();
 
       rows.forEach((row, index) => {
         const linha = index + 2;
@@ -265,6 +274,7 @@ function ProdutosTab() {
             modelo: parts[0] || codigoProduto,
             cor: parts.slice(1).join(' ') || '',
             valor_produto: parseFloat(String(row.valor_produto || 0)) || 0,
+            valor_remessa: parseFloat(String(row.valor_remessa || 0)) || 0,
           });
         }
       });
@@ -319,9 +329,9 @@ function ProdutosTab() {
 
   const downloadTemplate = () => {
     const template = [
-      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q01', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9 },
-      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q02', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9 },
-      { codigo_produto: 'PW6146', codigo_auxiliar: 'PW6146 A01', nome_produto: 'PW6146 Preto', valor_produto: 32.5 },
+      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q01', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q02', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_produto: 'PW6146', codigo_auxiliar: 'PW6146 A01', nome_produto: 'PW6146 Preto', valor_produto: 32.5, valor_remessa: 20.0 },
     ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
@@ -366,16 +376,27 @@ function ProdutosTab() {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
       const errors: { linha: number; codigo: string; mensagem: string }[] = [];
-      const updateMap = new Map<string, number>();
+      const updateMap = new Map<string, UpdateRow>();
 
       rows.forEach((row, index) => {
         const linha = index + 2;
         if (!row.codigo_auxiliar) { errors.push({ linha, codigo: '', mensagem: 'codigo_auxiliar obrigatório' }); return; }
-        if (row.valor_produto === undefined || row.valor_produto === null || row.valor_produto === '') { errors.push({ linha, codigo: String(row.codigo_auxiliar), mensagem: 'valor_produto obrigatório' }); return; }
         const codigo = String(row.codigo_auxiliar).toUpperCase().trim();
-        const valor = parseFloat(String(row.valor_produto));
-        if (isNaN(valor)) { errors.push({ linha, codigo, mensagem: 'valor_produto inválido' }); return; }
-        updateMap.set(codigo, valor);
+        const hasVenda = row.valor_produto !== undefined && row.valor_produto !== null && row.valor_produto !== '';
+        const hasRemessa = row.valor_remessa !== undefined && row.valor_remessa !== null && row.valor_remessa !== '';
+        if (!hasVenda && !hasRemessa) { errors.push({ linha, codigo, mensagem: 'Informe valor_produto e/ou valor_remessa' }); return; }
+        const entry: UpdateRow = {};
+        if (hasVenda) {
+          const v = parseFloat(String(row.valor_produto));
+          if (isNaN(v)) { errors.push({ linha, codigo, mensagem: 'valor_produto inválido' }); return; }
+          entry.valor_produto = v;
+        }
+        if (hasRemessa) {
+          const v = parseFloat(String(row.valor_remessa));
+          if (isNaN(v)) { errors.push({ linha, codigo, mensagem: 'valor_remessa inválido' }); return; }
+          entry.valor_remessa = v;
+        }
+        updateMap.set(codigo, entry);
       });
 
       const codigos = Array.from(updateMap.keys());
@@ -413,8 +434,12 @@ function ProdutosTab() {
       let updatedCount = 0;
       for (let i = 0; i < entries.length; i += BATCH_SIZE) {
         const batch = entries.slice(i, i + BATCH_SIZE);
-        const updates = batch.map(([codigo, valor]) => ({ codigo, valor }));
-        const { data, error } = await supabase.rpc('atualizar_valores_produtos', { p_updates: updates });
+        const updates = batch.map(([codigo, row]) => ({
+          codigo,
+          ...(row.valor_produto !== undefined ? { valor: row.valor_produto } : {}),
+          ...(row.valor_remessa !== undefined ? { valor_remessa: row.valor_remessa } : {}),
+        }));
+        const { data, error } = await supabase.rpc('atualizar_valores_produtos', { p_updates: updates as unknown as Json });
         if (error) console.error(`Erro no lote ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
         else updatedCount += data || batch.length;
         setUpdateProgress({ current: Math.min(i + BATCH_SIZE, total), total });
@@ -428,9 +453,9 @@ function ProdutosTab() {
 
   const downloadUpdateTemplate = () => {
     const template = [
-      { codigo_auxiliar: 'OB1215 Q01', valor_produto: 45.9 },
-      { codigo_auxiliar: 'OB1215 Q02', valor_produto: 45.9 },
-      { codigo_auxiliar: 'PW6146 A01', valor_produto: 32.5 },
+      { codigo_auxiliar: 'OB1215 Q01', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_auxiliar: 'OB1215 Q02', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_auxiliar: 'PW6146 A01', valor_produto: 32.5, valor_remessa: 20.0 },
     ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
@@ -499,9 +524,15 @@ function ProdutosTab() {
               <Label htmlFor="produto-nome">Nome do Produto</Label>
               <Input id="produto-nome" name="nome_produto" value={formData.nome_produto} onChange={(e) => setFormData({ ...formData, nome_produto: e.target.value })} className="border-2" placeholder="Ex: ORX OB1215 O51-P19-H144" required />
             </div>
-            <div>
-              <Label htmlFor="produto-valor">Valor (R$)</Label>
-              <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })} className="border-2" placeholder="0.00" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="produto-valor">Preço Venda (R$)</Label>
+                <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })} className="border-2" placeholder="0.00" />
+              </div>
+              <div>
+                <Label htmlFor="produto-valor-remessa">Preço Remessa (R$)</Label>
+                <Input id="produto-valor-remessa" name="valor_remessa" type="number" step="0.01" value={formData.valor_remessa} onChange={(e) => setFormData({ ...formData, valor_remessa: e.target.value })} className="border-2" placeholder="0.00" />
+              </div>
             </div>
             <Button type="submit" className="w-full">Cadastrar Produto</Button>
           </form>
@@ -543,6 +574,7 @@ function ProdutosTab() {
                         <TableHead>codigo_auxiliar</TableHead>
                         <TableHead>nome_produto</TableHead>
                         <TableHead>valor_produto</TableHead>
+                        <TableHead>valor_remessa</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -552,6 +584,7 @@ function ProdutosTab() {
                           <TableCell className="font-mono">{String(row.codigo_auxiliar || '')}</TableCell>
                           <TableCell>{String(row.nome_produto || '')}</TableCell>
                           <TableCell>{String(row.valor_produto || '0')}</TableCell>
+                          <TableCell>{String(row.valor_remessa || '0')}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -622,7 +655,8 @@ function ProdutosTab() {
                 <li><strong>codigo_produto</strong> (obrigatório): Código principal do produto. Ex: OB1215</li>
                 <li><strong>codigo_auxiliar</strong> (obrigatório): Código único para QR Code. Ex: OB1215 Q01</li>
                 <li><strong>nome_produto</strong> (obrigatório): Nome/descrição do produto</li>
-                <li><strong>valor_produto</strong> (opcional): Custo do produto. Ex: 45.90</li>
+                <li><strong>valor_produto</strong> (opcional): Preço de venda. Ex: 45.90</li>
+                <li><strong>valor_remessa</strong> (opcional): Preço de remessa. Ex: 30.00</li>
               </ul>
               <p className="mt-2 text-primary font-medium">Apenas produtos NOVOS serão importados. Produtos existentes são ignorados.</p>
             </div>
@@ -643,7 +677,7 @@ function ProdutosTab() {
                 <label htmlFor="update-file-input" className="cursor-pointer">
                   <RefreshCw className="mx-auto mb-2 text-muted-foreground" size={32} />
                   <p className="font-medium">Selecione arquivo com valores</p>
-                  <p className="text-sm text-muted-foreground">Apenas codigo_auxiliar e valor_produto são necessários</p>
+                  <p className="text-sm text-muted-foreground">codigo_auxiliar + valor_produto e/ou valor_remessa</p>
                 </label>
               ) : (
                 <div>
@@ -659,12 +693,13 @@ function ProdutosTab() {
                 <h4 className="font-medium mb-2">Preview (primeiras 5 linhas)</h4>
                 <div className="border-2 rounded-lg overflow-x-auto">
                   <Table>
-                    <TableHeader><TableRow><TableHead>codigo_auxiliar</TableHead><TableHead>valor_produto</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>codigo_auxiliar</TableHead><TableHead>valor_produto</TableHead><TableHead>valor_remessa</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {updatePreview.map((row, i) => (
                         <TableRow key={i}>
                           <TableCell className="font-mono">{String(row.codigo_auxiliar || '')}</TableCell>
-                          <TableCell>{String(row.valor_produto || '0')}</TableCell>
+                          <TableCell>{String(row.valor_produto ?? '')}</TableCell>
+                          <TableCell>{String(row.valor_remessa ?? '')}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
@@ -729,7 +764,9 @@ function ProdutosTab() {
               <h4 className="font-medium mb-2">Formato Esperado</h4>
               <ul className="space-y-1 text-muted-foreground">
                 <li><strong>codigo_auxiliar</strong> (obrigatório): Código do produto. Ex: OB1215 Q01</li>
-                <li><strong>valor_produto</strong> (obrigatório): Novo valor. Ex: 45.90</li>
+                <li><strong>valor_produto</strong> (opcional): Novo preço de venda. Ex: 45.90</li>
+                <li><strong>valor_remessa</strong> (opcional): Novo preço de remessa. Ex: 30.00</li>
+                <li className="text-xs italic">Pelo menos um dos dois é obrigatório.</li>
               </ul>
               <p className="mt-2 text-yellow-600 font-medium">Apenas produtos que já existem no banco terão seus valores atualizados.</p>
             </div>
@@ -772,7 +809,10 @@ function ProdutosTab() {
                     <div className="min-w-0 flex-1">
                       <p className="font-mono font-bold">{produto.codigo_auxiliar}</p>
                       <p className="text-sm text-muted-foreground truncate">{produto.nome_produto}</p>
-                      <p className="text-sm mt-1">R$ {Number(produto.valor_produto).toFixed(2)}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-sm">
+                        <span>Venda: <strong>R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
+                        <span className="text-muted-foreground">Remessa: <strong>R$ {Number(produto.valor_remessa ?? 0).toFixed(2)}</strong></span>
+                      </div>
                     </div>
                     <Button variant="outline" size="icon" className="border-2 flex-shrink-0" onClick={() => generateQRCode(produto)}>
                       <QrCode size={16} />

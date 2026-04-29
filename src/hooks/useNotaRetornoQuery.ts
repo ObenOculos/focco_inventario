@@ -71,14 +71,14 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
       if (codigosAuxiliares.length === 0) return [];
 
       // Busca produtos em lotes
-      const produtosMap = new Map<string, { nome_produto: string; valor_produto: number; codigo_produto: string }>();
+      const produtosMap = new Map<string, { nome_produto: string; valor_produto: number; valor_remessa: number; codigo_produto: string }>();
       const produtoBatchSize = 500;
 
       for (let i = 0; i < codigosAuxiliares.length; i += produtoBatchSize) {
         const batch = codigosAuxiliares.slice(i, i + produtoBatchSize);
         const { data: produtos } = await supabase
           .from('produtos')
-          .select('codigo_auxiliar, nome_produto, valor_produto, codigo_produto')
+          .select('codigo_auxiliar, nome_produto, valor_produto, valor_remessa, codigo_produto')
           .in('codigo_auxiliar', batch);
 
         if (produtos) {
@@ -86,6 +86,7 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
             produtosMap.set(p.codigo_auxiliar, {
               nome_produto: p.nome_produto,
               valor_produto: p.valor_produto || 0,
+              valor_remessa: p.valor_remessa || 0,
               codigo_produto: p.codigo_produto,
             });
           });
@@ -103,6 +104,7 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
             quantidade_atual: item.quantidade_real,
             quantidade_retorno: item.quantidade_real,
             valor_produto: produto?.valor_produto || 0,
+            valor_remessa: produto?.valor_remessa || 0,
             codigo_produto: produto?.codigo_produto || '',
           };
         })
