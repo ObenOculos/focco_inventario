@@ -255,6 +255,7 @@ export type Database = {
           nome_produto: string
           updated_at: string
           valor_produto: number | null
+          valor_remessa: number | null
         }
         Insert: {
           codigo_auxiliar: string
@@ -266,6 +267,7 @@ export type Database = {
           nome_produto: string
           updated_at?: string
           valor_produto?: number | null
+          valor_remessa?: number | null
         }
         Update: {
           codigo_auxiliar?: string
@@ -277,6 +279,7 @@ export type Database = {
           nome_produto?: string
           updated_at?: string
           valor_produto?: number | null
+          valor_remessa?: number | null
         }
         Relationships: []
       }
