@@ -748,11 +748,36 @@ function NotaRetornoTab() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Store className="h-5 w-5" />
-              Selecionar Loja
+              Gerar XML Ciclone
             </DialogTitle>
-            <DialogDescription>Escolha a loja para gerar o XML de retorno Ciclone.</DialogDescription>
+            <DialogDescription>Escolha a tabela de preço e a loja para gerar o XML de retorno.</DialogDescription>
           </DialogHeader>
-          <div className="grid grid-cols-2 gap-4 py-4">
+
+          <div className="space-y-2 py-2">
+            <p className="text-sm font-medium">Tabela de Preço</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={tabelaPreco === 'venda' ? 'default' : 'outline'}
+                onClick={() => setTabelaPreco('venda')}
+              >
+                Venda
+              </Button>
+              <Button
+                type="button"
+                variant={tabelaPreco === 'remessa' ? 'default' : 'outline'}
+                onClick={() => setTabelaPreco('remessa')}
+              >
+                Remessa
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Os valores unitários no XML virão da tabela <strong>{tabelaPreco === 'venda' ? 'de venda (valor_produto)' : 'de remessa (valor_remessa)'}</strong>.
+            </p>
+          </div>
+
+          <p className="text-sm font-medium pt-2">Loja</p>
+          <div className="grid grid-cols-2 gap-4 py-2">
             {[
               { codigo: 1, nome: 'Loja 01' },
               { codigo: 2, nome: 'Loja 02' },
@@ -769,7 +794,7 @@ function NotaRetornoTab() {
                       codigo_auxiliar: item.codigo_auxiliar,
                       nome_produto: item.nome_produto,
                       quantidade: item.quantidade_retorno,
-                      valor_unitario: item.valor_produto,
+                      valor_unitario: tabelaPreco === 'remessa' ? item.valor_remessa : item.valor_produto,
                     }));
                   const xml = gerarXmlRetornoCiclone({
                     codigoVendedor: selectedVendedor,
@@ -777,7 +802,7 @@ function NotaRetornoTab() {
                     codigoLoja: loja.codigo,
                     itens: itensXml,
                   });
-                  const nomeArquivo = `retorno-ciclone-loja${loja.codigo}-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
+                  const nomeArquivo = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
                   downloadXml(xml, nomeArquivo);
                   setLojaDialogOpen(false);
                 }}
