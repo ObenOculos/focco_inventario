@@ -693,7 +693,7 @@ function ProdutosTab() {
                 <h4 className="font-medium mb-2">Preview (primeiras 5 linhas)</h4>
                 <div className="border-2 rounded-lg overflow-x-auto">
                   <Table>
-                    <TableHeader><TableRow><TableHead>codigo_auxiliar</TableHead><TableHead>valor_produto</TableHead></TableRow></TableHeader>
+                    <TableHeader><TableRow><TableHead>codigo_auxiliar</TableHead><TableHead>valor_produto</TableHead><TableHead>valor_remessa</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {updatePreview.map((row, i) => (
                         <TableRow key={i}>
