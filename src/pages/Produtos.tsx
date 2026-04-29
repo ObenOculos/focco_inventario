@@ -584,6 +584,7 @@ function ProdutosTab() {
                           <TableCell className="font-mono">{String(row.codigo_auxiliar || '')}</TableCell>
                           <TableCell>{String(row.nome_produto || '')}</TableCell>
                           <TableCell>{String(row.valor_produto || '0')}</TableCell>
+                          <TableCell>{String(row.valor_remessa || '0')}</TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
