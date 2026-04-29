@@ -375,16 +375,27 @@ function ProdutosTab() {
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
       const rows = XLSX.utils.sheet_to_json(worksheet) as Record<string, unknown>[];
       const errors: { linha: number; codigo: string; mensagem: string }[] = [];
-      const updateMap = new Map<string, number>();
+      const updateMap = new Map<string, UpdateRow>();
 
       rows.forEach((row, index) => {
         const linha = index + 2;
         if (!row.codigo_auxiliar) { errors.push({ linha, codigo: '', mensagem: 'codigo_auxiliar obrigatório' }); return; }
-        if (row.valor_produto === undefined || row.valor_produto === null || row.valor_produto === '') { errors.push({ linha, codigo: String(row.codigo_auxiliar), mensagem: 'valor_produto obrigatório' }); return; }
         const codigo = String(row.codigo_auxiliar).toUpperCase().trim();
-        const valor = parseFloat(String(row.valor_produto));
-        if (isNaN(valor)) { errors.push({ linha, codigo, mensagem: 'valor_produto inválido' }); return; }
-        updateMap.set(codigo, valor);
+        const hasVenda = row.valor_produto !== undefined && row.valor_produto !== null && row.valor_produto !== '';
+        const hasRemessa = row.valor_remessa !== undefined && row.valor_remessa !== null && row.valor_remessa !== '';
+        if (!hasVenda && !hasRemessa) { errors.push({ linha, codigo, mensagem: 'Informe valor_produto e/ou valor_remessa' }); return; }
+        const entry: UpdateRow = {};
+        if (hasVenda) {
+          const v = parseFloat(String(row.valor_produto));
+          if (isNaN(v)) { errors.push({ linha, codigo, mensagem: 'valor_produto inválido' }); return; }
+          entry.valor_produto = v;
+        }
+        if (hasRemessa) {
+          const v = parseFloat(String(row.valor_remessa));
+          if (isNaN(v)) { errors.push({ linha, codigo, mensagem: 'valor_remessa inválido' }); return; }
+          entry.valor_remessa = v;
+        }
+        updateMap.set(codigo, entry);
       });
 
       const codigos = Array.from(updateMap.keys());
