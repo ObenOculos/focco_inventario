@@ -764,7 +764,9 @@ function ProdutosTab() {
               <h4 className="font-medium mb-2">Formato Esperado</h4>
               <ul className="space-y-1 text-muted-foreground">
                 <li><strong>codigo_auxiliar</strong> (obrigatório): Código do produto. Ex: OB1215 Q01</li>
-                <li><strong>valor_produto</strong> (obrigatório): Novo valor. Ex: 45.90</li>
+                <li><strong>valor_produto</strong> (opcional): Novo preço de venda. Ex: 45.90</li>
+                <li><strong>valor_remessa</strong> (opcional): Novo preço de remessa. Ex: 30.00</li>
+                <li className="text-xs italic">Pelo menos um dos dois é obrigatório.</li>
               </ul>
               <p className="mt-2 text-yellow-600 font-medium">Apenas produtos que já existem no banco terão seus valores atualizados.</p>
             </div>
