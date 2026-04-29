@@ -329,9 +329,9 @@ function ProdutosTab() {
 
   const downloadTemplate = () => {
     const template = [
-      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q01', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9 },
-      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q02', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9 },
-      { codigo_produto: 'PW6146', codigo_auxiliar: 'PW6146 A01', nome_produto: 'PW6146 Preto', valor_produto: 32.5 },
+      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q01', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_produto: 'OB1215', codigo_auxiliar: 'OB1215 Q02', nome_produto: 'ORX OB1215 O51-P19-H144', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_produto: 'PW6146', codigo_auxiliar: 'PW6146 A01', nome_produto: 'PW6146 Preto', valor_produto: 32.5, valor_remessa: 20.0 },
     ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
