@@ -524,9 +524,15 @@ function ProdutosTab() {
               <Label htmlFor="produto-nome">Nome do Produto</Label>
               <Input id="produto-nome" name="nome_produto" value={formData.nome_produto} onChange={(e) => setFormData({ ...formData, nome_produto: e.target.value })} className="border-2" placeholder="Ex: ORX OB1215 O51-P19-H144" required />
             </div>
-            <div>
-              <Label htmlFor="produto-valor">Valor (R$)</Label>
-              <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })} className="border-2" placeholder="0.00" />
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label htmlFor="produto-valor">Preço Venda (R$)</Label>
+                <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })} className="border-2" placeholder="0.00" />
+              </div>
+              <div>
+                <Label htmlFor="produto-valor-remessa">Preço Remessa (R$)</Label>
+                <Input id="produto-valor-remessa" name="valor_remessa" type="number" step="0.01" value={formData.valor_remessa} onChange={(e) => setFormData({ ...formData, valor_remessa: e.target.value })} className="border-2" placeholder="0.00" />
+              </div>
             </div>
             <Button type="submit" className="w-full">Cadastrar Produto</Button>
           </form>
