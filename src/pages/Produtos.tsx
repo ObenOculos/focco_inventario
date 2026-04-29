@@ -94,8 +94,14 @@ interface ImportValidation {
       modelo: string;
       cor: string;
       valor_produto: number;
+      valor_remessa: number;
     }
   >;
+}
+
+interface UpdateRow {
+  valor_produto?: number;
+  valor_remessa?: number;
 }
 
 interface UpdateValidation {
@@ -103,7 +109,7 @@ interface UpdateValidation {
   errors: { linha: number; codigo: string; mensagem: string }[];
   matchedProducts: number;
   notFoundProducts: string[];
-  updateMap: Map<string, number>;
+  updateMap: Map<string, UpdateRow>;
 }
 
 type ImportStatus = 'idle' | 'validating' | 'validated' | 'importing' | 'completed' | 'error';
