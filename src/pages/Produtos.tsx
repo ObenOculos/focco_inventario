@@ -453,9 +453,9 @@ function ProdutosTab() {
 
   const downloadUpdateTemplate = () => {
     const template = [
-      { codigo_auxiliar: 'OB1215 Q01', valor_produto: 45.9 },
-      { codigo_auxiliar: 'OB1215 Q02', valor_produto: 45.9 },
-      { codigo_auxiliar: 'PW6146 A01', valor_produto: 32.5 },
+      { codigo_auxiliar: 'OB1215 Q01', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_auxiliar: 'OB1215 Q02', valor_produto: 45.9, valor_remessa: 30.0 },
+      { codigo_auxiliar: 'PW6146 A01', valor_produto: 32.5, valor_remessa: 20.0 },
     ];
     const ws = XLSX.utils.json_to_sheet(template);
     const wb = XLSX.utils.book_new();
