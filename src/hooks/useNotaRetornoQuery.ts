@@ -104,6 +104,7 @@ export function useEstoqueRealVendedorQuery(codigoVendedor: string | null) {
             quantidade_atual: item.quantidade_real,
             quantidade_retorno: item.quantidade_real,
             valor_produto: produto?.valor_produto || 0,
+            valor_remessa: produto?.valor_remessa || 0,
             codigo_produto: produto?.codigo_produto || '',
           };
         })
