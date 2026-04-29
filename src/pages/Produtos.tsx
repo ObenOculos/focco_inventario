@@ -433,8 +433,12 @@ function ProdutosTab() {
       let updatedCount = 0;
       for (let i = 0; i < entries.length; i += BATCH_SIZE) {
         const batch = entries.slice(i, i + BATCH_SIZE);
-        const updates = batch.map(([codigo, valor]) => ({ codigo, valor }));
-        const { data, error } = await supabase.rpc('atualizar_valores_produtos', { p_updates: updates });
+        const updates = batch.map(([codigo, row]) => ({
+          codigo,
+          ...(row.valor_produto !== undefined ? { valor: row.valor_produto } : {}),
+          ...(row.valor_remessa !== undefined ? { valor_remessa: row.valor_remessa } : {}),
+        }));
+        const { data, error } = await supabase.rpc('atualizar_valores_produtos', { p_updates: updates as unknown as Json });
         if (error) console.error(`Erro no lote ${Math.floor(i / BATCH_SIZE) + 1}:`, error);
         else updatedCount += data || batch.length;
         setUpdateProgress({ current: Math.min(i + BATCH_SIZE, total), total });
