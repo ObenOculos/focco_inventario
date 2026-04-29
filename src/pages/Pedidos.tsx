@@ -84,6 +84,7 @@ interface ItemRetornoLocal {
   quantidade_atual: number;
   quantidade_retorno: number;
   valor_produto: number;
+  valor_remessa: number;
   codigo_produto: string;
 }
 
