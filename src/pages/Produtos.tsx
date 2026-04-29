@@ -655,7 +655,8 @@ function ProdutosTab() {
                 <li><strong>codigo_produto</strong> (obrigatório): Código principal do produto. Ex: OB1215</li>
                 <li><strong>codigo_auxiliar</strong> (obrigatório): Código único para QR Code. Ex: OB1215 Q01</li>
                 <li><strong>nome_produto</strong> (obrigatório): Nome/descrição do produto</li>
-                <li><strong>valor_produto</strong> (opcional): Custo do produto. Ex: 45.90</li>
+                <li><strong>valor_produto</strong> (opcional): Preço de venda. Ex: 45.90</li>
+                <li><strong>valor_remessa</strong> (opcional): Preço de remessa. Ex: 30.00</li>
               </ul>
               <p className="mt-2 text-primary font-medium">Apenas produtos NOVOS serão importados. Produtos existentes são ignorados.</p>
             </div>
