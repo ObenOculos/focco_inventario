@@ -809,7 +809,10 @@ function ProdutosTab() {
                     <div className="min-w-0 flex-1">
                       <p className="font-mono font-bold">{produto.codigo_auxiliar}</p>
                       <p className="text-sm text-muted-foreground truncate">{produto.nome_produto}</p>
-                      <p className="text-sm mt-1">R$ {Number(produto.valor_produto).toFixed(2)}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-sm">
+                        <span>Venda: <strong>R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
+                        <span className="text-muted-foreground">Remessa: <strong>R$ {Number(produto.valor_remessa ?? 0).toFixed(2)}</strong></span>
+                      </div>
                     </div>
                     <Button variant="outline" size="icon" className="border-2 flex-shrink-0" onClick={() => generateQRCode(produto)}>
                       <QrCode size={16} />
