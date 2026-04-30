@@ -1,44 +1,45 @@
 ## Objetivo
 
-Adicionar uma segunda tabela de preço ("preço de remessa") aos produtos e permitir, na geração do XML Ciclone, escolher qual tabela de preço usar (venda ou remessa).
+Permitir, ao gerar o XML Ciclone de retorno, dividir os itens em **N pedidos** (de 1 a 10). Cada pedido segmentado terá um `pedido_uuid` e `pedido_numero` próprios (IDs distintos), mas representará o mesmo retorno do mesmo vendedor, distribuído em vários XMLs.
 
-## Mudanças
+## Comportamento
 
-### 1. Banco de dados (migração)
-- Adicionar coluna `valor_remessa numeric DEFAULT 0` em `public.produtos`.
-- Atualizar a função RPC `atualizar_valores_produtos(p_updates jsonb)` para aceitar opcionalmente `valor_remessa` no payload, atualizando o campo correspondente quando presente. Mantém compatibilidade com payloads antigos (apenas `valor`).
+- No diálogo "Gerar XML Ciclone" (`src/pages/Pedidos.tsx`), além da escolha de Tabela de Preço e Loja, adicionar um campo **"Segmentar em quantos pedidos?"** (Select de 1 a 10, padrão = 1).
+- Ao clicar na loja:
+  - Se segmentos = 1 → comportamento atual (1 XML único).
+  - Se segmentos > 1 → gerar **N XMLs separados**, cada um com seu próprio `pedidoUuid`, `clienteUuid` e `pedidoNumero`, baixados em sequência. Nome do arquivo recebe sufixo `-parte{i}-de-{N}`.
+- Distribuição dos itens: round-robin pelos itens com `quantidade_retorno > 0`. Cada item inteiro vai para um único pedido (não fracionamos a quantidade de um mesmo SKU). Se segmentos > nº de itens, geramos apenas até o nº de itens (avisando o usuário com toast).
+- Cada XML continua válido individualmente: o `valor_total` é recalculado por segmento (já é feito dentro de `gerarXmlRetornoCiclone`).
 
-### 2. Página de Produtos (`src/pages/Produtos.tsx`)
-- Form de criar/editar produto: novo campo `valor_remessa` ao lado de `valor_produto` (rotulado "Preço de Venda" e "Preço de Remessa").
-- Listagem/cards de produto: mostrar os dois preços.
-- Importação Excel completa (criar produtos): aceitar coluna opcional `valor_remessa`; documentar nas instruções e nos exemplos da UI.
-- Importação Excel de atualização de valores: aceitar opcionalmente `valor_remessa` (qualquer um dos dois é suficiente; valida que pelo menos um veio). Atualiza nas instruções/exemplos.
+## Por que round-robin de itens inteiros
 
-### 3. Geração de XML Ciclone
-- `src/hooks/useNotaRetornoQuery.ts`: incluir `valor_remessa` no select de produtos e no objeto retornado por `useEstoqueRealVendedorQuery` (`valor_remessa`).
-- `src/pages/Pedidos.tsx`:
-  - Novo estado `tabelaPreco: 'venda' | 'remessa'` (default `'venda'`).
-  - No diálogo "Selecionar Loja" do XML: adicionar um seletor (RadioGroup) acima dos botões de loja: "Tabela de Preço — Venda / Remessa".
-  - Ao gerar o XML, mapear `valor_unitario` para `item.valor_produto` ou `item.valor_remessa` conforme escolha.
-  - Mostrar legenda discreta indicando qual tabela está selecionada.
-- `src/lib/gerarXmlCiclone.ts`: nenhuma mudança estrutural — segue recebendo `valor_unitario`. Opcional: incluir um sufixo no nome do arquivo (`-venda` / `-remessa`) para diferenciar exports.
+- Mantém o XML simples e o ERP Ciclone recebendo quantidades íntegras por linha (sem quebrar SKU).
+- Evita risco de divergência de arredondamento ao dividir quantidades.
+- Se no futuro quiser dividir por quantidade (ex.: quebrar um item de 50 peças em 2x 25), abrimos como evolução.
 
-## Comportamento esperado
-- Produtos podem ter dois preços independentes; ambos opcionais (default 0).
-- Importações antigas (sem `valor_remessa`) continuam funcionando.
-- A nota de retorno via edge function `criar-nota-retorno` continua usando `valor_produto` (preço de venda) como hoje — o seletor afeta APENAS o XML Ciclone, conforme pedido.
-- Cálculos de débito do vendedor e demais telas permanecem com `valor_produto`.
+## Detalhes técnicos
+
+### `src/lib/gerarXmlCiclone.ts`
+- `generatePedidoNumero` hoje usa `YYYYMMDDHHMMSS` + dígitos do vendedor. Para garantir IDs distintos quando vários XMLs são gerados no mesmo segundo, aceitar um parâmetro opcional `sequencia?: number` em `gerarXmlRetornoCiclone` e concatenar ao final do `pedidonumero` (ex.: `...HHMMSS01`, `...HHMMSS02`). O `pedidoUuid` já é aleatório por chamada — segue único naturalmente.
+- Nenhuma mudança estrutural no XML.
+
+### `src/pages/Pedidos.tsx`
+- Novo estado `segmentos: number` (default 1).
+- Novo `<Select>` no dialog (1..10) entre o bloco Tabela de Preço e o bloco Loja.
+- Refatorar o `onClick` da loja para:
+  1. Filtrar itens com `quantidade_retorno > 0`.
+  2. Se `segmentos > itens.length`, ajustar `effectiveSegmentos = itens.length` e exibir toast informativo.
+  3. Distribuir em `effectiveSegmentos` arrays via round-robin.
+  4. Para cada bucket: chamar `gerarXmlRetornoCiclone({...itens: bucket, sequencia: i+1})` e `downloadXml` com nome `retorno-ciclone-{tabelaPreco}-loja{codigo}-{vendedor}-parte{i+1}-de-{N}-{data}.xml`. Quando `N=1`, manter nome atual (sem sufixo de parte).
+  5. Toast final com total de arquivos gerados; fechar dialog.
+- Resetar `segmentos` para 1 quando o dialog fechar.
 
 ## Arquivos a alterar
-- 1 migração SQL (coluna + atualização da RPC)
-- `src/pages/Produtos.tsx`
-- `src/hooks/useNotaRetornoQuery.ts`
-- `src/pages/Pedidos.tsx`
-- `src/lib/gerarXmlCiclone.ts` (apenas nome do arquivo, opcional)
 
-## Perguntas em aberto
-Se quiser, posso também:
-- Aplicar a mesma escolha de tabela de preço ao cálculo de débito do vendedor (Conferência) — hoje está ligada a `valor_produto`.
-- Permitir escolher tabela de preço ao gerar a Nota de Retorno (edge function), não só no XML.
+- `src/lib/gerarXmlCiclone.ts` — adicionar parâmetro opcional `sequencia` para diferenciar `pedidonumero`.
+- `src/pages/Pedidos.tsx` — novo Select de segmentos + lógica de distribuição e download múltiplo.
 
-Confirme se quer alguma dessas extensões ou se devo seguir só com o escopo acima.
+## Fora de escopo
+
+- Dividir quantidades de um mesmo SKU entre pedidos (pode virar evolução futura).
+- Alterar a edge function `criar-nota-retorno` (continua gerando 1 nota só, como hoje).
