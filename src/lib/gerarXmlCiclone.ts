@@ -58,7 +58,7 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
-export function gerarXmlRetornoCiclone({ codigoVendedor, nomeVendedor, codigoLoja, itens }: GerarXmlParams): string {
+export function gerarXmlRetornoCiclone({ codigoVendedor, nomeVendedor, codigoLoja, itens, sequencia }: GerarXmlParams): string {
   const pedidoUuid = generateUUID();
   const clienteUuid = generateUUID();
   const now = new Date();
