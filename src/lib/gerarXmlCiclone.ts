@@ -10,6 +10,8 @@ interface GerarXmlParams {
   nomeVendedor: string;
   codigoLoja: number;
   itens: ItemXmlCiclone[];
+  /** Sequência opcional para diferenciar pedidos quando o XML é segmentado em vários arquivos. */
+  sequencia?: number;
 }
 
 function generateUUID(): string {
@@ -31,10 +33,11 @@ function getDateParts(date: Date) {
   };
 }
 
-function generatePedidoNumero(codigoVendedor: string, date: Date): string {
+function generatePedidoNumero(codigoVendedor: string, date: Date, sequencia?: number): string {
   const digits = codigoVendedor.replace(/\D/g, '');
   const { yyyy, mm, dd, hh, min, ss } = getDateParts(date);
-  return `${digits}${yyyy}${mm}${dd}${hh}${min}${ss}`;
+  const seq = sequencia && sequencia > 0 ? String(sequencia).padStart(2, '0') : '';
+  return `${digits}${yyyy}${mm}${dd}${hh}${min}${ss}${seq}`;
 }
 
 function formatDateTime(date: Date): string {
@@ -55,7 +58,7 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
-export function gerarXmlRetornoCiclone({ codigoVendedor, nomeVendedor, codigoLoja, itens }: GerarXmlParams): string {
+export function gerarXmlRetornoCiclone({ codigoVendedor, nomeVendedor, codigoLoja, itens, sequencia }: GerarXmlParams): string {
   const pedidoUuid = generateUUID();
   const clienteUuid = generateUUID();
   const now = new Date();
@@ -75,7 +78,7 @@ export function gerarXmlRetornoCiclone({ codigoVendedor, nomeVendedor, codigoLoj
   // Build cliente sub-registro (vendedor as "cliente" for internal adjustment)
   const clienteXml = `<subregistro><id>ws_api_cliente</id><ws_api_cliente_uuid>${clienteUuid}</ws_api_cliente_uuid><ws_api_pedido_uuid>${pedidoUuid}</ws_api_pedido_uuid><pgemp_codigo>${codigoLoja}</pgemp_codigo><pgfll_codigo>1</pgfll_codigo><pgwsm_codigo>1</pgwsm_codigo><wsacl_datahoraregistro>${dataHora}</wsacl_datahoraregistro><wsacl_cliente>${escapeXml(codigoVendedor)}</wsacl_cliente><wsacl_razaosocial>${escapeXml(nomeVendedor)}</wsacl_razaosocial><wsacl_nomefantasia>${escapeXml(nomeVendedor)}</wsacl_nomefantasia><wsacl_cpfcnpj></wsacl_cpfcnpj><wsacl_rgie></wsacl_rgie><wsacl_iesuframa></wsacl_iesuframa><wsacl_cep></wsacl_cep><wsacl_rua></wsacl_rua><wsacl_numero></wsacl_numero><wsacl_complemento></wsacl_complemento><wsacl_bairro></wsacl_bairro><wsacl_cidade></wsacl_cidade><wsacl_estado></wsacl_estado><wsacl_entregacep></wsacl_entregacep><wsacl_entregarua></wsacl_entregarua><wsacl_entreganumero></wsacl_entreganumero><wsacl_entregacomplemento></wsacl_entregacomplemento><wsacl_entregabairro></wsacl_entregabairro><wsacl_entregacidade></wsacl_entregacidade><wsacl_entregaestado></wsacl_entregaestado><wsacl_atividade></wsacl_atividade><wsacl_contatonome></wsacl_contatonome><wsacl_telefone></wsacl_telefone><wsacl_celular></wsacl_celular><wsacl_extras></wsacl_extras></subregistro>`;
 
-  const xml = `<ciclone><id>pedidovenda</id><registro><id>ws_api_pedido</id><ws_api_pedido_uuid>${pedidoUuid}</ws_api_pedido_uuid><pgemp_codigo>${codigoLoja}</pgemp_codigo><pgfll_codigo>1</pgfll_codigo><pgwsm_codigo>1</pgwsm_codigo><wsapd_empresa>${codigoLoja}.:.1</wsapd_empresa><wsapd_origem>FOCCO_BRASIL</wsapd_origem><wsapd_datahoraregistro>${dataHora}</wsapd_datahoraregistro><wsapd_situacao>D</wsapd_situacao><wsapd_pedidouuid></wsapd_pedidouuid><wsapd_pedidonumero>${generatePedidoNumero(codigoVendedor, now)}</wsapd_pedidonumero><wsapd_datahoraaberturaemissao>${dataEmissao}</wsapd_datahoraaberturaemissao><wsapd_datahorafechamento>${dataHora}</wsapd_datahorafechamento><wsapd_valorfrete></wsapd_valorfrete><wsapd_valortotal>${formatNumber(valorTotal)}</wsapd_valortotal><wsapd_valortotalliquido>${formatNumber(valorTotal)}</wsapd_valortotalliquido><wsapd_tipopedido>0</wsapd_tipopedido><wsapd_vendedor>${escapeXml(codigoVendedor)}</wsapd_vendedor><wsapd_condicaopagamento>0</wsapd_condicaopagamento><wsapd_condicaopagamentodesc>A VISTA.</wsapd_condicaopagamentodesc><wsapd_formapagamento>0</wsapd_formapagamento><wsapd_transportadora>0</wsapd_transportadora><wsapd_transportadoradesc></wsapd_transportadoradesc><wsapd_observacao>RETORNO DE ESTOQUE - GERADO AUTOMATICAMENTE</wsapd_observacao><wsapd_versaodados></wsapd_versaodados><wsapd_extras></wsapd_extras>${clienteXml}${itensXml}</registro></ciclone>`;
+  const xml = `<ciclone><id>pedidovenda</id><registro><id>ws_api_pedido</id><ws_api_pedido_uuid>${pedidoUuid}</ws_api_pedido_uuid><pgemp_codigo>${codigoLoja}</pgemp_codigo><pgfll_codigo>1</pgfll_codigo><pgwsm_codigo>1</pgwsm_codigo><wsapd_empresa>${codigoLoja}.:.1</wsapd_empresa><wsapd_origem>FOCCO_BRASIL</wsapd_origem><wsapd_datahoraregistro>${dataHora}</wsapd_datahoraregistro><wsapd_situacao>D</wsapd_situacao><wsapd_pedidouuid></wsapd_pedidouuid><wsapd_pedidonumero>${generatePedidoNumero(codigoVendedor, now, sequencia)}</wsapd_pedidonumero><wsapd_datahoraaberturaemissao>${dataEmissao}</wsapd_datahoraaberturaemissao><wsapd_datahorafechamento>${dataHora}</wsapd_datahorafechamento><wsapd_valorfrete></wsapd_valorfrete><wsapd_valortotal>${formatNumber(valorTotal)}</wsapd_valortotal><wsapd_valortotalliquido>${formatNumber(valorTotal)}</wsapd_valortotalliquido><wsapd_tipopedido>0</wsapd_tipopedido><wsapd_vendedor>${escapeXml(codigoVendedor)}</wsapd_vendedor><wsapd_condicaopagamento>0</wsapd_condicaopagamento><wsapd_condicaopagamentodesc>A VISTA.</wsapd_condicaopagamentodesc><wsapd_formapagamento>0</wsapd_formapagamento><wsapd_transportadora>0</wsapd_transportadora><wsapd_transportadoradesc></wsapd_transportadoradesc><wsapd_observacao>RETORNO DE ESTOQUE - GERADO AUTOMATICAMENTE</wsapd_observacao><wsapd_versaodados></wsapd_versaodados><wsapd_extras></wsapd_extras>${clienteXml}${itensXml}</registro></ciclone>`;
 
   return xml;
 }
