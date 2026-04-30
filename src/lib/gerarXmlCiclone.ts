@@ -94,3 +94,23 @@ export function downloadXml(xmlContent: string, fileName: string) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
 }
+
+export async function downloadXmlsAsZip(
+  arquivos: { nome: string; conteudo: string }[],
+  zipFileName: string
+) {
+  const { default: JSZip } = await import('jszip');
+  const zip = new JSZip();
+  arquivos.forEach(({ nome, conteudo }) => {
+    zip.file(nome, conteudo);
+  });
+  const blob = await zip.generateAsync({ type: 'blob', compression: 'DEFLATE' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = zipFileName;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
