@@ -418,6 +418,7 @@ function NotaRetornoTab() {
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [lojaDialogOpen, setLojaDialogOpen] = useState(false);
   const [tabelaPreco, setTabelaPreco] = useState<'venda' | 'remessa'>('venda');
+  const [segmentos, setSegmentos] = useState<number>(1);
 
   const { data: vendedores = [], isLoading: loadingVendedores } = useVendedoresListQuery();
   const {
