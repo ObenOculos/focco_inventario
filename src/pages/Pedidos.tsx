@@ -845,7 +845,7 @@ function NotaRetornoTab() {
                   });
 
                   const dataIso = new Date().toISOString().split('T')[0];
-                  buckets.forEach((bucket, i) => {
+                  const arquivos = buckets.map((bucket, i) => {
                     const xml = gerarXmlRetornoCiclone({
                       codigoVendedor: selectedVendedor,
                       nomeVendedor: vendedorInfo?.nome || selectedVendedor,
@@ -854,15 +854,23 @@ function NotaRetornoTab() {
                       sequencia: effectiveSegmentos > 1 ? i + 1 : undefined,
                     });
                     const sufixoParte = effectiveSegmentos > 1 ? `-parte${i + 1}-de-${effectiveSegmentos}` : '';
-                    const nomeArquivo = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}${sufixoParte}-${dataIso}.xml`;
-                    downloadXml(xml, nomeArquivo);
+                    const nome = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}${sufixoParte}-${dataIso}.xml`;
+                    return { nome, conteudo: xml };
                   });
 
-                  toast.success(
-                    effectiveSegmentos > 1
-                      ? `${effectiveSegmentos} arquivos XML gerados.`
-                      : 'XML gerado com sucesso.'
-                  );
+                  if (effectiveSegmentos > 1) {
+                    const zipName = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}-${effectiveSegmentos}partes-${dataIso}.zip`;
+                    downloadXmlsAsZip(arquivos, zipName)
+                      .then(() => toast.success(`ZIP gerado com ${effectiveSegmentos} XMLs.`))
+                      .catch((err) => {
+                        console.error(err);
+                        toast.error('Falha ao gerar o arquivo ZIP.');
+                      });
+                  } else {
+                    downloadXml(arquivos[0].conteudo, arquivos[0].nome);
+                    toast.success('XML gerado com sucesso.');
+                  }
+
                   setLojaDialogOpen(false);
                   setSegmentos(1);
                 }}
