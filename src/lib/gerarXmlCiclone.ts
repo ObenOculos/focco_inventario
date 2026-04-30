@@ -33,10 +33,11 @@ function getDateParts(date: Date) {
   };
 }
 
-function generatePedidoNumero(codigoVendedor: string, date: Date): string {
+function generatePedidoNumero(codigoVendedor: string, date: Date, sequencia?: number): string {
   const digits = codigoVendedor.replace(/\D/g, '');
   const { yyyy, mm, dd, hh, min, ss } = getDateParts(date);
-  return `${digits}${yyyy}${mm}${dd}${hh}${min}${ss}`;
+  const seq = sequencia && sequencia > 0 ? String(sequencia).padStart(2, '0') : '';
+  return `${digits}${yyyy}${mm}${dd}${hh}${min}${ss}${seq}`;
 }
 
 function formatDateTime(date: Date): string {
