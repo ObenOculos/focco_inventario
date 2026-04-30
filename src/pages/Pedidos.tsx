@@ -745,14 +745,20 @@ function NotaRetornoTab() {
       </AlertDialog>
 
       {/* Dialog de Seleção de Loja */}
-      <Dialog open={lojaDialogOpen} onOpenChange={setLojaDialogOpen}>
+      <Dialog
+        open={lojaDialogOpen}
+        onOpenChange={(open) => {
+          setLojaDialogOpen(open);
+          if (!open) setSegmentos(1);
+        }}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Store className="h-5 w-5" />
               Gerar XML Ciclone
             </DialogTitle>
-            <DialogDescription>Escolha a tabela de preço e a loja para gerar o XML de retorno.</DialogDescription>
+            <DialogDescription>Escolha a tabela de preço, a segmentação e a loja para gerar o XML de retorno.</DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2 py-2">
@@ -778,6 +784,25 @@ function NotaRetornoTab() {
             </p>
           </div>
 
+          <div className="space-y-2 py-2">
+            <p className="text-sm font-medium">Segmentar em quantos pedidos?</p>
+            <Select value={String(segmentos)} onValueChange={(v) => setSegmentos(Number(v))}>
+              <SelectTrigger id="segmentos-xml">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n === 1 ? '1 pedido (sem segmentação)' : `${n} pedidos`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Os itens serão distribuídos em <strong>{segmentos}</strong> {segmentos === 1 ? 'pedido' : 'pedidos'} com IDs distintos. Cada segmento gera um arquivo XML separado.
+            </p>
+          </div>
+
           <p className="text-sm font-medium pt-2">Loja</p>
           <div className="grid grid-cols-2 gap-4 py-2">
             {[
@@ -798,15 +823,48 @@ function NotaRetornoTab() {
                       quantidade: item.quantidade_retorno,
                       valor_unitario: tabelaPreco === 'remessa' ? item.valor_remessa : item.valor_produto,
                     }));
-                  const xml = gerarXmlRetornoCiclone({
-                    codigoVendedor: selectedVendedor,
-                    nomeVendedor: vendedorInfo?.nome || selectedVendedor,
-                    codigoLoja: loja.codigo,
-                    itens: itensXml,
+
+                  if (itensXml.length === 0) {
+                    toast.error('Nenhum item com quantidade de retorno para gerar o XML.');
+                    return;
+                  }
+
+                  // Ajusta segmentação ao máximo de itens disponíveis
+                  const requested = Math.max(1, Math.min(10, segmentos));
+                  const effectiveSegmentos = Math.min(requested, itensXml.length);
+                  if (effectiveSegmentos < requested) {
+                    toast.warning(
+                      `Só há ${itensXml.length} item(ns). Gerando ${effectiveSegmentos} pedido(s) em vez de ${requested}.`
+                    );
+                  }
+
+                  // Distribui itens em buckets via round-robin
+                  const buckets: typeof itensXml[] = Array.from({ length: effectiveSegmentos }, () => []);
+                  itensXml.forEach((item, idx) => {
+                    buckets[idx % effectiveSegmentos].push(item);
                   });
-                  const nomeArquivo = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}-${new Date().toISOString().split('T')[0]}.xml`;
-                  downloadXml(xml, nomeArquivo);
+
+                  const dataIso = new Date().toISOString().split('T')[0];
+                  buckets.forEach((bucket, i) => {
+                    const xml = gerarXmlRetornoCiclone({
+                      codigoVendedor: selectedVendedor,
+                      nomeVendedor: vendedorInfo?.nome || selectedVendedor,
+                      codigoLoja: loja.codigo,
+                      itens: bucket,
+                      sequencia: effectiveSegmentos > 1 ? i + 1 : undefined,
+                    });
+                    const sufixoParte = effectiveSegmentos > 1 ? `-parte${i + 1}-de-${effectiveSegmentos}` : '';
+                    const nomeArquivo = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}${sufixoParte}-${dataIso}.xml`;
+                    downloadXml(xml, nomeArquivo);
+                  });
+
+                  toast.success(
+                    effectiveSegmentos > 1
+                      ? `${effectiveSegmentos} arquivos XML gerados.`
+                      : 'XML gerado com sucesso.'
+                  );
                   setLojaDialogOpen(false);
+                  setSegmentos(1);
                 }}
               >
                 <Store className="h-6 w-6" />
