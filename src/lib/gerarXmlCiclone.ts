@@ -10,6 +10,8 @@ interface GerarXmlParams {
   nomeVendedor: string;
   codigoLoja: number;
   itens: ItemXmlCiclone[];
+  /** Sequência opcional para diferenciar pedidos quando o XML é segmentado em vários arquivos. */
+  sequencia?: number;
 }
 
 function generateUUID(): string {
