@@ -8,6 +8,3 @@ verify_jwt = false
 
 [functions.criar-nota-retorno]
 verify_jwt = false
-
-[functions.restore-inventory]
-verify_jwt = false
