@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X, RefreshCcw } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X, RefreshCcw, Download, Upload } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
