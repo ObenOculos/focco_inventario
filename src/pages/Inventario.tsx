@@ -28,6 +28,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination } from '@/components/Pagination';
+import { useCodigosCorrecaoQuery } from '@/hooks/useCodigosCorrecaoQuery';
 
 interface InventarioItem {
   codigo_auxiliar: string;
@@ -68,6 +69,8 @@ export default function Inventario() {
   const [brandFilter, setBrandFilter] = useState<'all' | 'oben' | 'power' | 'outros'>('all');
   const [showClearAllDialog, setShowClearAllDialog] = useState(false);
 
+  const { data: codigosCorrecao = [] } = useCodigosCorrecaoQuery();
+
   const filteredItemsByBrand = useMemo(() => {
     if (brandFilter === 'all') {
       return items;
@@ -87,15 +90,36 @@ export default function Inventario() {
     });
   }, [items, brandFilter]);
 
+  // Search com suporte a códigos de correção (errado → correto)
+  const searchedItems = useMemo(() => {
+    const term = searchTerm.trim().toLowerCase();
+    if (!term) return filteredItemsByBrand;
+
+    // Códigos corretos cujo "errado" bate com o termo digitado
+    const matchingCorrectCodes = new Set(
+      codigosCorrecao
+        .filter((c) => c.cod_errado.toLowerCase().includes(term))
+        .map((c) => c.cod_auxiliar_correto.toLowerCase())
+    );
+
+    return filteredItemsByBrand.filter((item) => {
+      const codigo = item.codigo_auxiliar.toLowerCase();
+      const nome = (item.nome_produto || '').toLowerCase();
+      return (
+        codigo.includes(term) ||
+        nome.includes(term) ||
+        matchingCorrectCodes.has(codigo)
+      );
+    });
+  }, [filteredItemsByBrand, searchTerm, codigosCorrecao]);
+
   // Filtrar e paginar itens
   const {
     paginatedData: paginatedItems,
     totalItems,
     ...paginationProps
   } = usePagination({
-    data: filteredItemsByBrand,
-    searchTerm,
-    searchFields: ['codigo_auxiliar', 'nome_produto'],
+    data: searchedItems,
     itemsPerPage: 10,
   });
 
