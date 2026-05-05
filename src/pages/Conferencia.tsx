@@ -125,6 +125,7 @@ export default function Conferencia() {
   const [movimentosPosteriores, setMovimentosPosteriores] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
+  const gerarRetornoInvMutation = useGerarNotaRetornoDeInventarioMutation();
 
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedoresSimpleQuery(isGerente);
   const {
