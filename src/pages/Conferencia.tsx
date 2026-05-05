@@ -25,6 +25,7 @@ import {
   Minus,
   ArrowLeft,
   Settings,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Dialog,
