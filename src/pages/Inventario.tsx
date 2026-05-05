@@ -455,7 +455,12 @@ export default function Inventario() {
       setInventarioInfo(null);
     } catch (error: any) {
       console.error('Erro ao salvar inventário:', error);
-      toast.error('Erro ao salvar inventário');
+      const msg =
+        error?.message ||
+        error?.error_description ||
+        error?.details ||
+        (typeof error === 'string' ? error : 'Erro desconhecido');
+      toast.error('Erro ao salvar inventário', { description: msg });
     } finally {
       setLoading(false);
     }
