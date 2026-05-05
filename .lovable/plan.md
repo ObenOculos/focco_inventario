@@ -1,38 +1,50 @@
+
 ## Contexto
 
-- Vendedor: **Mister Cláudio** (`codigo_vendedor='16'`, user_id `54d8acae-...`)
-- Inventário do dia 01/02/2026 foi deletado. Hoje só existe 1 inventário aprovado (03/05/2026).
-- Arquivo enviado: `conferencia_Mister_Cláudio_01-02-2026_completo.xlsx` — 1.897 linhas com colunas `Código Auxiliar`, `Quantidade Física`, `Estoque Teórico`, `Diferença`, `Status`.
+Hoje a aba **Nota de Retorno** (em `/pedidos`) sempre usa o estoque real mais recente do vendedor (`get_estoque_real_vendedor` retorna o último `estoque_real` por SKU). Isso cria dois problemas:
 
-## ⚠️ Alerta importante antes de executar
+1. **Não há como gerar uma nota de retorno de um inventário específico.** Se o gerente quer devolver exatamente o que foi contado em um inventário antigo (ex: 01/02), não consegue — só pega o último.
+2. **Quando o mesmo vendedor tem dois inventários aprovados**, o segundo simplesmente vira o novo baseline e o anterior some da visão de "estoque atual". Isso já funciona para cálculo de teórico (usa `MAX(data_inventario)`), mas confunde quando precisamos olhar "o que foi contado no inventário X".
 
-O inventário aprovado de 03/05/2026 já gravou `estoque_real` usando como **base teórica** os movimentos pós-data. Se inserirmos um inventário aprovado em 01/02/2026 **agora**, ele vira o "último aprovado" só para datas ≤ 01/02. O inventário de 03/05 continua sendo o mais recente e a base de cálculo atual **não muda**. Ou seja: a restauração é segura para histórico, mas não recalcula nada do presente.
+## O que vamos construir
 
-Confirmar comigo antes de rodar:
-1. Restaurar como **`aprovado`** com `data_inventario = 2026-02-01 12:00:00-03` (recomendado, replica o estado original)?
-2. Ou restaurar como **`pendente`** para o gerente revisar/aprovar manualmente de novo?
+### 1. Gerar Nota de Retorno a partir de um inventário específico
 
-## Passos da execução
+Na tela **Conferência** (`/conferencia`), quando o gerente abre um inventário **aprovado**, adicionar um botão **"Gerar Nota de Retorno deste Inventário"** (no menu de ações secundárias).
 
-1. **Copiar o XLSX** para o sandbox e ler com pandas, mantendo apenas `Código Auxiliar` + `Quantidade Física` (ignorar linhas com qtd nula/negativa).
-2. **Gerar SQL de inserção** em uma migration única:
-   - `INSERT INTO inventarios` → novo `id`, `codigo_vendedor='16'`, `user_id='54d8acae-...'`, `data_inventario='2026-02-01 12:00:00-03'`, `status` conforme decisão acima, `observacoes='Restaurado a partir de planilha Excel — inventário original deletado.'`.
-   - `INSERT INTO itens_inventario` em lote (1.897 linhas) usando o `id` do inventário acima e `nome_produto` da planilha.
-3. **Se status = `aprovado`**, replicar também o `estoque_real`:
-   - Para cada item contado, inserir em `estoque_real` com `codigo_vendedor='16'`, `quantidade_real = Quantidade Física`, `inventario_id = <novo>`, `data_atualizacao = '2026-02-01 12:00:00-03'`.
-   - Isso reproduz o que a edge function `aprovar-e-ajustar-inventario` teria feito.
-4. **Validar** com SELECT: contagem de itens_inventario + estoque_real = 1.897 e a função `comparar_estoque_inventario_paginado` retornar resultado coerente.
+Ao clicar:
+- Abre um modal de confirmação listando: vendedor, data do inventário, total de SKUs e unidades que serão devolvidos, valor total.
+- Permite escolher: **devolver tudo** (quantidade física do inventário) **ou apenas itens com quantidade > 0**.
+- Confirma → chama a edge function `criar-nota-retorno` passando os itens vindos do inventário (não do `estoque_real` mais recente).
+
+Resultado: gera o pedido tipo `3` (Retorno) normalmente, abatendo o estoque.
+
+### 2. Múltiplos inventários aprovados do mesmo vendedor
+
+Hoje o sistema já suporta tecnicamente (cada inventário tem sua data e gera seu snapshot em `estoque_real`), mas a UX não deixa claro. Vamos:
+
+- **Conferência**: mostrar badge "Mais recente" no inventário aprovado mais novo de cada vendedor, e badge cinza "Histórico" nos anteriores.
+- **Nota de Retorno (aba Pedidos)**: continuar usando o mais recente como padrão (comportamento atual), mas adicionar um aviso "Baseado no inventário de DD/MM/AAAA — para usar outro, vá em Conferência".
+- **Cálculo de teórico**: já usa `MAX(data_inventario)` corretamente, sem mudança.
+
+### 3. Validação
+
+- Bloquear geração de nota de retorno se o inventário escolhido não for o mais recente E já existirem movimentações (vendas/remessas/retornos) posteriores a ele — porque devolveria itens que já podem ter saído. Mostrar toast explicando.
+- Permitir override apenas com confirmação extra ("Eu sei o que estou fazendo").
 
 ## Detalhes técnicos
 
-- Inserções vão em lotes de 500 via SQL `INSERT ... VALUES (...), (...)` para respeitar limites do Postgres.
-- Vou usar `gen_random_uuid()` para o id do inventário e capturá-lo via CTE `WITH inv AS (INSERT ... RETURNING id)` para encadear os itens.
-- A planilha não traz `nome_produto` separado do "Nome Produto"; vou usar essa coluna direto. Para códigos não cadastrados, a inserção em `itens_inventario` ainda funciona (não há FK).
-- A migration ficará idempotente protegida por `ON CONFLICT DO NOTHING` no `inventarios` (checando `codigo_vendedor + data_inventario` se necessário) ou simplesmente rodando uma vez só.
+- `src/pages/Conferencia.tsx`: novo botão no `DropdownMenu` de ações do inventário aprovado, novo `AlertDialog` de confirmação.
+- `src/hooks/useNotaRetornoQuery.ts`: nova função `useGerarNotaRetornoDeInventarioMutation` que monta os itens a partir de `itens_inventario` + tabela `produtos` (para pegar `valor_produto`) e chama a mesma edge function `criar-nota-retorno`.
+- Edge function `criar-nota-retorno`: **sem mudanças** — já recebe `{ codigo_vendedor, itens, observacoes }`, então só passamos os itens montados a partir do inventário escolhido.
+- `useInventariosPendentesQuery`: adicionar flag computada `is_mais_recente` por vendedor para o badge.
+- Validação de movimentações posteriores: query rápida em `pedidos` filtrando por `codigo_vendedor` e `data_emissao > data_inventario`.
 
-## Riscos
+## Arquivos afetados
 
-- Se já tiver havido importações de pedidos com `data_emissao` entre 01/02 e 03/05, o cálculo histórico via `calcular_estoque_vendedor_ate_data` para datas nesse intervalo passará a usar essa base — isso é o comportamento desejado da restauração.
-- Não vou apagar/alterar nada do inventário de 03/05.
+- `src/pages/Conferencia.tsx` — botão + modal
+- `src/hooks/useNotaRetornoQuery.ts` — nova mutation
+- `src/hooks/useConferenciaQuery.ts` — flag `is_mais_recente`
+- `src/pages/Pedidos.tsx` — aviso na aba Nota de Retorno
 
-Me responde **(1) aprovado** ou **(2) pendente** e eu sigo.
+Sem migração de banco. Sem mudanças em edge functions.
