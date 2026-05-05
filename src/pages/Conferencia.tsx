@@ -386,6 +386,41 @@ export default function Conferencia() {
     }
   };
 
+  const handleOpenRetornoDialog = async () => {
+    if (!selectedInventario) return;
+    setRetornoApenasComQtd(true);
+    setRetornoForceConfirm(false);
+    setMovimentosPosteriores(null);
+    setShowManagerActions(false);
+    setShowRetornoDialog(true);
+
+    const { count, error } = await supabase
+      .from('pedidos')
+      .select('id', { count: 'exact', head: true })
+      .eq('codigo_vendedor', selectedInventario.codigo_vendedor)
+      .in('codigo_tipo', [2, 3, 7, 99])
+      .gt('data_emissao', selectedInventario.data_inventario);
+    if (!error) {
+      setMovimentosPosteriores(count ?? 0);
+    }
+  };
+
+  const handleConfirmGerarRetorno = async () => {
+    if (!selectedInventario) return;
+    try {
+      await gerarRetornoInvMutation.mutateAsync({
+        inventario_id: selectedInventario.id,
+        codigo_vendedor: selectedInventario.codigo_vendedor,
+        observacoes: `Retorno do inventário de ${format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}`,
+        apenas_com_quantidade: retornoApenasComQtd,
+      });
+      setShowRetornoDialog(false);
+    } catch {
+      // toast tratado no hook
+    }
+  };
+
+
   const handleEditValue = (codigoAuxiliar: string, value: string) => {
     if (value === '' || value === '-') {
       setEditedValues((prev) => ({ ...prev, [codigoAuxiliar]: 0 }));
