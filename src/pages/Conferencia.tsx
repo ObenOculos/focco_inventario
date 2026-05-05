@@ -863,6 +863,17 @@ export default function Conferencia() {
                       </Button>
                     </>
                   )}
+                  {selectedInventario?.status === 'aprovado' && (
+                    <Button
+                      onClick={handleOpenRetornoDialog}
+                      disabled={gerarRetornoInvMutation.isPending}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <RotateCcw size={16} className="mr-2" />
+                      Gerar Nota de Retorno
+                    </Button>
+                  )}
                 </div>
                 {isPendingOrRevisao && (
                   <div className="space-y-2">
