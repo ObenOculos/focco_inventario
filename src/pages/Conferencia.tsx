@@ -892,6 +892,102 @@ export default function Conferencia() {
               </DialogContent>
             </Dialog>
 
+            {/* Dialog: Gerar Nota de Retorno do Inventário */}
+            <AlertDialog open={showRetornoDialog} onOpenChange={setShowRetornoDialog}>
+              <AlertDialogContent className="max-w-lg">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Gerar Nota de Retorno deste Inventário</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        Será criada uma nota de retorno (tipo 3) com os itens contados em{' '}
+                        <strong>
+                          {selectedInventario && format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
+                        </strong>{' '}
+                        para <strong>{selectedInventario?.profiles?.nome || selectedInventario?.codigo_vendedor}</strong>.
+                      </div>
+                      {selectedInventario && (
+                        <div className="rounded border-2 p-3 bg-muted/30 text-xs space-y-1">
+                          <div>
+                            <strong>{new Set(selectedInventario.itens_inventario.map((i) => i.codigo_auxiliar)).size}</strong> SKUs ·{' '}
+                            <strong>
+                              {selectedInventario.itens_inventario.reduce((s, i) => s + Number(i.quantidade_fisica), 0)}
+                            </strong>{' '}
+                            unidades totais
+                          </div>
+                          <div className="text-muted-foreground">
+                            {retornoApenasComQtd
+                              ? 'Apenas itens com quantidade > 0 serão incluídos.'
+                              : 'Todos os itens (incluindo zerados) serão incluídos.'}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Switch
+                          id="apenas-com-qtd"
+                          checked={retornoApenasComQtd}
+                          onCheckedChange={setRetornoApenasComQtd}
+                        />
+                        <Label htmlFor="apenas-com-qtd" className="text-xs cursor-pointer">
+                          Apenas itens com quantidade contada &gt; 0
+                        </Label>
+                      </div>
+                      {movimentosPosteriores === null ? (
+                        <div className="text-xs text-muted-foreground">Verificando movimentações posteriores...</div>
+                      ) : movimentosPosteriores > 0 ? (
+                        <div className="rounded border-2 border-destructive/50 bg-destructive/10 p-3 text-xs space-y-2">
+                          <div className="font-semibold text-destructive flex items-center gap-1.5">
+                            <AlertTriangle size={14} />
+                            Atenção: existem {movimentosPosteriores} movimentações após esta data
+                          </div>
+                          <div>
+                            Itens podem já ter saído ou entrado depois deste inventário. Gerar a nota agora pode causar
+                            divergência no estoque.
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <Switch
+                              id="force-confirm"
+                              checked={retornoForceConfirm}
+                              onCheckedChange={setRetornoForceConfirm}
+                            />
+                            <Label htmlFor="force-confirm" className="text-xs cursor-pointer">
+                              Eu sei o que estou fazendo, prosseguir mesmo assim
+                            </Label>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-green-700">
+                          Nenhuma movimentação após este inventário — seguro para gerar.
+                        </div>
+                      )}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={gerarRetornoInvMutation.isPending}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleConfirmGerarRetorno();
+                    }}
+                    disabled={
+                      gerarRetornoInvMutation.isPending ||
+                      movimentosPosteriores === null ||
+                      (movimentosPosteriores > 0 && !retornoForceConfirm)
+                    }
+                  >
+                    {gerarRetornoInvMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Gerando...
+                      </>
+                    ) : (
+                      'Confirmar Geração'
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
             <Card className="border-2 shadow-none">
               <CardHeader>
                 <div className="flex items-center justify-between gap-2">
