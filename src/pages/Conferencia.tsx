@@ -25,6 +25,7 @@ import {
   Minus,
   ArrowLeft,
   Settings,
+  RotateCcw,
 } from 'lucide-react';
 import {
   Dialog,
@@ -77,6 +78,7 @@ import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useGerarNotaRetornoDeInventarioMutation } from '@/hooks/useNotaRetornoQuery';
 
 type ItemNaoContado = {
   codigo_auxiliar: string;
@@ -117,8 +119,13 @@ export default function Conferencia() {
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [usaSomaParaNegativo, setUsaSomaParaNegativo] = useState(true);
+  const [showRetornoDialog, setShowRetornoDialog] = useState(false);
+  const [retornoApenasComQtd, setRetornoApenasComQtd] = useState(true);
+  const [retornoForceConfirm, setRetornoForceConfirm] = useState(false);
+  const [movimentosPosteriores, setMovimentosPosteriores] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
+  const gerarRetornoInvMutation = useGerarNotaRetornoDeInventarioMutation();
 
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedoresSimpleQuery(isGerente);
   const {
@@ -378,6 +385,41 @@ export default function Conferencia() {
       setSaving(false);
     }
   };
+
+  const handleOpenRetornoDialog = async () => {
+    if (!selectedInventario) return;
+    setRetornoApenasComQtd(true);
+    setRetornoForceConfirm(false);
+    setMovimentosPosteriores(null);
+    setShowManagerActions(false);
+    setShowRetornoDialog(true);
+
+    const { count, error } = await supabase
+      .from('pedidos')
+      .select('id', { count: 'exact', head: true })
+      .eq('codigo_vendedor', selectedInventario.codigo_vendedor)
+      .in('codigo_tipo', [2, 3, 7, 99])
+      .gt('data_emissao', selectedInventario.data_inventario);
+    if (!error) {
+      setMovimentosPosteriores(count ?? 0);
+    }
+  };
+
+  const handleConfirmGerarRetorno = async () => {
+    if (!selectedInventario) return;
+    try {
+      await gerarRetornoInvMutation.mutateAsync({
+        inventario_id: selectedInventario.id,
+        codigo_vendedor: selectedInventario.codigo_vendedor,
+        observacoes: `Retorno do inventário de ${format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}`,
+        apenas_com_quantidade: retornoApenasComQtd,
+      });
+      setShowRetornoDialog(false);
+    } catch {
+      // toast tratado no hook
+    }
+  };
+
 
   const handleEditValue = (codigoAuxiliar: string, value: string) => {
     if (value === '' || value === '-') {
@@ -655,11 +697,23 @@ export default function Conferencia() {
                           <CardTitle className="text-base flex items-center gap-2">
                             <User size={16} /> {inv.profiles?.nome || 'Vendedor'}
                           </CardTitle>
-                          <Badge
-                            variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
-                          >
-                            <span className="capitalize">{inv.status}</span>
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            {isAprovado && inv.is_mais_recente && (
+                              <Badge variant="outline" className="border-green-600 text-green-700 text-[10px]">
+                                Mais recente
+                              </Badge>
+                            )}
+                            {isAprovado && inv.is_mais_recente === false && (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                Histórico
+                              </Badge>
+                            )}
+                            <Badge
+                              variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
+                            >
+                              <span className="capitalize">{inv.status}</span>
+                            </Badge>
+                          </div>
                         </div>
                         <p className="font-mono text-xs text-muted-foreground pt-1">
                           {inv.codigo_vendedor}
@@ -821,6 +875,17 @@ export default function Conferencia() {
                       </Button>
                     </>
                   )}
+                  {selectedInventario?.status === 'aprovado' && (
+                    <Button
+                      onClick={handleOpenRetornoDialog}
+                      disabled={gerarRetornoInvMutation.isPending}
+                      size="sm"
+                      variant="outline"
+                    >
+                      <RotateCcw size={16} className="mr-2" />
+                      Gerar Nota de Retorno
+                    </Button>
+                  )}
                 </div>
                 {isPendingOrRevisao && (
                   <div className="space-y-2">
@@ -838,6 +903,102 @@ export default function Conferencia() {
                 )}
               </DialogContent>
             </Dialog>
+
+            {/* Dialog: Gerar Nota de Retorno do Inventário */}
+            <AlertDialog open={showRetornoDialog} onOpenChange={setShowRetornoDialog}>
+              <AlertDialogContent className="max-w-lg">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Gerar Nota de Retorno deste Inventário</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        Será criada uma nota de retorno (tipo 3) com os itens contados em{' '}
+                        <strong>
+                          {selectedInventario && format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
+                        </strong>{' '}
+                        para <strong>{selectedInventario?.profiles?.nome || selectedInventario?.codigo_vendedor}</strong>.
+                      </div>
+                      {selectedInventario && (
+                        <div className="rounded border-2 p-3 bg-muted/30 text-xs space-y-1">
+                          <div>
+                            <strong>{new Set(selectedInventario.itens_inventario.map((i) => i.codigo_auxiliar)).size}</strong> SKUs ·{' '}
+                            <strong>
+                              {selectedInventario.itens_inventario.reduce((s, i) => s + Number(i.quantidade_fisica), 0)}
+                            </strong>{' '}
+                            unidades totais
+                          </div>
+                          <div className="text-muted-foreground">
+                            {retornoApenasComQtd
+                              ? 'Apenas itens com quantidade > 0 serão incluídos.'
+                              : 'Todos os itens (incluindo zerados) serão incluídos.'}
+                          </div>
+                        </div>
+                      )}
+                      <div className="flex items-center gap-2 pt-1">
+                        <Switch
+                          id="apenas-com-qtd"
+                          checked={retornoApenasComQtd}
+                          onCheckedChange={setRetornoApenasComQtd}
+                        />
+                        <Label htmlFor="apenas-com-qtd" className="text-xs cursor-pointer">
+                          Apenas itens com quantidade contada &gt; 0
+                        </Label>
+                      </div>
+                      {movimentosPosteriores === null ? (
+                        <div className="text-xs text-muted-foreground">Verificando movimentações posteriores...</div>
+                      ) : movimentosPosteriores > 0 ? (
+                        <div className="rounded border-2 border-destructive/50 bg-destructive/10 p-3 text-xs space-y-2">
+                          <div className="font-semibold text-destructive flex items-center gap-1.5">
+                            <AlertTriangle size={14} />
+                            Atenção: existem {movimentosPosteriores} movimentações após esta data
+                          </div>
+                          <div>
+                            Itens podem já ter saído ou entrado depois deste inventário. Gerar a nota agora pode causar
+                            divergência no estoque.
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <Switch
+                              id="force-confirm"
+                              checked={retornoForceConfirm}
+                              onCheckedChange={setRetornoForceConfirm}
+                            />
+                            <Label htmlFor="force-confirm" className="text-xs cursor-pointer">
+                              Eu sei o que estou fazendo, prosseguir mesmo assim
+                            </Label>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-green-700">
+                          Nenhuma movimentação após este inventário — seguro para gerar.
+                        </div>
+                      )}
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={gerarRetornoInvMutation.isPending}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => {
+                      e.preventDefault();
+                      handleConfirmGerarRetorno();
+                    }}
+                    disabled={
+                      gerarRetornoInvMutation.isPending ||
+                      movimentosPosteriores === null ||
+                      (movimentosPosteriores > 0 && !retornoForceConfirm)
+                    }
+                  >
+                    {gerarRetornoInvMutation.isPending ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Gerando...
+                      </>
+                    ) : (
+                      'Confirmar Geração'
+                    )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
 
             <Card className="border-2 shadow-none">
               <CardHeader>

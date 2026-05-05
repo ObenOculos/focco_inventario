@@ -559,6 +559,11 @@ function NotaRetornoTab() {
 
       {selectedVendedor && (
         <>
+          <div className="rounded border-2 bg-blue-50 dark:bg-blue-950/30 p-3 text-xs text-blue-900 dark:text-blue-200">
+            <strong>Atenção:</strong> esta nota usa o estoque real <em>mais recente</em> do vendedor (último inventário aprovado + movimentações posteriores).
+            Para gerar uma nota a partir de um inventário aprovado específico, vá em <strong>Conferência</strong>, abra o inventário e use{' '}
+            <em>Ações do Gerente → Gerar Nota de Retorno</em>.
+          </div>
           {/* Resumo */}
           <Card>
             <CardContent className="pt-6">
