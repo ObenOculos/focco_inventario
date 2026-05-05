@@ -119,6 +119,10 @@ export default function Conferencia() {
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [usaSomaParaNegativo, setUsaSomaParaNegativo] = useState(true);
+  const [showRetornoDialog, setShowRetornoDialog] = useState(false);
+  const [retornoApenasComQtd, setRetornoApenasComQtd] = useState(true);
+  const [retornoForceConfirm, setRetornoForceConfirm] = useState(false);
+  const [movimentosPosteriores, setMovimentosPosteriores] = useState<number | null>(null);
 
   const queryClient = useQueryClient();
 
