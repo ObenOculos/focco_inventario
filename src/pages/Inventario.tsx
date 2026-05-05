@@ -28,6 +28,7 @@ import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination } from '@/components/Pagination';
+import { useCodigosCorrecaoQuery } from '@/hooks/useCodigosCorrecaoQuery';
 
 interface InventarioItem {
   codigo_auxiliar: string;
