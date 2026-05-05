@@ -10,40 +10,47 @@ serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const body = await req.json();
-    const {
-      codigo_vendedor,
-      user_id,
-      data_inventario,
-      observacoes,
-      items, // [{c, n, q}]
-      admin_token,
-    } = body;
-
-    if (admin_token !== Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')) {
-      return new Response(JSON.stringify({ error: 'forbidden' }), {
-        status: 403,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Auth: must be a logged-in gerente
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader?.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'no token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user } } = await supabase.auth.getUser(token);
+    if (!user) {
+      return new Response(JSON.stringify({ error: 'invalid token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    if (profile?.role !== 'gerente') {
+      return new Response(JSON.stringify({ error: 'not gerente' }), {
+        status: 403,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    const body = await req.json();
+    const { codigo_vendedor, user_id, data_inventario, observacoes, items } = body;
+
     const { data: inv, error: invErr } = await supabase
       .from('inventarios')
-      .insert({
-        codigo_vendedor,
-        user_id,
-        data_inventario,
-        status: 'aprovado',
-        observacoes,
-      })
+      .insert({ codigo_vendedor, user_id, data_inventario, status: 'aprovado', observacoes })
       .select('id')
       .single();
-
     if (invErr) throw invErr;
     const inv_id = inv.id;
 
