@@ -5,6 +5,7 @@ import { Database } from '@/integrations/supabase/types';
 type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
   itens_inventario: Database['public']['Tables']['itens_inventario']['Row'][];
   profiles?: { nome: string };
+  is_mais_recente?: boolean;
 };
 
 const BATCH_SIZE = 1000;
@@ -13,7 +14,6 @@ async function fetchAllItensInventario(inventarioIds: string[]) {
   if (inventarioIds.length === 0) return [];
   const all: Database['public']['Tables']['itens_inventario']['Row'][] = [];
   let from = 0;
-  // Paginate using range to bypass the 1000-row default cap
   // eslint-disable-next-line no-constant-condition
   while (true) {
     const { data, error } = await supabase
@@ -61,8 +61,6 @@ export const useInventariosPendentesQuery = (
 
       const inventarios = (invs || []) as any[];
       const ids = inventarios.map((i) => i.id);
-
-      // Fetch all items across all inventarios in batches (avoids 1000-row embed cap)
       const itens = await fetchAllItensInventario(ids);
 
       const byInv = new Map<string, Database['public']['Tables']['itens_inventario']['Row'][]>();
@@ -72,9 +70,27 @@ export const useInventariosPendentesQuery = (
         byInv.set(it.inventario_id, arr);
       }
 
+      // Identify most-recent APPROVED inventory per vendedor
+      const maisRecenteAprovadoPorVendedor = new Map<string, string>();
+      for (const inv of inventarios) {
+        if (inv.status !== 'aprovado') continue;
+        const cur = maisRecenteAprovadoPorVendedor.get(inv.codigo_vendedor);
+        if (!cur) {
+          maisRecenteAprovadoPorVendedor.set(inv.codigo_vendedor, inv.id);
+        } else {
+          const curInv = inventarios.find((i) => i.id === cur);
+          if (curInv && new Date(inv.data_inventario) > new Date(curInv.data_inventario)) {
+            maisRecenteAprovadoPorVendedor.set(inv.codigo_vendedor, inv.id);
+          }
+        }
+      }
+
       return inventarios.map((inv) => ({
         ...inv,
         itens_inventario: byInv.get(inv.id) || [],
+        is_mais_recente:
+          inv.status === 'aprovado' &&
+          maisRecenteAprovadoPorVendedor.get(inv.codigo_vendedor) === inv.id,
       })) as InventarioComItens[];
     },
   });
