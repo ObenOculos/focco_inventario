@@ -815,16 +815,45 @@ export default function Inventario() {
                   Outros
                 </Button>
               </div>
-              {items.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={handleImportFile}
+                  className="hidden"
+                  id="inventario-import-file"
+                  name="inventario_import_file"
+                />
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size={isMobile ? 'sm' : 'default'}
-                  onClick={() => setShowClearAllDialog(true)}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <RefreshCcw size={16} className="mr-2" />
-                  Limpar Tudo
+                  <Upload size={16} className="mr-2" />
+                  Importar
                 </Button>
-              )}
+                {items.length > 0 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size={isMobile ? 'sm' : 'default'}
+                      onClick={handleExportFile}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Exportar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size={isMobile ? 'sm' : 'default'}
+                      onClick={() => setShowClearAllDialog(true)}
+                    >
+                      <RefreshCcw size={16} className="mr-2" />
+                      Limpar Tudo
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
