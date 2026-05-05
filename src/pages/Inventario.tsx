@@ -46,6 +46,7 @@ export default function Inventario() {
   const [observacoes, setObservacoes] = useState('');
   const [loading, setLoading] = useState(false); // Loading para envio
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
