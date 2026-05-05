@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X, RefreshCcw } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X, RefreshCcw, Download, Upload } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -46,6 +46,7 @@ export default function Inventario() {
   const [observacoes, setObservacoes] = useState('');
   const [loading, setLoading] = useState(false); // Loading para envio
   const scannerRef = useRef<Html5Qrcode | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -343,6 +344,84 @@ export default function Inventario() {
     clearDraft();
     setShowClearAllDialog(false);
     toast.success('Todos os itens foram removidos.');
+  };
+
+  const handleExportFile = () => {
+    if (items.length === 0) {
+      toast.error('Não há itens para exportar.');
+      return;
+    }
+    const payload = {
+      version: 1,
+      tipo: 'inventario_focco',
+      exported_at: new Date().toISOString(),
+      codigo_vendedor: profile?.codigo_vendedor || null,
+      observacoes,
+      editing_inventario_id: editingInventarioId,
+      items,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = format(new Date(), 'yyyyMMdd_HHmm');
+    const vendedor = profile?.codigo_vendedor || 'vendedor';
+    a.href = url;
+    a.download = `inventario_${vendedor}_${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success('Arquivo exportado com sucesso.');
+  };
+
+  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if (!data || !Array.isArray(data.items)) {
+        toast.error('Arquivo inválido: formato não reconhecido.');
+        return;
+      }
+      const importedItems: InventarioItem[] = data.items
+        .filter((it: any) => it && typeof it.codigo_auxiliar === 'string')
+        .map((it: any) => ({
+          codigo_auxiliar: String(it.codigo_auxiliar).toUpperCase(),
+          nome_produto: String(it.nome_produto || it.codigo_auxiliar),
+          quantidade_fisica: Number(it.quantidade_fisica) || 0,
+        }));
+
+      if (importedItems.length === 0) {
+        toast.error('Arquivo não contém itens válidos.');
+        return;
+      }
+
+      // Mesclar com itens existentes (somar quantidades de códigos repetidos)
+      setItems((prev) => {
+        const map = new Map<string, InventarioItem>();
+        prev.forEach((it) => map.set(it.codigo_auxiliar, { ...it }));
+        importedItems.forEach((it) => {
+          const existing = map.get(it.codigo_auxiliar);
+          if (existing) {
+            existing.quantidade_fisica += it.quantidade_fisica;
+          } else {
+            map.set(it.codigo_auxiliar, it);
+          }
+        });
+        return Array.from(map.values());
+      });
+
+      if (typeof data.observacoes === 'string' && data.observacoes && !observacoes) {
+        setObservacoes(data.observacoes);
+      }
+
+      toast.success(`${importedItems.length} item(ns) importado(s) do arquivo.`);
+    } catch (err) {
+      console.error('Erro ao importar arquivo:', err);
+      toast.error('Não foi possível ler o arquivo. Verifique se é um JSON válido.');
+    }
   };
 
   const handleSubmit = async () => {
@@ -736,16 +815,45 @@ export default function Inventario() {
                   Outros
                 </Button>
               </div>
-              {items.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="application/json,.json"
+                  onChange={handleImportFile}
+                  className="hidden"
+                  id="inventario-import-file"
+                  name="inventario_import_file"
+                />
                 <Button
-                  variant="destructive"
+                  variant="outline"
                   size={isMobile ? 'sm' : 'default'}
-                  onClick={() => setShowClearAllDialog(true)}
+                  onClick={() => fileInputRef.current?.click()}
                 >
-                  <RefreshCcw size={16} className="mr-2" />
-                  Limpar Tudo
+                  <Upload size={16} className="mr-2" />
+                  Importar
                 </Button>
-              )}
+                {items.length > 0 && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size={isMobile ? 'sm' : 'default'}
+                      onClick={handleExportFile}
+                    >
+                      <Download size={16} className="mr-2" />
+                      Exportar
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size={isMobile ? 'sm' : 'default'}
+                      onClick={() => setShowClearAllDialog(true)}
+                    >
+                      <RefreshCcw size={16} className="mr-2" />
+                      Limpar Tudo
+                    </Button>
+                  </>
+                )}
+              </div>
             </div>
           </CardHeader>
           <CardContent>
