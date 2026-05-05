@@ -697,11 +697,23 @@ export default function Conferencia() {
                           <CardTitle className="text-base flex items-center gap-2">
                             <User size={16} /> {inv.profiles?.nome || 'Vendedor'}
                           </CardTitle>
-                          <Badge
-                            variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
-                          >
-                            <span className="capitalize">{inv.status}</span>
-                          </Badge>
+                          <div className="flex items-center gap-1.5">
+                            {isAprovado && inv.is_mais_recente && (
+                              <Badge variant="outline" className="border-green-600 text-green-700 text-[10px]">
+                                Mais recente
+                              </Badge>
+                            )}
+                            {isAprovado && inv.is_mais_recente === false && (
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                                Histórico
+                              </Badge>
+                            )}
+                            <Badge
+                              variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
+                            >
+                              <span className="capitalize">{inv.status}</span>
+                            </Badge>
+                          </div>
                         </div>
                         <p className="font-mono text-xs text-muted-foreground pt-1">
                           {inv.codigo_vendedor}
