@@ -78,6 +78,7 @@ import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { useGerarNotaRetornoDeInventarioMutation } from '@/hooks/useNotaRetornoQuery';
 
 type ItemNaoContado = {
   codigo_auxiliar: string;
