@@ -1,13 +1,23 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.86.0';
+import { z } from 'https://esm.sh/zod@3.23.8';
 import { corsHeaders } from '../_shared/cors.ts';
 
-// Tipos para melhor type safety
-interface CriarVendedorRequest {
-  email: string;
-  nome: string;
-  codigo_vendedor?: string;
-  telefone?: string;
-}
+// Schema rigoroso de validação
+const CriarVendedorSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(5)
+    .max(254)
+    .email('Email inválido')
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Formato de email inválido'),
+  nome: z.string().trim().min(2).max(150),
+  codigo_vendedor: z.string().trim().min(1).max(50).optional(),
+  telefone: z.string().trim().min(6).max(30).optional(),
+});
+
+type CriarVendedorRequest = z.infer<typeof CriarVendedorSchema>;
 
 interface CriarVendedorResponse {
   success: boolean;
@@ -39,39 +49,28 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Validação da entrada
-    const body: CriarVendedorRequest = await req.json();
-    const { email, nome, codigo_vendedor, telefone } = body;
-
-    // Validações obrigatórias
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return new Response(JSON.stringify({ error: 'Email válido é obrigatório' }), {
+    // Validação com zod
+    let parsedBody: CriarVendedorRequest;
+    try {
+      const raw = await req.json();
+      const result = CriarVendedorSchema.safeParse(raw);
+      if (!result.success) {
+        return new Response(
+          JSON.stringify({
+            error: 'Dados inválidos',
+            details: result.error.flatten().fieldErrors,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      parsedBody = result.data;
+    } catch {
+      return new Response(JSON.stringify({ error: 'JSON inválido' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    if (!nome || typeof nome !== 'string' || nome.trim().length < 2) {
-      return new Response(
-        JSON.stringify({ error: 'Nome é obrigatório e deve ter pelo menos 2 caracteres' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Validações opcionais
-    if (codigo_vendedor && typeof codigo_vendedor !== 'string') {
-      return new Response(JSON.stringify({ error: 'Código do vendedor deve ser uma string' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (telefone && typeof telefone !== 'string') {
-      return new Response(JSON.stringify({ error: 'Telefone deve ser uma string' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const { email, nome, codigo_vendedor, telefone } = parsedBody;
 
     // Cliente admin do Supabase
     const supabaseAdmin = createClient(
