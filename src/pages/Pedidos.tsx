@@ -502,6 +502,109 @@ function NotaRetornoTab() {
   const gerarNotaMutation = useGerarNotaRetornoDeInventarioMutation();
   const [confirmInv, setConfirmInv] = useState<InventarioAprovado | null>(null);
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
+  const [xmlInv, setXmlInv] = useState<InventarioAprovado | null>(null);
+  const [xmlTabela, setXmlTabela] = useState<'venda' | 'remessa'>('venda');
+  const [xmlSegmentos, setXmlSegmentos] = useState<number>(1);
+  const [xmlLoading, setXmlLoading] = useState(false);
+
+  const handleGerarXml = async (loja: { codigo: number; nome: string }) => {
+    if (!xmlInv) return;
+    setXmlLoading(true);
+    try {
+      // Carrega itens do inventário (paginado)
+      const itensInv: { codigo_auxiliar: string; quantidade_fisica: number; nome_produto: string | null }[] = [];
+      const BATCH = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('itens_inventario')
+          .select('codigo_auxiliar, quantidade_fisica, nome_produto')
+          .eq('inventario_id', xmlInv.id)
+          .range(from, from + BATCH - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        itensInv.push(...data.map((d) => ({
+          codigo_auxiliar: d.codigo_auxiliar,
+          quantidade_fisica: Number(d.quantidade_fisica) || 0,
+          nome_produto: d.nome_produto,
+        })));
+        if (data.length < BATCH) break;
+        from += BATCH;
+      }
+
+      const itensValidos = itensInv.filter((i) => i.quantidade_fisica > 0);
+      if (itensValidos.length === 0) {
+        toast.error('Inventário sem itens com quantidade para gerar XML.');
+        return;
+      }
+
+      // Busca preços e nomes na tabela produtos
+      const codigos = Array.from(new Set(itensValidos.map((i) => i.codigo_auxiliar)));
+      const prodMap = new Map<string, { nome_produto: string; valor_produto: number; valor_remessa: number }>();
+      for (let i = 0; i < codigos.length; i += 500) {
+        const lote = codigos.slice(i, i + 500);
+        const { data: prods } = await supabase
+          .from('produtos')
+          .select('codigo_auxiliar, nome_produto, valor_produto, valor_remessa')
+          .in('codigo_auxiliar', lote);
+        prods?.forEach((p) => prodMap.set(p.codigo_auxiliar, {
+          nome_produto: p.nome_produto,
+          valor_produto: Number(p.valor_produto) || 0,
+          valor_remessa: Number(p.valor_remessa) || 0,
+        }));
+      }
+
+      const itensXml = itensValidos.map((it) => {
+        const p = prodMap.get(it.codigo_auxiliar);
+        return {
+          codigo_auxiliar: it.codigo_auxiliar,
+          nome_produto: p?.nome_produto || it.nome_produto || it.codigo_auxiliar,
+          quantidade: it.quantidade_fisica,
+          valor_unitario: xmlTabela === 'remessa' ? (p?.valor_remessa || 0) : (p?.valor_produto || 0),
+        };
+      });
+
+      const requested = Math.max(1, Math.min(10, xmlSegmentos));
+      const effectiveSegmentos = Math.min(requested, itensXml.length);
+      if (effectiveSegmentos < requested) {
+        toast.warning(`Só há ${itensXml.length} item(ns). Gerando ${effectiveSegmentos} pedido(s).`);
+      }
+
+      const buckets: typeof itensXml[] = Array.from({ length: effectiveSegmentos }, () => []);
+      itensXml.forEach((item, idx) => buckets[idx % effectiveSegmentos].push(item));
+
+      const dataIso = new Date().toISOString().split('T')[0];
+      const nomeVendedor = xmlInv.profiles?.nome || xmlInv.codigo_vendedor;
+      const arquivos = buckets.map((bucket, i) => {
+        const xml = gerarXmlRetornoCiclone({
+          codigoVendedor: xmlInv.codigo_vendedor,
+          nomeVendedor,
+          codigoLoja: loja.codigo,
+          itens: bucket,
+          sequencia: effectiveSegmentos > 1 ? i + 1 : undefined,
+        });
+        const sufixo = effectiveSegmentos > 1 ? `-parte${i + 1}-de-${effectiveSegmentos}` : '';
+        const nome = `retorno-ciclone-${xmlTabela}-loja${loja.codigo}-${xmlInv.codigo_vendedor}${sufixo}-${dataIso}.xml`;
+        return { nome, conteudo: xml };
+      });
+
+      if (effectiveSegmentos > 1) {
+        const zipName = `retorno-ciclone-${xmlTabela}-loja${loja.codigo}-${xmlInv.codigo_vendedor}-${effectiveSegmentos}partes-${dataIso}.zip`;
+        await downloadXmlsAsZip(arquivos, zipName);
+        toast.success(`ZIP gerado com ${effectiveSegmentos} XMLs.`);
+      } else {
+        downloadXml(arquivos[0].conteudo, arquivos[0].nome);
+        toast.success('XML gerado com sucesso.');
+      }
+      setXmlInv(null);
+      setXmlSegmentos(1);
+    } catch (err) {
+      console.error(err);
+      toast.error('Falha ao gerar XML.', { description: err instanceof Error ? err.message : 'Erro desconhecido' });
+    } finally {
+      setXmlLoading(false);
+    }
+  };
 
   const vendedoresUnicos = useMemo(() => {
     const map = new Map<string, string>();
@@ -620,6 +723,15 @@ function NotaRetornoTab() {
                   <Undo2 className="h-4 w-4 mr-2" />
                   Gerar Nota de Retorno
                 </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                  onClick={() => setXmlInv(inv)}
+                >
+                  <FileCode className="h-4 w-4 mr-2" />
+                  Exportar XML Ciclone
+                </Button>
               </CardContent>
             </Card>
           ))}
@@ -670,6 +782,99 @@ function NotaRetornoTab() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog XML Ciclone */}
+      <Dialog
+        open={!!xmlInv}
+        onOpenChange={(open) => {
+          if (!open && !xmlLoading) {
+            setXmlInv(null);
+            setXmlSegmentos(1);
+          }
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Store className="h-5 w-5" />
+              Gerar XML Ciclone
+            </DialogTitle>
+            <DialogDescription>
+              Inventário de{' '}
+              <strong>{xmlInv?.profiles?.nome || xmlInv?.codigo_vendedor}</strong>
+              {xmlInv && ` · ${format(new Date(xmlInv.data_inventario), 'dd/MM/yyyy')}`}
+              . Escolha tabela de preço, segmentação e a loja.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-2 py-2">
+            <p className="text-sm font-medium">Tabela de Preço</p>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                variant={xmlTabela === 'venda' ? 'default' : 'outline'}
+                onClick={() => setXmlTabela('venda')}
+              >
+                Venda
+              </Button>
+              <Button
+                type="button"
+                variant={xmlTabela === 'remessa' ? 'default' : 'outline'}
+                onClick={() => setXmlTabela('remessa')}
+              >
+                Remessa
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Valores unitários virão da tabela{' '}
+              <strong>{xmlTabela === 'venda' ? 'de venda (valor_produto)' : 'de remessa (valor_remessa)'}</strong>.
+            </p>
+          </div>
+
+          <div className="space-y-2 py-2">
+            <p className="text-sm font-medium">Segmentar em quantos pedidos?</p>
+            <Select value={String(xmlSegmentos)} onValueChange={(v) => setXmlSegmentos(Number(v))}>
+              <SelectTrigger id="segmentos-xml">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n === 1 ? '1 pedido (sem segmentação)' : `${n} pedidos`}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Itens distribuídos em <strong>{xmlSegmentos}</strong>{' '}
+              {xmlSegmentos === 1 ? 'pedido' : 'pedidos'}. Cada segmento gera um arquivo separado.
+            </p>
+          </div>
+
+          <p className="text-sm font-medium pt-2">Loja</p>
+          <div className="grid grid-cols-2 gap-4 py-2">
+            {[
+              { codigo: 1, nome: 'Loja 01' },
+              { codigo: 2, nome: 'Loja 02' },
+            ].map((loja) => (
+              <Button
+                key={loja.codigo}
+                variant="outline"
+                className="h-24 flex flex-col gap-2 text-base"
+                disabled={xmlLoading}
+                onClick={() => handleGerarXml(loja)}
+              >
+                {xmlLoading ? (
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                ) : (
+                  <Store className="h-6 w-6" />
+                )}
+                {loja.nome}
+              </Button>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
