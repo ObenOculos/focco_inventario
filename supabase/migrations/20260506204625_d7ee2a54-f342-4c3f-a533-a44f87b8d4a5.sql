@@ -1,0 +1,1 @@
+ALTER TYPE public.inventory_status ADD VALUE IF NOT EXISTS 'baixado';

@@ -450,7 +450,6 @@ export default function Conferencia() {
         inventario_id: selectedInventario.id,
         codigo_vendedor: selectedInventario.codigo_vendedor,
         observacoes: `Retorno do inventário de ${format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}`,
-        apenas_com_quantidade: retornoApenasComQtd,
       });
       setShowRetornoDialog(false);
     } catch {

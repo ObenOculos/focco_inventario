@@ -60,10 +60,13 @@ import { useVendedoresListQuery } from '@/hooks/useVendedoresGerenciamentoQuery'
 import {
   useEstoqueRealVendedorQuery,
   useGerarNotaRetornoMutation,
+  useGerarNotaRetornoDeInventarioMutation,
 } from '@/hooks/useNotaRetornoQuery';
 import * as XLSX from 'xlsx';
 import { gerarXmlRetornoCiclone, downloadXml, downloadXmlsAsZip } from '@/lib/gerarXmlCiclone';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 // ─── Types ───────────────────────────────────────────────────
 
@@ -406,528 +409,267 @@ function ConsultarPedidosTab() {
   );
 }
 
-// ─── Banner: última nota de retorno recente ─────────────────
+// ─── Nota de Retorno Tab (a partir de inventários aprovados) ─
 
-function UltimaNotaRetornoBanner({ codigoVendedor }: { codigoVendedor: string }) {
-  const { data } = usePedidosPaginatedQuery({
-    codigoVendedor,
-    isGerente: true,
-    tipoFilter: '3',
-    vendedorFilter: codigoVendedor,
-    searchTerm: '',
-    page: 1,
-    pageSize: 1,
-  });
-
-  const ultima = data?.data?.[0];
-  if (!ultima) return null;
-
-  const horas = (Date.now() - new Date(ultima.data_emissao).getTime()) / 36e5;
-  if (horas > 24) return null;
-
-  return (
-    <div className="rounded border-2 border-green-500/40 bg-green-50 dark:bg-green-950/30 p-3 text-xs text-green-900 dark:text-green-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-      <div>
-        <strong>Última nota de retorno gerada:</strong>{' '}
-        <span className="font-mono">#{ultima.numero_pedido}</span> em{' '}
-        {format(new Date(ultima.data_emissao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} —{' '}
-        {Number(ultima.valor_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
-      </div>
-      <span className="text-[11px] opacity-80">
-        Veja detalhes em <strong>Consultar Pedidos</strong> (filtro Retorno).
-      </span>
-    </div>
-  );
+interface InventarioAprovado {
+  id: string;
+  codigo_vendedor: string;
+  data_inventario: string;
+  status: string;
+  updated_at: string;
+  observacoes: string | null;
+  profiles: { nome: string } | null;
+  total_unidades: number;
+  total_produtos: number;
+  valor_total: number;
 }
 
-// ─── Nota de Retorno Tab ─────────────────────────────────────
+function useInventariosAprovadosPendentes() {
+  return useQuery({
+    queryKey: ['inventarios-aprovados-pendentes-retorno'],
+    queryFn: async () => {
+      const { data: invs, error } = await supabase
+        .from('inventarios')
+        .select('id, codigo_vendedor, data_inventario, status, updated_at, observacoes, profiles!inventarios_user_id_fkey(nome)')
+        .eq('status', 'aprovado' as never)
+        .order('data_inventario', { ascending: false });
+      if (error) throw error;
+      const lista = (invs || []) as unknown as Array<Omit<InventarioAprovado, 'total_unidades' | 'total_produtos' | 'valor_total'>>;
+      if (lista.length === 0) return [] as InventarioAprovado[];
+
+      // Carrega itens em lotes
+      const ids = lista.map((i) => i.id);
+      const itens: { inventario_id: string; codigo_auxiliar: string; quantidade_fisica: number }[] = [];
+      const BATCH = 1000;
+      for (let i = 0; i < ids.length; i += 50) {
+        const lote = ids.slice(i, i + 50);
+        let from = 0;
+        while (true) {
+          const { data, error: e } = await supabase
+            .from('itens_inventario')
+            .select('inventario_id, codigo_auxiliar, quantidade_fisica')
+            .in('inventario_id', lote)
+            .range(from, from + BATCH - 1);
+          if (e) throw e;
+          if (!data || data.length === 0) break;
+          itens.push(...data.map((d) => ({
+            inventario_id: d.inventario_id,
+            codigo_auxiliar: d.codigo_auxiliar,
+            quantidade_fisica: Number(d.quantidade_fisica) || 0,
+          })));
+          if (data.length < BATCH) break;
+          from += BATCH;
+        }
+      }
+
+      // Carrega valores de produtos
+      const codigos = Array.from(new Set(itens.map((it) => it.codigo_auxiliar)));
+      const valorMap = new Map<string, number>();
+      for (let i = 0; i < codigos.length; i += 500) {
+        const lote = codigos.slice(i, i + 500);
+        const { data: prods } = await supabase
+          .from('produtos').select('codigo_auxiliar, valor_produto').in('codigo_auxiliar', lote);
+        prods?.forEach((p) => valorMap.set(p.codigo_auxiliar, Number(p.valor_produto) || 0));
+      }
+
+      // Agrega por inventário
+      const agg = new Map<string, { unidades: number; produtos: Set<string>; valor: number }>();
+      for (const it of itens) {
+        if (it.quantidade_fisica <= 0) continue;
+        const cur = agg.get(it.inventario_id) || { unidades: 0, produtos: new Set<string>(), valor: 0 };
+        cur.unidades += it.quantidade_fisica;
+        cur.produtos.add(it.codigo_auxiliar);
+        cur.valor += it.quantidade_fisica * (valorMap.get(it.codigo_auxiliar) || 0);
+        agg.set(it.inventario_id, cur);
+      }
+
+      return lista.map((inv) => {
+        const a = agg.get(inv.id);
+        return {
+          ...inv,
+          total_unidades: a?.unidades ?? 0,
+          total_produtos: a?.produtos.size ?? 0,
+          valor_total: a?.valor ?? 0,
+        };
+      }).filter((i) => i.total_unidades > 0);
+    },
+    staleTime: 60_000,
+  });
+}
 
 function NotaRetornoTab() {
-  const { profile } = useAuth();
-  const [selectedVendedor, setSelectedVendedor] = useState<string>('');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(20);
-  const [itensRetorno, setItensRetorno] = useState<ItemRetornoLocal[]>([]);
-  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [lojaDialogOpen, setLojaDialogOpen] = useState(false);
-  const [tabelaPreco, setTabelaPreco] = useState<'venda' | 'remessa'>('venda');
-  const [segmentos, setSegmentos] = useState<number>(1);
+  const { data: inventarios = [], isLoading, isFetching } = useInventariosAprovadosPendentes();
+  const gerarNotaMutation = useGerarNotaRetornoDeInventarioMutation();
+  const [confirmInv, setConfirmInv] = useState<InventarioAprovado | null>(null);
+  const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
 
-  const { data: vendedores = [], isLoading: loadingVendedores } = useVendedoresListQuery();
-  const {
-    data: estoqueReal,
-    isLoading: loadingEstoque,
-    isFetching: fetchingEstoque,
-  } = useEstoqueRealVendedorQuery(selectedVendedor || null);
-  const gerarNotaMutation = useGerarNotaRetornoMutation();
-
-  useEffect(() => {
-    if (estoqueReal && estoqueReal.length > 0) {
-      setItensRetorno(estoqueReal);
-    } else {
-      setItensRetorno([]);
-    }
-  }, [estoqueReal]);
-
-  const filteredItens = useMemo(() => {
-    if (!searchTerm) return itensRetorno;
-    const term = searchTerm.toLowerCase();
-    return itensRetorno.filter(
-      (item) =>
-        item.codigo_auxiliar.toLowerCase().includes(term) ||
-        item.nome_produto.toLowerCase().includes(term)
-    );
-  }, [itensRetorno, searchTerm]);
-
-  const totalItems = filteredItens.length;
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-  const startIndex = (currentPage - 1) * itemsPerPage;
-  const paginatedItens = filteredItens.slice(startIndex, startIndex + itemsPerPage);
-
-  const resumo = useMemo(() => {
-    const itensComRetorno = itensRetorno.filter((i) => i.quantidade_retorno > 0);
-    const totalUnidades = itensComRetorno.reduce((acc, i) => acc + i.quantidade_retorno, 0);
-    const valorTotal = itensComRetorno.reduce(
-      (acc, i) => acc + i.quantidade_retorno * i.valor_produto,
-      0
-    );
-    return { totalProdutos: itensComRetorno.length, totalUnidades, valorTotal };
-  }, [itensRetorno]);
-
-  const handleVendedorChange = (value: string) => {
-    setSelectedVendedor(value);
-    setCurrentPage(1);
-    setSearchTerm('');
-  };
-
-  const handleQuantidadeChange = (codigoAuxiliar: string, quantidade: number) => {
-    setItensRetorno((prev) =>
-      prev.map((item) =>
-        item.codigo_auxiliar === codigoAuxiliar
-          ? { ...item, quantidade_retorno: Math.max(0, Math.min(quantidade, item.quantidade_atual)) }
-          : item
-      )
-    );
-  };
-
-  const handleZerarTudo = () => {
-    setItensRetorno((prev) => prev.map((item) => ({ ...item, quantidade_retorno: item.quantidade_atual })));
-  };
-
-  const handleLimparTudo = () => {
-    setItensRetorno((prev) => prev.map((item) => ({ ...item, quantidade_retorno: 0 })));
-  };
-
-  const handleExportExcel = () => {
-    const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
-    const itensExport = itensRetorno
-      .filter((i) => i.quantidade_retorno > 0)
-      .map((item) => ({
-        'Código QR': item.codigo_auxiliar,
-        Produto: item.nome_produto,
-        'Estoque Atual': item.quantidade_atual,
-        'Qtd Retorno': item.quantidade_retorno,
-        'Valor Unitário': item.valor_produto,
-        'Valor Total': item.quantidade_retorno * item.valor_produto,
-      }));
-    if (itensExport.length === 0) return;
-    const ws = XLSX.utils.json_to_sheet(itensExport);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Nota de Retorno');
-    const nomeArquivo = `nota-retorno-${vendedorInfo?.nome || selectedVendedor}-${new Date().toISOString().split('T')[0]}.xlsx`;
-    XLSX.writeFile(wb, nomeArquivo);
-  };
-
-  const handleGerarNota = async () => {
-    const itensParaRetorno = itensRetorno
-      .filter((i) => i.quantidade_retorno > 0)
-      .map((item) => ({
-        codigo_auxiliar: item.codigo_auxiliar,
-        nome_produto: item.nome_produto,
-        quantidade: item.quantidade_retorno,
-        valor_produto: item.valor_produto,
-      }));
-    await gerarNotaMutation.mutateAsync({
-      codigo_vendedor: selectedVendedor,
-      itens: itensParaRetorno,
+  const vendedoresUnicos = useMemo(() => {
+    const map = new Map<string, string>();
+    inventarios.forEach((i) => {
+      if (!map.has(i.codigo_vendedor)) {
+        map.set(i.codigo_vendedor, i.profiles?.nome || i.codigo_vendedor);
+      }
     });
-    setConfirmDialogOpen(false);
-    setSelectedVendedor('');
-    setItensRetorno([]);
-  };
+    return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
+  }, [inventarios]);
 
-  const vendedorSelecionado = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
+  const filtered = useMemo(() => {
+    if (vendedorFilter === 'todos') return inventarios;
+    return inventarios.filter((i) => i.codigo_vendedor === vendedorFilter);
+  }, [inventarios, vendedorFilter]);
+
+  const handleGerar = async () => {
+    if (!confirmInv) return;
+    await gerarNotaMutation.mutateAsync({
+      inventario_id: confirmInv.id,
+      codigo_vendedor: confirmInv.codigo_vendedor,
+      observacoes: `Retorno do inventário de ${format(new Date(confirmInv.data_inventario), 'dd/MM/yyyy')}`,
+    });
+    setConfirmInv(null);
+  };
 
   return (
     <div className="space-y-6">
-      {/* Seleção do Vendedor */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Gerar Nova Nota de Retorno</CardTitle>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Undo2 className="h-5 w-5" />
+            Gerar Nota de Retorno a partir de Inventário Aprovado
+            <RefetchIndicator isFetching={isFetching && !isLoading} />
+          </CardTitle>
           <CardDescription>
-            Esta tela cria uma <strong>nova</strong> nota de retorno com base no estoque real
-            atual do vendedor. Para consultar notas já emitidas, use a aba{' '}
-            <strong>Consultar Pedidos</strong> com o filtro <strong>Tipo: Retorno</strong>.
+            Cada inventário aprovado abaixo pode virar uma nota de retorno. Ao gerar, o
+            inventário é marcado como <strong>baixado</strong> e some desta lista.
+            Para consultar notas já emitidas, use a aba <strong>Consultar Pedidos</strong>{' '}
+            (filtro <strong>Tipo: Retorno</strong>).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Select value={selectedVendedor} onValueChange={handleVendedorChange}>
-              <SelectTrigger className="w-full sm:w-80">
-                <SelectValue placeholder="Selecione um vendedor..." />
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Select value={vendedorFilter} onValueChange={setVendedorFilter}>
+              <SelectTrigger className="w-full sm:w-72">
+                <SelectValue placeholder="Filtrar por vendedor" />
               </SelectTrigger>
               <SelectContent>
-                {vendedores.map((v) => (
-                  <SelectItem key={v.id} value={v.codigo_vendedor || ''}>
-                    {v.nome} ({v.codigo_vendedor})
+                <SelectItem value="todos">Todos os vendedores</SelectItem>
+                {vendedoresUnicos.map(([codigo, nome]) => (
+                  <SelectItem key={codigo} value={codigo}>
+                    {nome} ({codigo})
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            {selectedVendedor && (
-              <div className="flex gap-2">
-                <Button variant="outline" size="sm" onClick={handleZerarTudo}>Retornar Tudo</Button>
-                <Button variant="outline" size="sm" onClick={handleLimparTudo}>Limpar Tudo</Button>
-              </div>
-            )}
           </div>
         </CardContent>
       </Card>
 
-      {selectedVendedor && (
-        <>
-          <UltimaNotaRetornoBanner codigoVendedor={selectedVendedor} />
-          <div className="rounded border-2 bg-blue-50 dark:bg-blue-950/30 p-3 text-xs text-blue-900 dark:text-blue-200">
-            <strong>Atenção:</strong> esta tela mostra o estoque real <em>atual</em> do vendedor,
-            não o histórico de notas. Se você já emitiu uma nota de retorno recentemente,
-            ela <strong>não aparece aqui</strong> — consulte na aba <strong>Consultar Pedidos</strong> (filtro Retorno).
-            Para gerar uma nota a partir de um inventário aprovado específico, vá em{' '}
-            <strong>Conferência</strong> → <em>Ações do Gerente → Gerar Nota de Retorno</em>.
-          </div>
-          {/* Resumo */}
-          <Card>
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <Package className="h-8 w-8 text-primary" />
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          <span className="ml-2 text-muted-foreground">Carregando inventários...</span>
+        </div>
+      ) : filtered.length === 0 ? (
+        <Card>
+          <CardContent className="py-16 text-center">
+            <Check className="h-12 w-12 mx-auto mb-4 text-green-500 opacity-70" />
+            <p className="font-medium mb-1">Nenhum inventário aprovado pendente de retorno.</p>
+            <p className="text-sm text-muted-foreground">
+              Inventários aprovados aparecem aqui até serem baixados em uma nota.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {filtered.map((inv) => (
+            <Card key={inv.id} className="border-2 shadow-none">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-2">
                   <div>
-                    <p className="text-sm text-muted-foreground">Produtos</p>
-                    <p className="text-2xl font-bold">{resumo.totalProdutos}</p>
+                    <CardTitle className="text-base">{inv.profiles?.nome || inv.codigo_vendedor}</CardTitle>
+                    <p className="font-mono text-xs text-muted-foreground pt-0.5">
+                      {inv.codigo_vendedor}
+                    </p>
                   </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <Undo2 className="h-8 w-8 text-destructive" />
-                  <div>
-                    <p className="text-sm text-muted-foreground">Unidades p/ Retorno</p>
-                    <p className="text-2xl font-bold">{resumo.totalUnidades}</p>
-                  </div>
-                </div>
-                <div className="flex items-center gap-3 p-4 bg-muted/50 rounded-lg">
-                  <Badge variant="outline" className="text-lg px-3 py-1">
-                    {resumo.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  <Badge variant="outline" className="border-green-600 text-green-700 text-[10px]">
+                    Aprovado
                   </Badge>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Tabela de Itens */}
-          <Card>
-            <CardHeader>
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                <CardTitle className="flex items-center gap-2">
-                  <Package className="h-5 w-5" />
-                  Itens do Estoque
-                  <RefetchIndicator isFetching={fetchingEstoque && !loadingEstoque} />
-                </CardTitle>
-                <SearchFilter
-                  value={searchTerm}
-                  onChange={(v) => { setSearchTerm(v); setCurrentPage(1); }}
-                  placeholder="Buscar produto..."
-                />
-              </div>
-            </CardHeader>
-            <CardContent>
-              {loadingEstoque ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                  <span className="ml-2 text-muted-foreground">Carregando estoque...</span>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <div className="flex items-center justify-between text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Package size={14} />
+                    {inv.total_produtos} produtos · {inv.total_unidades} un.
+                  </span>
+                  <span className="text-xs">
+                    {format(new Date(inv.data_inventario), 'dd/MM/yyyy')}
+                  </span>
                 </div>
-              ) : itensRetorno.length === 0 ? (
-                <div className="text-center py-12 text-muted-foreground">
-                  <AlertTriangle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                  <p>Nenhum item com estoque real encontrado para este vendedor.</p>
-                  <p className="text-sm">O vendedor precisa ter um inventário aprovado.</p>
+                <div className="text-xs text-muted-foreground">
+                  Valor:{' '}
+                  <strong>
+                    {inv.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                  </strong>
                 </div>
-              ) : (
-                <>
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Código QR</TableHead>
-                          <TableHead className="hidden md:table-cell">Produto</TableHead>
-                          <TableHead className="text-right">Est. Atual</TableHead>
-                          <TableHead className="text-right">Qtd Retorno</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedItens.map((item) => (
-                          <TableRow key={item.codigo_auxiliar}>
-                            <TableCell className="font-mono text-sm">{item.codigo_auxiliar}</TableCell>
-                            <TableCell className="hidden md:table-cell max-w-[200px] truncate">
-                              {item.nome_produto}
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Badge variant="secondary">{item.quantidade_atual}</Badge>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Input
-                                type="number"
-                                min={0}
-                                max={item.quantidade_atual}
-                                value={item.quantidade_retorno}
-                                onChange={(e) =>
-                                  handleQuantidadeChange(item.codigo_auxiliar, parseInt(e.target.value) || 0)
-                                }
-                                className="w-20 text-right ml-auto"
-                              />
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
-                  </div>
-                  {totalPages > 1 && (
-                    <PaginationComponent
-                      currentPage={currentPage}
-                      totalPages={totalPages}
-                      itemsPerPage={itemsPerPage}
-                      totalItems={totalItems}
-                      startIndex={startIndex}
-                      endIndex={Math.min(startIndex + itemsPerPage, totalItems)}
-                      onPageChange={setCurrentPage}
-                      onItemsPerPageChange={(v) => { setItemsPerPage(Number(v)); setCurrentPage(1); }}
-                    />
-                  )}
-                </>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Ações */}
-          {resumo.totalProdutos > 0 && (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="flex flex-col sm:flex-row justify-end gap-3">
-                  <Button variant="outline" onClick={handleExportExcel}>
-                    <FileDown className="h-4 w-4 mr-2" />
-                    Exportar Excel
-                  </Button>
-                  <Button variant="outline" onClick={() => setLojaDialogOpen(true)}>
-                    <FileCode className="h-4 w-4 mr-2" />
-                    Exportar XML Ciclone
-                  </Button>
-                  <Button onClick={() => setConfirmDialogOpen(true)} disabled={gerarNotaMutation.isPending}>
-                    {gerarNotaMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Gerando...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="h-4 w-4 mr-2" />
-                        Gerar Nota de Retorno
-                      </>
-                    )}
-                  </Button>
-                </div>
+                <Button
+                  className="w-full"
+                  size="sm"
+                  onClick={() => setConfirmInv(inv)}
+                  disabled={gerarNotaMutation.isPending}
+                >
+                  <Undo2 className="h-4 w-4 mr-2" />
+                  Gerar Nota de Retorno
+                </Button>
               </CardContent>
             </Card>
-          )}
-        </>
+          ))}
+        </div>
       )}
 
-      {/* Dialog de Confirmação */}
-      <AlertDialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
+      <AlertDialog open={!!confirmInv} onOpenChange={(o) => !o && setConfirmInv(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Nota de Retorno</AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2">
-              <p>
-                Você está prestes a gerar uma nota de retorno para{' '}
-                <strong>{vendedorSelecionado?.nome}</strong>.
-              </p>
-              <div className="bg-muted p-3 rounded-lg mt-2">
-                <p><strong>{resumo.totalProdutos}</strong> produtos</p>
-                <p><strong>{resumo.totalUnidades}</strong> unidades</p>
+            <AlertDialogDescription asChild>
+              <div className="space-y-2">
                 <p>
-                  Valor:{' '}
+                  Gerar nota de retorno para{' '}
+                  <strong>{confirmInv?.profiles?.nome || confirmInv?.codigo_vendedor}</strong> a partir do
+                  inventário de{' '}
                   <strong>
-                    {resumo.valorTotal.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    {confirmInv && format(new Date(confirmInv.data_inventario), 'dd/MM/yyyy')}
                   </strong>
+                  ?
+                </p>
+                {confirmInv && (
+                  <div className="bg-muted p-3 rounded-lg text-sm">
+                    <p><strong>{confirmInv.total_produtos}</strong> produtos</p>
+                    <p><strong>{confirmInv.total_unidades}</strong> unidades</p>
+                    <p>
+                      Valor:{' '}
+                      <strong>
+                        {confirmInv.valor_total.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </strong>
+                    </p>
+                  </div>
+                )}
+                <p className="text-destructive font-medium">
+                  O inventário será marcado como <strong>baixado</strong> e o estoque real desses
+                  itens irá a zero.
                 </p>
               </div>
-              <p className="text-destructive font-medium mt-2">
-                Esta ação irá zerar o estoque teórico deste vendedor para os itens selecionados.
-              </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleGerarNota} disabled={gerarNotaMutation.isPending}>
+            <AlertDialogCancel disabled={gerarNotaMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleGerar} disabled={gerarNotaMutation.isPending}>
               {gerarNotaMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Gerando...
-                </>
-              ) : (
-                'Confirmar'
-              )}
+                <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Gerando...</>
+              ) : 'Confirmar'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Dialog de Seleção de Loja */}
-      <Dialog
-        open={lojaDialogOpen}
-        onOpenChange={(open) => {
-          setLojaDialogOpen(open);
-          if (!open) setSegmentos(1);
-        }}
-      >
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Store className="h-5 w-5" />
-              Gerar XML Ciclone
-            </DialogTitle>
-            <DialogDescription>Escolha a tabela de preço, a segmentação e a loja para gerar o XML de retorno.</DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-2 py-2">
-            <p className="text-sm font-medium">Tabela de Preço</p>
-            <div className="grid grid-cols-2 gap-2">
-              <Button
-                type="button"
-                variant={tabelaPreco === 'venda' ? 'default' : 'outline'}
-                onClick={() => setTabelaPreco('venda')}
-              >
-                Venda
-              </Button>
-              <Button
-                type="button"
-                variant={tabelaPreco === 'remessa' ? 'default' : 'outline'}
-                onClick={() => setTabelaPreco('remessa')}
-              >
-                Remessa
-              </Button>
-            </div>
-            <p className="text-xs text-muted-foreground">
-              Os valores unitários no XML virão da tabela <strong>{tabelaPreco === 'venda' ? 'de venda (valor_produto)' : 'de remessa (valor_remessa)'}</strong>.
-            </p>
-          </div>
-
-          <div className="space-y-2 py-2">
-            <p className="text-sm font-medium">Segmentar em quantos pedidos?</p>
-            <Select value={String(segmentos)} onValueChange={(v) => setSegmentos(Number(v))}>
-              <SelectTrigger id="segmentos-xml">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-                  <SelectItem key={n} value={String(n)}>
-                    {n === 1 ? '1 pedido (sem segmentação)' : `${n} pedidos`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-xs text-muted-foreground">
-              Os itens serão distribuídos em <strong>{segmentos}</strong> {segmentos === 1 ? 'pedido' : 'pedidos'} com IDs distintos. Cada segmento gera um arquivo XML separado.
-            </p>
-          </div>
-
-          <p className="text-sm font-medium pt-2">Loja</p>
-          <div className="grid grid-cols-2 gap-4 py-2">
-            {[
-              { codigo: 1, nome: 'Loja 01' },
-              { codigo: 2, nome: 'Loja 02' },
-            ].map((loja) => (
-              <Button
-                key={loja.codigo}
-                variant="outline"
-                className="h-24 flex flex-col gap-2 text-base"
-                onClick={() => {
-                  const vendedorInfo = vendedores.find((v) => v.codigo_vendedor === selectedVendedor);
-                  const itensXml = itensRetorno
-                    .filter((i) => i.quantidade_retorno > 0)
-                    .map((item) => ({
-                      codigo_auxiliar: item.codigo_auxiliar,
-                      nome_produto: item.nome_produto,
-                      quantidade: item.quantidade_retorno,
-                      valor_unitario: tabelaPreco === 'remessa' ? item.valor_remessa : item.valor_produto,
-                    }));
-
-                  if (itensXml.length === 0) {
-                    toast.error('Nenhum item com quantidade de retorno para gerar o XML.');
-                    return;
-                  }
-
-                  // Ajusta segmentação ao máximo de itens disponíveis
-                  const requested = Math.max(1, Math.min(10, segmentos));
-                  const effectiveSegmentos = Math.min(requested, itensXml.length);
-                  if (effectiveSegmentos < requested) {
-                    toast.warning(
-                      `Só há ${itensXml.length} item(ns). Gerando ${effectiveSegmentos} pedido(s) em vez de ${requested}.`
-                    );
-                  }
-
-                  // Distribui itens em buckets via round-robin
-                  const buckets: typeof itensXml[] = Array.from({ length: effectiveSegmentos }, () => []);
-                  itensXml.forEach((item, idx) => {
-                    buckets[idx % effectiveSegmentos].push(item);
-                  });
-
-                  const dataIso = new Date().toISOString().split('T')[0];
-                  const arquivos = buckets.map((bucket, i) => {
-                    const xml = gerarXmlRetornoCiclone({
-                      codigoVendedor: selectedVendedor,
-                      nomeVendedor: vendedorInfo?.nome || selectedVendedor,
-                      codigoLoja: loja.codigo,
-                      itens: bucket,
-                      sequencia: effectiveSegmentos > 1 ? i + 1 : undefined,
-                    });
-                    const sufixoParte = effectiveSegmentos > 1 ? `-parte${i + 1}-de-${effectiveSegmentos}` : '';
-                    const nome = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}${sufixoParte}-${dataIso}.xml`;
-                    return { nome, conteudo: xml };
-                  });
-
-                  if (effectiveSegmentos > 1) {
-                    const zipName = `retorno-ciclone-${tabelaPreco}-loja${loja.codigo}-${selectedVendedor}-${effectiveSegmentos}partes-${dataIso}.zip`;
-                    downloadXmlsAsZip(arquivos, zipName)
-                      .then(() => toast.success(`ZIP gerado com ${effectiveSegmentos} XMLs.`))
-                      .catch((err) => {
-                        console.error(err);
-                        toast.error('Falha ao gerar o arquivo ZIP.');
-                      });
-                  } else {
-                    downloadXml(arquivos[0].conteudo, arquivos[0].nome);
-                    toast.success('XML gerado com sucesso.');
-                  }
-
-                  setLojaDialogOpen(false);
-                  setSegmentos(1);
-                }}
-              >
-                <Store className="h-6 w-6" />
-                {loja.nome}
-              </Button>
-            ))}
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
