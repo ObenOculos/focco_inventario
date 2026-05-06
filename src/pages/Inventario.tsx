@@ -994,6 +994,12 @@ export default function Inventario() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <ImportInventarioModal
+        open={showImportModal}
+        onOpenChange={setShowImportModal}
+        onImport={handleImportItems}
+      />
     </AppLayout>
   );
 }
