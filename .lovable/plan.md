@@ -1,62 +1,34 @@
-# Reorganização do header "Itens do Inventário"
 
-## Problema
-Hoje, no card de itens do inventário, a linha de filtros mistura **filtros de marca** (Todos / Oben / Power / Outros) com **ações destrutivas/secundárias** (Importar, Exportar, Limpar Tudo). No mobile (390px), os botões quebram em várias linhas, "empurram" os filtros e competem com eles visualmente. Não há hierarquia clara entre "filtrar a lista" e "agir sobre o inventário inteiro".
+## Contexto
 
-## Solução proposta
+A aba **"Nota de Retorno"** em `/pedidos` é uma **tela de criação** de nova nota (mostra o estoque real atual do vendedor para você decidir o que retornar). Não é histórico.
 
-### 1. Mover ações para o título do card (canto direito)
-As ações **Importar / Exportar / Limpar Tudo** deixam de ficar na linha de filtros e passam para a linha do título `Itens do Inventário (N)`, alinhadas à direita. Isso segue o padrão do shadcn/ui (CardHeader com action no canto) e separa claramente "ações sobre os dados" de "filtros que afetam a visualização".
+A nota que o Charles gerou (`RET-8-1778098588100`, 825 itens, 931 unidades, R$ 88.130,90) **existe e está íntegra** no banco. Ela aparece em **aba "Consultar Pedidos" → filtro Tipo: Retorno**.
 
-### 2. Agrupar em menu de overflow
-As três ações são consolidadas num único botão "kebab" (`MoreVertical`) com `DropdownMenu`:
-- Importar (sempre visível)
-- Exportar (desabilitado se `items.length === 0`)
-- Separador
-- Limpar Tudo (em vermelho/destructive, desabilitado se vazio)
+Os "8 itens" que aparecem são o que sobrou de saldo no estoque real do Charles depois da nota de retorno e da aprovação do 3º inventário (que ele fez *depois* da nota).
 
-Isso reduz drasticamente o ruído visual no mobile e segue a memória [Secondary Dropdowns](mem://design/secondary-actions-dropdown-pattern).
+## O problema real é de UX
 
-### 3. Linha de filtros mais limpa
-Sobra apenas: campo de busca + chips de marca (Todos/Oben/Power/Outros). Os chips ganham destaque por serem o único controle visível ali.
+O rótulo "Nota de Retorno" induz o gerente a pensar que vai ver a nota emitida. Vou ajustar a UI para deixar claro que é uma ferramenta de criação.
 
-### 4. Indicador de filtro ativo no contador
-O título passa de `Itens do Inventário (N)` para algo como:
-- Sem filtro: `Itens do Inventário · 25 peças`
-- Com filtro: `Itens do Inventário · 12 de 25 peças` + badge "Oben" ao lado
+## Mudanças propostas em `src/pages/Pedidos.tsx`
 
-Isso torna óbvio que o número refletido considera o filtro (encadeando com o ajuste anterior).
+1. **Renomear a aba** de "Nota de Retorno" → **"Gerar Nota de Retorno"**.
+2. **Adicionar um banner contextual** no topo da aba quando o vendedor tem nota(s) de retorno recentes (últimas 24h):
+   - "Última nota gerada: `RET-8-...` em 06/05/2026 — 825 itens, R$ 88.130,90. [Ver detalhes]"
+   - O botão "Ver detalhes" leva para a aba **Consultar Pedidos** já filtrada por aquele vendedor + tipo Retorno.
+3. **Atualizar o texto do header** do card "Selecionar Vendedor":
+   - Antes: "Escolha o vendedor para gerar a nota de retorno do estoque"
+   - Depois: "Esta tela cria uma **nova** nota de retorno com base no estoque real atual. Para consultar notas já emitidas, use a aba **Consultar Pedidos** (filtro: Retorno)."
+4. **Reforçar o aviso azul** existente (linha 562-566) deixando explícito: "Se você já emitiu uma nota de retorno hoje, ela não aparece aqui — use Consultar Pedidos."
 
-## Layout resultante (mobile 390px)
+## Detalhe técnico
 
-```text
-┌────────────────────────────────────────┐
-│ Itens do Inventário · 12 peças    [⋮] │  ← ações em dropdown
-│ [Oben]                                  │  ← badge se filtro ativo
-│                                         │
-│ [🔍 Filtrar por código ou nome...    ] │
-│                                         │
-│ [Todos] [Oben] [Power] [Outros]        │  ← chips limpos
-├────────────────────────────────────────┤
-│ ABC123 PRETO                  [- 5 +]  │
-│ ...                                     │
-└────────────────────────────────────────┘
-```
+- Nenhuma migração SQL necessária.
+- Para o banner do item 2, reaproveitar `usePedidosPaginatedQuery` filtrando `tipoFilter='3'`, `vendedorFilter=selectedVendedor`, `pageSize=1`, e exibir o pedido mais recente se `data_emissao` for de até 24h atrás.
+- Sem mudanças em edge functions, hooks ou banco.
 
-## Outros ajustes de UX/UI identificados
+## Fora de escopo
 
-1. **Chips de marca como `ToggleGroup`** — hoje são 4 `Button` individuais; usar `ToggleGroup` semântica (a11y), mantém visual.
-2. **Estado vazio do filtro** — quando o usuário filtra por marca e não há resultados, a mensagem atual ("Nenhum item adicionado ainda") fica errada. Mostrar: "Nenhum item da marca **Oben** encontrado" + botão "Limpar filtro".
-3. **"Limpar Tudo" no dropdown vermelho** — manter `destructive` no item do menu para reforçar o perigo, e reaproveitar o `AlertDialog` de confirmação existente.
-4. **Busca + chips num bloco coeso** — agrupar visualmente busca e chips (mesmo container, sem `mt-4` quebrando), reforçando que ambos filtram a mesma lista.
-
-## Arquivos a alterar
-
-- `src/pages/Inventario.tsx`
-  - Imports: adicionar `MoreVertical`, `DropdownMenu*`, `Badge`, `ToggleGroup*`.
-  - `CardHeader` da seção "Itens do Inventário": novo layout (título + dropdown à direita; busca + chips agrupados abaixo).
-  - Substituir os 4 `Button` de marca por `ToggleGroup` com `ToggleGroupItem`.
-  - Ajustar mensagem de estado vazio considerando `brandFilter !== 'all'` ou `searchTerm`.
-  - Remover a `<div>` antiga que misturava filtros e ações.
-
-Nenhum componente novo precisa ser criado. Os modais `ImportInventarioModal` / `ExportInventarioModal` e o `AlertDialog` de "Limpar Tudo" continuam funcionando exatamente como antes.
+- Não vou recriar/reaprovar nada no banco — os dados estão corretos.
+- Não vou mudar o comportamento de `get_estoque_real_vendedor` (está certo: retornar o estado mais recente).
