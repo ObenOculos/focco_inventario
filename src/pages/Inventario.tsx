@@ -128,8 +128,8 @@ export default function Inventario() {
   const isMobile = useIsMobile();
 
   const totalQuantity = useMemo(
-    () => items.reduce((acc, item) => acc + item.quantidade_fisica, 0),
-    [items]
+    () => searchedItems.reduce((acc, item) => acc + item.quantidade_fisica, 0),
+    [searchedItems]
   );
 
   const blocker = useBlocker(
