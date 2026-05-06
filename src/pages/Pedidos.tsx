@@ -60,10 +60,13 @@ import { useVendedoresListQuery } from '@/hooks/useVendedoresGerenciamentoQuery'
 import {
   useEstoqueRealVendedorQuery,
   useGerarNotaRetornoMutation,
+  useGerarNotaRetornoDeInventarioMutation,
 } from '@/hooks/useNotaRetornoQuery';
 import * as XLSX from 'xlsx';
 import { gerarXmlRetornoCiclone, downloadXml, downloadXmlsAsZip } from '@/lib/gerarXmlCiclone';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 // ─── Types ───────────────────────────────────────────────────
 
