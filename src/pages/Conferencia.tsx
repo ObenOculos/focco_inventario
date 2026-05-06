@@ -914,15 +914,26 @@ export default function Conferencia() {
                     </>
                   )}
                   {selectedInventario?.status === 'aprovado' && (
-                    <Button
-                      onClick={handleOpenRetornoDialog}
-                      disabled={gerarRetornoInvMutation.isPending}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <RotateCcw size={16} className="mr-2" />
-                      Gerar Nota de Retorno
-                    </Button>
+                    <>
+                      <Button
+                        onClick={handleOpenRetornoDialog}
+                        disabled={gerarRetornoInvMutation.isPending}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <RotateCcw size={16} className="mr-2" />
+                        Gerar Nota de Retorno
+                      </Button>
+                      <Button
+                        onClick={() => { setShowManagerActions(false); setReverterConfirm(false); setShowReverterDialog(true); }}
+                        disabled={reverting}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <ArrowLeft size={16} className="mr-2" />
+                        Reverter Aprovação
+                      </Button>
+                    </>
                   )}
                 </div>
                 {isPendingOrRevisao && (
