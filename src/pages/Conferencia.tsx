@@ -120,6 +120,9 @@ export default function Conferencia() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [usaSomaParaNegativo, setUsaSomaParaNegativo] = useState(true);
   const [showRetornoDialog, setShowRetornoDialog] = useState(false);
+  const [showReverterDialog, setShowReverterDialog] = useState(false);
+  const [reverterConfirm, setReverterConfirm] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [retornoApenasComQtd, setRetornoApenasComQtd] = useState(true);
   const [retornoForceConfirm, setRetornoForceConfirm] = useState(false);
   const [movimentosPosteriores, setMovimentosPosteriores] = useState<number | null>(null);
@@ -383,6 +386,41 @@ export default function Conferencia() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleReverterAprovacao = async () => {
+    if (!selectedInventario) return;
+    setReverting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reverter-aprovacao-inventario', {
+        body: { inventario_id: selectedInventario.id },
+      });
+      if (error) {
+        const ctx: any = (error as any).context;
+        let msg = error.message;
+        try {
+          if (ctx && typeof ctx.json === 'function') {
+            const j = await ctx.json();
+            if (j?.error) msg = j.error;
+          }
+        } catch (_e) { /* noop */ }
+        throw new Error(msg);
+      }
+      toast.success(data?.message || 'Aprovação revertida.');
+      queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+      queryClient.invalidateQueries({ queryKey: ['estoqueReal'] });
+      queryClient.invalidateQueries({ queryKey: ['estoqueTeorico'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      setShowReverterDialog(false);
+      setReverterConfirm(false);
+      setSelectedInventario(null);
+      refetchInventarios();
+    } catch (e: any) {
+      toast.error('Não foi possível reverter', { description: e.message });
+    } finally {
+      setReverting(false);
     }
   };
 
@@ -876,15 +914,26 @@ export default function Conferencia() {
                     </>
                   )}
                   {selectedInventario?.status === 'aprovado' && (
-                    <Button
-                      onClick={handleOpenRetornoDialog}
-                      disabled={gerarRetornoInvMutation.isPending}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <RotateCcw size={16} className="mr-2" />
-                      Gerar Nota de Retorno
-                    </Button>
+                    <>
+                      <Button
+                        onClick={handleOpenRetornoDialog}
+                        disabled={gerarRetornoInvMutation.isPending}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <RotateCcw size={16} className="mr-2" />
+                        Gerar Nota de Retorno
+                      </Button>
+                      <Button
+                        onClick={() => { setShowManagerActions(false); setReverterConfirm(false); setShowReverterDialog(true); }}
+                        disabled={reverting}
+                        size="sm"
+                        variant="outline"
+                      >
+                        <ArrowLeft size={16} className="mr-2" />
+                        Reverter Aprovação
+                      </Button>
+                    </>
                   )}
                 </div>
                 {isPendingOrRevisao && (
@@ -995,6 +1044,58 @@ export default function Conferencia() {
                     ) : (
                       'Confirmar Geração'
                     )}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Dialog: Reverter Aprovação */}
+            <AlertDialog open={showReverterDialog} onOpenChange={(o) => { setShowReverterDialog(o); if (!o) setReverterConfirm(false); }}>
+              <AlertDialogContent className="max-w-lg">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Reverter Aprovação do Inventário</AlertDialogTitle>
+                  <AlertDialogDescription asChild>
+                    <div className="space-y-3 text-sm">
+                      <div>
+                        O inventário de{' '}
+                        <strong>{selectedInventario?.profiles?.nome || selectedInventario?.codigo_vendedor}</strong>{' '}
+                        em{' '}
+                        <strong>
+                          {selectedInventario && format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
+                        </strong>{' '}
+                        voltará ao status <strong>pendente</strong>.
+                      </div>
+                      <div className="rounded border-2 border-destructive/50 bg-destructive/10 p-3 text-xs space-y-1">
+                        <div className="font-semibold text-destructive flex items-center gap-1.5">
+                          <AlertTriangle size={14} /> O que será desfeito:
+                        </div>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          <li>O snapshot de estoque real criado por esta aprovação será removido.</li>
+                          <li>O estoque real anterior do vendedor (se houver) volta a ser o vigente.</li>
+                          <li>Você poderá aprovar ou enviar para revisão novamente.</li>
+                          <li>Se já foi gerada uma Nota de Retorno baseada neste inventário, ela permanece (já foi exportada).</li>
+                        </ul>
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <Switch
+                          id="confirm-reverter"
+                          checked={reverterConfirm}
+                          onCheckedChange={setReverterConfirm}
+                        />
+                        <Label htmlFor="confirm-reverter" className="text-xs cursor-pointer">
+                          Confirmo que entendo e quero reverter a aprovação
+                        </Label>
+                      </div>
+                    </div>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={reverting}>Cancelar</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={(e) => { e.preventDefault(); handleReverterAprovacao(); }}
+                    disabled={reverting || !reverterConfirm}
+                  >
+                    {reverting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Revertendo...</>) : 'Reverter Aprovação'}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
