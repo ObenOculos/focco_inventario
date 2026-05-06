@@ -15,20 +15,19 @@ interface ItemRetorno {
 
 interface NotaRetornoRequest {
   codigo_vendedor: string;
-  itens: ItemRetorno[];
+  itens?: ItemRetorno[];
   observacoes?: string;
+  inventario_id?: string; // Quando informado, monta a nota a partir do inventário aprovado
 }
 
 /**
  * Edge Function: Criar Nota de Retorno
  *
- * Fluxo:
- * 1. Valida permissões (apenas gerentes)
- * 2. Recebe código do vendedor e lista de itens a retornar
- * 3. Gera número do pedido automático com prefixo "RET-"
- * 4. Cria pedido na tabela pedidos com codigo_tipo = 3
- * 5. Insere itens em lotes de 500 (evita limite de 1000)
- * 6. Retorna sucesso com número da nota gerada
+ * Dois modos de operação:
+ * - Modo "inventário": recebe `inventario_id` (status=aprovado) e gera a nota
+ *   a partir das quantidades contadas em itens_inventario. Ao concluir,
+ *   marca o inventário como `baixado`.
+ * - Modo "manual" (legado): recebe lista `itens` arbitrária.
  */
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -37,29 +36,19 @@ serve(async (req: Request) => {
 
   try {
     const body: NotaRetornoRequest = await req.json();
-    const { codigo_vendedor, itens, observacoes } = body;
+    const { codigo_vendedor, observacoes, inventario_id } = body;
+    let { itens } = body;
 
     if (!codigo_vendedor || typeof codigo_vendedor !== 'string') {
       throw new Error('Código do vendedor é obrigatório.');
     }
 
-    if (!itens || !Array.isArray(itens) || itens.length === 0) {
-      throw new Error('Lista de itens é obrigatória.');
-    }
-
-    // Filtra itens com quantidade > 0
-    const itensValidos = itens.filter((item) => item.quantidade > 0);
-    if (itensValidos.length === 0) {
-      throw new Error('Nenhum item com quantidade válida para retorno.');
-    }
-
-    // Cliente admin com service role
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Valida autenticação
+    // Auth
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Token não fornecido.' }), {
@@ -67,78 +56,128 @@ serve(async (req: Request) => {
         status: 401,
       });
     }
-
     const token = authHeader.replace('Bearer ', '');
-    const {
-      data: { user },
-      error: authError,
-    } = await supabaseAdmin.auth.getUser(token);
-
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Token inválido.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 401,
       });
     }
-
-    // Valida permissão de gerente
-    const { data: profile, error: profileError } = await supabaseAdmin
-      .from('profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError || profile?.role !== 'gerente') {
+    const { data: profile } = await supabaseAdmin
+      .from('profiles').select('role').eq('id', user.id).single();
+    if (profile?.role !== 'gerente') {
       return new Response(JSON.stringify({ error: 'Acesso negado. Apenas gerentes.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 403,
       });
     }
 
-    // Busca dados do vendedor
-    const { data: vendedor, error: vendedorError } = await supabaseAdmin
-      .from('profiles')
-      .select('nome, codigo_vendedor')
-      .eq('codigo_vendedor', codigo_vendedor)
-      .maybeSingle();
+    // === MODO INVENTÁRIO ===
+    let inventarioValidado: { id: string; status: string; codigo_vendedor: string } | null = null;
+    if (inventario_id) {
+      const { data: inv, error: invErr } = await supabaseAdmin
+        .from('inventarios')
+        .select('id, status, codigo_vendedor')
+        .eq('id', inventario_id)
+        .maybeSingle();
+      if (invErr || !inv) throw new Error('Inventário não encontrado.');
+      if (inv.codigo_vendedor !== codigo_vendedor) {
+        throw new Error('Inventário não pertence ao vendedor informado.');
+      }
+      if (inv.status !== 'aprovado') {
+        throw new Error(`Inventário precisa estar aprovado (status atual: ${inv.status}).`);
+      }
+      inventarioValidado = inv;
 
+      // Monta itens a partir de itens_inventario (somando duplicatas) + valor de produtos
+      const itensAgg = new Map<string, { quantidade: number; nome_produto: string | null }>();
+      const BATCH = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabaseAdmin
+          .from('itens_inventario')
+          .select('codigo_auxiliar, quantidade_fisica, nome_produto')
+          .eq('inventario_id', inventario_id)
+          .order('id', { ascending: true })
+          .range(from, from + BATCH - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        for (const it of data) {
+          const cur = itensAgg.get(it.codigo_auxiliar);
+          const q = Number(it.quantidade_fisica) || 0;
+          if (cur) cur.quantidade += q;
+          else itensAgg.set(it.codigo_auxiliar, { quantidade: q, nome_produto: it.nome_produto });
+        }
+        if (data.length < BATCH) break;
+        from += BATCH;
+      }
+
+      const codigos = Array.from(itensAgg.entries()).filter(([, v]) => v.quantidade > 0).map(([k]) => k);
+      if (codigos.length === 0) {
+        throw new Error('Inventário não possui itens contados (quantidade > 0).');
+      }
+
+      const produtosMap = new Map<string, { nome_produto: string; valor_produto: number }>();
+      for (let i = 0; i < codigos.length; i += 500) {
+        const lote = codigos.slice(i, i + 500);
+        const { data: produtos } = await supabaseAdmin
+          .from('produtos')
+          .select('codigo_auxiliar, nome_produto, valor_produto')
+          .in('codigo_auxiliar', lote);
+        produtos?.forEach((p) => {
+          produtosMap.set(p.codigo_auxiliar, {
+            nome_produto: p.nome_produto,
+            valor_produto: Number(p.valor_produto) || 0,
+          });
+        });
+      }
+
+      itens = codigos.map((codigo) => {
+        const agg = itensAgg.get(codigo)!;
+        const prod = produtosMap.get(codigo);
+        return {
+          codigo_auxiliar: codigo,
+          nome_produto: prod?.nome_produto || agg.nome_produto || codigo,
+          quantidade: agg.quantidade,
+          valor_produto: prod?.valor_produto || 0,
+        };
+      });
+    }
+
+    if (!itens || !Array.isArray(itens) || itens.length === 0) {
+      throw new Error('Lista de itens é obrigatória.');
+    }
+    const itensValidos = itens.filter((item) => item.quantidade > 0);
+    if (itensValidos.length === 0) {
+      throw new Error('Nenhum item com quantidade válida para retorno.');
+    }
+
+    // Vendedor
+    const { data: vendedor } = await supabaseAdmin
+      .from('profiles').select('nome, codigo_vendedor')
+      .eq('codigo_vendedor', codigo_vendedor).maybeSingle();
     const nomeVendedor = vendedor?.nome || codigo_vendedor;
 
-    // Gera número do pedido automático
-    const timestamp = Date.now();
-    const numeroPedido = `RET-${codigo_vendedor}-${timestamp}`;
+    const numeroPedido = `RET-${codigo_vendedor}-${Date.now()}`;
+    const valorTotal = itensValidos.reduce((acc, i) => acc + (i.valor_produto || 0) * i.quantidade, 0);
 
-    console.log(`[INFO] Criando nota de retorno ${numeroPedido} para vendedor ${codigo_vendedor}`);
-    console.log(`[INFO] Total de itens a processar: ${itensValidos.length}`);
+    console.log(`[INFO] Criando nota ${numeroPedido} (${itensValidos.length} itens) ${inventario_id ? `do inv. ${inventario_id}` : 'manual'}`);
 
-    // Calcula valor total
-    const valorTotal = itensValidos.reduce((acc, item) => {
-      return acc + (item.valor_produto || 0) * item.quantidade;
-    }, 0);
-
-    // Cria o pedido
     const { data: pedido, error: pedidoError } = await supabaseAdmin
       .from('pedidos')
       .insert({
         numero_pedido: numeroPedido,
         data_emissao: new Date().toISOString(),
-        codigo_vendedor: codigo_vendedor,
+        codigo_vendedor,
         nome_vendedor: nomeVendedor,
-        codigo_tipo: 3, // Retorno
+        codigo_tipo: 3,
         valor_total: valorTotal,
         situacao: 'N',
       })
-      .select('id')
-      .single();
+      .select('id').single();
+    if (pedidoError || !pedido) throw new Error('Falha ao criar nota de retorno.');
 
-    if (pedidoError || !pedido) {
-      console.error('[ERROR] Erro ao criar pedido:', pedidoError);
-      throw new Error('Falha ao criar nota de retorno.');
-    }
-
-    console.log(`[INFO] Pedido criado com ID: ${pedido.id}`);
-
-    // Prepara itens do pedido
     const itensPedido = itensValidos.map((item) => ({
       pedido_id: pedido.id,
       codigo_auxiliar: item.codigo_auxiliar,
@@ -147,70 +186,47 @@ serve(async (req: Request) => {
       valor_produto: item.valor_produto || 0,
     }));
 
-    // Insere itens em lotes de 500
-    const batchSize = 500;
-    let insertedCount = 0;
-
-    for (let i = 0; i < itensPedido.length; i += batchSize) {
-      const batch = itensPedido.slice(i, i + batchSize);
+    for (let i = 0; i < itensPedido.length; i += 500) {
+      const batch = itensPedido.slice(i, i + 500);
       const { error: insertError } = await supabaseAdmin.from('itens_pedido').insert(batch);
-
       if (insertError) {
-        console.error(`[ERROR] Erro ao inserir lote de itens (offset ${i}):`, insertError);
-        // Tenta deletar o pedido em caso de erro
         await supabaseAdmin.from('pedidos').delete().eq('id', pedido.id);
         throw new Error('Falha ao inserir itens do retorno.');
       }
-
-      insertedCount += batch.length;
-      console.log(`[INFO] Inseridos ${insertedCount}/${itensPedido.length} itens`);
     }
 
-    const totalUnidades = itensValidos.reduce((acc, item) => acc + item.quantidade, 0);
-
-    // === ATUALIZAR ESTOQUE_REAL ===
-    // Insere novos registros com quantidade reduzida para cada item retornado
-    console.log(`[INFO] Atualizando estoque_real para ${itensValidos.length} itens...`);
+    // === ATUALIZA estoque_real ===
     const agora = new Date().toISOString();
-
-    for (const item of itensValidos) {
-      // Busca quantidade atual do estoque_real (registro mais recente)
-      const { data: estoqueAtual, error: estoqueError } = await supabaseAdmin
-        .from('estoque_real')
-        .select('quantidade_real')
-        .eq('codigo_vendedor', codigo_vendedor)
-        .eq('codigo_auxiliar', item.codigo_auxiliar)
-        .order('data_atualizacao', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (estoqueError) {
-        console.error(`[WARN] Erro ao buscar estoque_real para ${item.codigo_auxiliar}:`, estoqueError);
-        continue;
-      }
-
-      const quantidadeAtual = estoqueAtual?.quantidade_real || 0;
-      const novaQuantidade = Math.max(0, quantidadeAtual - item.quantidade);
-
-      // Insere novo registro com quantidade reduzida
-      const { error: insertEstoqueError } = await supabaseAdmin
-        .from('estoque_real')
-        .insert({
-          codigo_vendedor: codigo_vendedor,
-          codigo_auxiliar: item.codigo_auxiliar,
-          quantidade_real: novaQuantidade,
-          data_atualizacao: agora,
-          inventario_id: null,
-        });
-
-      if (insertEstoqueError) {
-        console.error(`[WARN] Erro ao atualizar estoque_real para ${item.codigo_auxiliar}:`, insertEstoqueError);
-      } else {
-        console.log(`[INFO] estoque_real ${item.codigo_auxiliar}: ${quantidadeAtual} -> ${novaQuantidade}`);
-      }
+    const estoqueRows = itensValidos.map((item) => ({
+      codigo_vendedor,
+      codigo_auxiliar: item.codigo_auxiliar,
+      quantidade_real: 0,
+      data_atualizacao: agora,
+      inventario_id: null,
+    }));
+    for (let i = 0; i < estoqueRows.length; i += 500) {
+      const batch = estoqueRows.slice(i, i + 500);
+      const { error: erErr } = await supabaseAdmin.from('estoque_real').insert(batch);
+      if (erErr) console.error('[WARN] estoque_real batch error:', erErr);
     }
 
-    console.log(`[INFO] Nota de retorno criada com sucesso: ${numeroPedido}`);
+    // === MARCA INVENTÁRIO COMO BAIXADO ===
+    if (inventarioValidado) {
+      const obsBaixa = `Nota de retorno ${numeroPedido} gerada em ${new Date().toLocaleString('pt-BR')}`;
+      const { error: invUpdErr } = await supabaseAdmin
+        .from('inventarios')
+        .update({
+          status: 'baixado',
+          observacoes_gerente: observacoes
+            ? `${observacoes}\n\n${obsBaixa}`
+            : obsBaixa,
+          updated_at: agora,
+        })
+        .eq('id', inventarioValidado.id);
+      if (invUpdErr) console.error('[WARN] Falha ao marcar inventário baixado:', invUpdErr);
+    }
+
+    const totalUnidades = itensValidos.reduce((acc, i) => acc + i.quantidade, 0);
 
     return new Response(
       JSON.stringify({
@@ -220,15 +236,13 @@ serve(async (req: Request) => {
         total_itens: itensValidos.length,
         total_unidades: totalUnidades,
         valor_total: valorTotal,
+        inventario_id: inventarioValidado?.id ?? null,
       }),
-      {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        status: 200,
-      }
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (err) {
     const errorMessage = err instanceof Error ? err.message : 'Erro desconhecido';
-    console.error('[ERROR] Exceção:', errorMessage);
+    console.error('[ERROR]', errorMessage);
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 400,
