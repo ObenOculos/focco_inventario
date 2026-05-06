@@ -1,13 +1,23 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.86.0';
+import { z } from 'https://esm.sh/zod@3.23.8';
 import { corsHeaders } from '../_shared/cors.ts';
 
-// Tipos para melhor type safety
-interface CriarVendedorRequest {
-  email: string;
-  nome: string;
-  codigo_vendedor?: string;
-  telefone?: string;
-}
+// Schema rigoroso de validação
+const CriarVendedorSchema = z.object({
+  email: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .min(5)
+    .max(254)
+    .email('Email inválido')
+    .regex(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Formato de email inválido'),
+  nome: z.string().trim().min(2).max(150),
+  codigo_vendedor: z.string().trim().min(1).max(50).optional(),
+  telefone: z.string().trim().min(6).max(30).optional(),
+});
+
+type CriarVendedorRequest = z.infer<typeof CriarVendedorSchema>;
 
 interface CriarVendedorResponse {
   success: boolean;
