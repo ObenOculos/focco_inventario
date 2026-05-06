@@ -400,54 +400,21 @@ export default function Inventario() {
     toast.success('Arquivo exportado com sucesso.');
   };
 
-  const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    e.target.value = '';
-    if (!file) return;
-    try {
-      const text = await file.text();
-      const data = JSON.parse(text);
-      if (!data || !Array.isArray(data.items)) {
-        toast.error('Arquivo inválido: formato não reconhecido.');
-        return;
-      }
-      const importedItems: InventarioItem[] = data.items
-        .filter((it: any) => it && typeof it.codigo_auxiliar === 'string')
-        .map((it: any) => ({
-          codigo_auxiliar: String(it.codigo_auxiliar).toUpperCase(),
-          nome_produto: String(it.nome_produto || it.codigo_auxiliar),
-          quantidade_fisica: Number(it.quantidade_fisica) || 0,
-        }));
-
-      if (importedItems.length === 0) {
-        toast.error('Arquivo não contém itens válidos.');
-        return;
-      }
-
-      // Mesclar com itens existentes (somar quantidades de códigos repetidos)
-      setItems((prev) => {
-        const map = new Map<string, InventarioItem>();
-        prev.forEach((it) => map.set(it.codigo_auxiliar, { ...it }));
-        importedItems.forEach((it) => {
-          const existing = map.get(it.codigo_auxiliar);
-          if (existing) {
-            existing.quantidade_fisica += it.quantidade_fisica;
-          } else {
-            map.set(it.codigo_auxiliar, it);
-          }
-        });
-        return Array.from(map.values());
+  const handleImportItems = (importedItems: ImportedInventarioItem[], obs?: string) => {
+    setItems((prev) => {
+      const map = new Map<string, InventarioItem>();
+      prev.forEach((it) => map.set(it.codigo_auxiliar, { ...it }));
+      importedItems.forEach((it) => {
+        const existing = map.get(it.codigo_auxiliar);
+        if (existing) {
+          existing.quantidade_fisica += it.quantidade_fisica;
+        } else {
+          map.set(it.codigo_auxiliar, { ...it });
+        }
       });
-
-      if (typeof data.observacoes === 'string' && data.observacoes && !observacoes) {
-        setObservacoes(data.observacoes);
-      }
-
-      toast.success(`${importedItems.length} item(ns) importado(s) do arquivo.`);
-    } catch (err) {
-      console.error('Erro ao importar arquivo:', err);
-      toast.error('Não foi possível ler o arquivo. Verifique se é um JSON válido.');
-    }
+      return Array.from(map.values());
+    });
+    if (obs && !observacoes) setObservacoes(obs);
   };
 
   const handleSubmit = async () => {
