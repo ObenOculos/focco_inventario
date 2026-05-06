@@ -502,6 +502,109 @@ function NotaRetornoTab() {
   const gerarNotaMutation = useGerarNotaRetornoDeInventarioMutation();
   const [confirmInv, setConfirmInv] = useState<InventarioAprovado | null>(null);
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
+  const [xmlInv, setXmlInv] = useState<InventarioAprovado | null>(null);
+  const [xmlTabela, setXmlTabela] = useState<'venda' | 'remessa'>('venda');
+  const [xmlSegmentos, setXmlSegmentos] = useState<number>(1);
+  const [xmlLoading, setXmlLoading] = useState(false);
+
+  const handleGerarXml = async (loja: { codigo: number; nome: string }) => {
+    if (!xmlInv) return;
+    setXmlLoading(true);
+    try {
+      // Carrega itens do inventário (paginado)
+      const itensInv: { codigo_auxiliar: string; quantidade_fisica: number; nome_produto: string | null }[] = [];
+      const BATCH = 1000;
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('itens_inventario')
+          .select('codigo_auxiliar, quantidade_fisica, nome_produto')
+          .eq('inventario_id', xmlInv.id)
+          .range(from, from + BATCH - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        itensInv.push(...data.map((d) => ({
+          codigo_auxiliar: d.codigo_auxiliar,
+          quantidade_fisica: Number(d.quantidade_fisica) || 0,
+          nome_produto: d.nome_produto,
+        })));
+        if (data.length < BATCH) break;
+        from += BATCH;
+      }
+
+      const itensValidos = itensInv.filter((i) => i.quantidade_fisica > 0);
+      if (itensValidos.length === 0) {
+        toast.error('Inventário sem itens com quantidade para gerar XML.');
+        return;
+      }
+
+      // Busca preços e nomes na tabela produtos
+      const codigos = Array.from(new Set(itensValidos.map((i) => i.codigo_auxiliar)));
+      const prodMap = new Map<string, { nome_produto: string; valor_produto: number; valor_remessa: number }>();
+      for (let i = 0; i < codigos.length; i += 500) {
+        const lote = codigos.slice(i, i + 500);
+        const { data: prods } = await supabase
+          .from('produtos')
+          .select('codigo_auxiliar, nome_produto, valor_produto, valor_remessa')
+          .in('codigo_auxiliar', lote);
+        prods?.forEach((p) => prodMap.set(p.codigo_auxiliar, {
+          nome_produto: p.nome_produto,
+          valor_produto: Number(p.valor_produto) || 0,
+          valor_remessa: Number(p.valor_remessa) || 0,
+        }));
+      }
+
+      const itensXml = itensValidos.map((it) => {
+        const p = prodMap.get(it.codigo_auxiliar);
+        return {
+          codigo_auxiliar: it.codigo_auxiliar,
+          nome_produto: p?.nome_produto || it.nome_produto || it.codigo_auxiliar,
+          quantidade: it.quantidade_fisica,
+          valor_unitario: xmlTabela === 'remessa' ? (p?.valor_remessa || 0) : (p?.valor_produto || 0),
+        };
+      });
+
+      const requested = Math.max(1, Math.min(10, xmlSegmentos));
+      const effectiveSegmentos = Math.min(requested, itensXml.length);
+      if (effectiveSegmentos < requested) {
+        toast.warning(`Só há ${itensXml.length} item(ns). Gerando ${effectiveSegmentos} pedido(s).`);
+      }
+
+      const buckets: typeof itensXml[] = Array.from({ length: effectiveSegmentos }, () => []);
+      itensXml.forEach((item, idx) => buckets[idx % effectiveSegmentos].push(item));
+
+      const dataIso = new Date().toISOString().split('T')[0];
+      const nomeVendedor = xmlInv.profiles?.nome || xmlInv.codigo_vendedor;
+      const arquivos = buckets.map((bucket, i) => {
+        const xml = gerarXmlRetornoCiclone({
+          codigoVendedor: xmlInv.codigo_vendedor,
+          nomeVendedor,
+          codigoLoja: loja.codigo,
+          itens: bucket,
+          sequencia: effectiveSegmentos > 1 ? i + 1 : undefined,
+        });
+        const sufixo = effectiveSegmentos > 1 ? `-parte${i + 1}-de-${effectiveSegmentos}` : '';
+        const nome = `retorno-ciclone-${xmlTabela}-loja${loja.codigo}-${xmlInv.codigo_vendedor}${sufixo}-${dataIso}.xml`;
+        return { nome, conteudo: xml };
+      });
+
+      if (effectiveSegmentos > 1) {
+        const zipName = `retorno-ciclone-${xmlTabela}-loja${loja.codigo}-${xmlInv.codigo_vendedor}-${effectiveSegmentos}partes-${dataIso}.zip`;
+        await downloadXmlsAsZip(arquivos, zipName);
+        toast.success(`ZIP gerado com ${effectiveSegmentos} XMLs.`);
+      } else {
+        downloadXml(arquivos[0].conteudo, arquivos[0].nome);
+        toast.success('XML gerado com sucesso.');
+      }
+      setXmlInv(null);
+      setXmlSegmentos(1);
+    } catch (err) {
+      console.error(err);
+      toast.error('Falha ao gerar XML.', { description: err instanceof Error ? err.message : 'Erro desconhecido' });
+    } finally {
+      setXmlLoading(false);
+    }
+  };
 
   const vendedoresUnicos = useMemo(() => {
     const map = new Map<string, string>();
