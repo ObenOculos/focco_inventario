@@ -23,7 +23,7 @@ import {
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X, RefreshCcw, Download, Upload } from 'lucide-react';
+import { Camera, Plus, Trash2, Send, QrCode, Search, Check, X, RefreshCcw, Download, Upload, MoreVertical } from 'lucide-react';
 import { Html5Qrcode } from 'html5-qrcode';
 import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -31,6 +31,15 @@ import { Pagination } from '@/components/Pagination';
 import { useCodigosCorrecaoQuery } from '@/hooks/useCodigosCorrecaoQuery';
 import { ImportInventarioModal, ImportedInventarioItem } from '@/components/ImportInventarioModal';
 import { ExportInventarioModal } from '@/components/ExportInventarioModal';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { Badge } from '@/components/ui/badge';
 
 interface InventarioItem {
   codigo_auxiliar: string;
