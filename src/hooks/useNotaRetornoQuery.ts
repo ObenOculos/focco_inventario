@@ -187,6 +187,7 @@ export function useGerarNotaRetornoDeInventarioMutation() {
       queryClient.invalidateQueries({ queryKey: ['pedidos'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-teorico'] });
       queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventarios-aprovados-pendentes-retorno'] });
     },
     onError: (error: Error) => {
       toast.error('Erro ao criar nota de retorno', {
