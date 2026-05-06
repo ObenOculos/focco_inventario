@@ -374,33 +374,7 @@ export default function Inventario() {
     toast.success('Todos os itens foram removidos.');
   };
 
-  const handleExportFile = () => {
-    if (items.length === 0) {
-      toast.error('Não há itens para exportar.');
-      return;
-    }
-    const payload = {
-      version: 1,
-      tipo: 'inventario_focco',
-      exported_at: new Date().toISOString(),
-      codigo_vendedor: profile?.codigo_vendedor || null,
-      observacoes,
-      editing_inventario_id: editingInventarioId,
-      items,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const stamp = format(new Date(), 'yyyyMMdd_HHmm');
-    const vendedor = profile?.codigo_vendedor || 'vendedor';
-    a.href = url;
-    a.download = `inventario_${vendedor}_${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('Arquivo exportado com sucesso.');
-  };
+  // Exportação agora é feita via ExportInventarioModal (JSON ou Excel)
 
   const handleImportItems = (importedItems: ImportedInventarioItem[], obs?: string) => {
     setItems((prev) => {
