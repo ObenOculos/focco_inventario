@@ -389,6 +389,41 @@ export default function Conferencia() {
     }
   };
 
+  const handleReverterAprovacao = async () => {
+    if (!selectedInventario) return;
+    setReverting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('reverter-aprovacao-inventario', {
+        body: { inventario_id: selectedInventario.id },
+      });
+      if (error) {
+        const ctx: any = (error as any).context;
+        let msg = error.message;
+        try {
+          if (ctx && typeof ctx.json === 'function') {
+            const j = await ctx.json();
+            if (j?.error) msg = j.error;
+          }
+        } catch (_e) { /* noop */ }
+        throw new Error(msg);
+      }
+      toast.success(data?.message || 'Aprovação revertida.');
+      queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+      queryClient.invalidateQueries({ queryKey: ['estoqueReal'] });
+      queryClient.invalidateQueries({ queryKey: ['estoqueTeorico'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      setShowReverterDialog(false);
+      setReverterConfirm(false);
+      setSelectedInventario(null);
+      refetchInventarios();
+    } catch (e: any) {
+      toast.error('Não foi possível reverter', { description: e.message });
+    } finally {
+      setReverting(false);
+    }
+  };
+
   const handleOpenRetornoDialog = async () => {
     if (!selectedInventario) return;
     setRetornoApenasComQtd(true);
