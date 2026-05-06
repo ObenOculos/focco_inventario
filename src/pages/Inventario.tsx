@@ -751,91 +751,112 @@ export default function Inventario() {
 
         {/* Items */}
         <Card className="border-2">
-          <CardHeader>
-            <CardTitle>Itens do Inventário ({totalQuantity})</CardTitle>
-            <div className="relative mt-2">
-              <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
-                size={16}
-              />
-              <Input
-                id="inventario-search"
-                name="search"
-                placeholder="Filtrar por código ou nome..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-9 border-2"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2 mt-4 justify-between">
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  variant={brandFilter === 'all' ? 'default' : 'outline'}
-                  onClick={() => setBrandFilter('all')}
-                  size={isMobile ? 'sm' : 'default'}
-                >
-                  Todos
-                </Button>
-                <Button
-                  variant={brandFilter === 'oben' ? 'default' : 'outline'}
-                  onClick={() => setBrandFilter('oben')}
-                  size={isMobile ? 'sm' : 'default'}
-                >
-                  Oben
-                </Button>
-                <Button
-                  variant={brandFilter === 'power' ? 'default' : 'outline'}
-                  onClick={() => setBrandFilter('power')}
-                  size={isMobile ? 'sm' : 'default'}
-                >
-                  Power
-                </Button>
-                <Button
-                  variant={brandFilter === 'outros' ? 'default' : 'outline'}
-                  onClick={() => setBrandFilter('outros')}
-                  size={isMobile ? 'sm' : 'default'}
-                >
-                  Outros
-                </Button>
-              </div>
-              <div className="flex gap-2 flex-wrap">
-                <Button
-                  variant="outline"
-                  size={isMobile ? 'sm' : 'default'}
-                  onClick={() => setShowImportModal(true)}
-                >
-                  <Upload size={16} className="mr-2" />
-                  Importar
-                </Button>
-                {items.length > 0 && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size={isMobile ? 'sm' : 'default'}
-                      onClick={() => setShowExportModal(true)}
-                    >
-                      <Download size={16} className="mr-2" />
-                      Exportar
-                    </Button>
-                    <Button
-                      variant="destructive"
-                      size={isMobile ? 'sm' : 'default'}
-                      onClick={() => setShowClearAllDialog(true)}
-                    >
-                      <RefreshCcw size={16} className="mr-2" />
-                      Limpar Tudo
-                    </Button>
-                  </>
+          <CardHeader className="space-y-4">
+            <div className="flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <CardTitle className="flex items-center gap-2 flex-wrap">
+                  <span>Itens do Inventário</span>
+                  <span className="text-sm font-normal text-muted-foreground">
+                    {isFiltering
+                      ? `${totalQuantity} de ${totalAllQuantity} peças`
+                      : `${totalAllQuantity} ${totalAllQuantity === 1 ? 'peça' : 'peças'}`}
+                  </span>
+                </CardTitle>
+                {brandFilter !== 'all' && (
+                  <Badge variant="secondary" className="mt-2 capitalize">
+                    Marca: {brandFilter}
+                  </Badge>
                 )}
               </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="icon" aria-label="Ações do inventário">
+                    <MoreVertical size={18} />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => setShowImportModal(true)}>
+                    <Upload size={16} className="mr-2" />
+                    Importar
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setShowExportModal(true)}
+                    disabled={items.length === 0}
+                  >
+                    <Download size={16} className="mr-2" />
+                    Exportar
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={() => setShowClearAllDialog(true)}
+                    disabled={items.length === 0}
+                    className="text-destructive focus:text-destructive"
+                  >
+                    <RefreshCcw size={16} className="mr-2" />
+                    Limpar tudo
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+
+            <div className="space-y-2">
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  size={16}
+                />
+                <Input
+                  id="inventario-search"
+                  name="search"
+                  placeholder="Filtrar por código ou nome..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-9 border-2"
+                />
+              </div>
+              <ToggleGroup
+                type="single"
+                value={brandFilter}
+                onValueChange={(v) => v && setBrandFilter(v as typeof brandFilter)}
+                className="flex flex-wrap justify-start gap-2"
+              >
+                <ToggleGroupItem value="all" size={isMobile ? 'sm' : 'default'} variant="outline">
+                  Todos
+                </ToggleGroupItem>
+                <ToggleGroupItem value="oben" size={isMobile ? 'sm' : 'default'} variant="outline">
+                  Oben
+                </ToggleGroupItem>
+                <ToggleGroupItem value="power" size={isMobile ? 'sm' : 'default'} variant="outline">
+                  Power
+                </ToggleGroupItem>
+                <ToggleGroupItem value="outros" size={isMobile ? 'sm' : 'default'} variant="outline">
+                  Outros
+                </ToggleGroupItem>
+              </ToggleGroup>
             </div>
           </CardHeader>
           <CardContent>
             {paginatedItems.length === 0 ? (
-              <div className="border-2 rounded-lg p-8 text-center text-muted-foreground">
-                {searchTerm
-                  ? `Nenhum item encontrado para "${searchTerm}"`
-                  : 'Nenhum item adicionado ainda.'}
+              <div className="border-2 rounded-lg p-8 text-center text-muted-foreground space-y-3">
+                <p>
+                  {searchTerm
+                    ? `Nenhum item encontrado para "${searchTerm}".`
+                    : brandFilter !== 'all'
+                    ? `Nenhum item da marca ${brandFilter} no inventário.`
+                    : 'Nenhum item adicionado ainda.'}
+                </p>
+                {isFiltering && items.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSearchTerm('');
+                      setBrandFilter('all');
+                    }}
+                  >
+                    Limpar filtros
+                  </Button>
+                )}
               </div>
             ) : (
               <div className="space-y-0">
