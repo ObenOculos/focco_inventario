@@ -809,19 +809,10 @@ export default function Inventario() {
                 </Button>
               </div>
               <div className="flex gap-2 flex-wrap">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="application/json,.json"
-                  onChange={handleImportFile}
-                  className="hidden"
-                  id="inventario-import-file"
-                  name="inventario_import_file"
-                />
                 <Button
                   variant="outline"
                   size={isMobile ? 'sm' : 'default'}
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => setShowImportModal(true)}
                 >
                   <Upload size={16} className="mr-2" />
                   Importar
