@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.criar-nota-retorno]
 verify_jwt = false
+
+[functions.reverter-aprovacao-inventario]
+verify_jwt = false
