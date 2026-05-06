@@ -120,6 +120,9 @@ export default function Conferencia() {
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [usaSomaParaNegativo, setUsaSomaParaNegativo] = useState(true);
   const [showRetornoDialog, setShowRetornoDialog] = useState(false);
+  const [showReverterDialog, setShowReverterDialog] = useState(false);
+  const [reverterConfirm, setReverterConfirm] = useState(false);
+  const [reverting, setReverting] = useState(false);
   const [retornoApenasComQtd, setRetornoApenasComQtd] = useState(true);
   const [retornoForceConfirm, setRetornoForceConfirm] = useState(false);
   const [movimentosPosteriores, setMovimentosPosteriores] = useState<number | null>(null);
