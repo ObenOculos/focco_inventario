@@ -479,7 +479,7 @@ export type Database = {
       }
     }
     Enums: {
-      inventory_status: "pendente" | "aprovado" | "revisao"
+      inventory_status: "pendente" | "aprovado" | "revisao" | "baixado"
       user_role: "vendedor" | "gerente"
     }
     CompositeTypes: {
@@ -608,7 +608,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      inventory_status: ["pendente", "aprovado", "revisao"],
+      inventory_status: ["pendente", "aprovado", "revisao", "baixado"],
       user_role: ["vendedor", "gerente"],
     },
   },
