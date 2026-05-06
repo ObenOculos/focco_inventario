@@ -30,6 +30,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination } from '@/components/Pagination';
 import { useCodigosCorrecaoQuery } from '@/hooks/useCodigosCorrecaoQuery';
 import { ImportInventarioModal, ImportedInventarioItem } from '@/components/ImportInventarioModal';
+import { ExportInventarioModal } from '@/components/ExportInventarioModal';
 
 interface InventarioItem {
   codigo_auxiliar: string;
@@ -70,6 +71,7 @@ export default function Inventario() {
   const [brandFilter, setBrandFilter] = useState<'all' | 'oben' | 'power' | 'outros'>('all');
   const [showClearAllDialog, setShowClearAllDialog] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const { data: codigosCorrecao = [] } = useCodigosCorrecaoQuery();
 
@@ -372,33 +374,7 @@ export default function Inventario() {
     toast.success('Todos os itens foram removidos.');
   };
 
-  const handleExportFile = () => {
-    if (items.length === 0) {
-      toast.error('Não há itens para exportar.');
-      return;
-    }
-    const payload = {
-      version: 1,
-      tipo: 'inventario_focco',
-      exported_at: new Date().toISOString(),
-      codigo_vendedor: profile?.codigo_vendedor || null,
-      observacoes,
-      editing_inventario_id: editingInventarioId,
-      items,
-    };
-    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    const stamp = format(new Date(), 'yyyyMMdd_HHmm');
-    const vendedor = profile?.codigo_vendedor || 'vendedor';
-    a.href = url;
-    a.download = `inventario_${vendedor}_${stamp}.json`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast.success('Arquivo exportado com sucesso.');
-  };
+  // Exportação agora é feita via ExportInventarioModal (JSON ou Excel)
 
   const handleImportItems = (importedItems: ImportedInventarioItem[], obs?: string) => {
     setItems((prev) => {
@@ -822,7 +798,7 @@ export default function Inventario() {
                     <Button
                       variant="outline"
                       size={isMobile ? 'sm' : 'default'}
-                      onClick={handleExportFile}
+                      onClick={() => setShowExportModal(true)}
                     >
                       <Download size={16} className="mr-2" />
                       Exportar
@@ -999,6 +975,15 @@ export default function Inventario() {
         open={showImportModal}
         onOpenChange={setShowImportModal}
         onImport={handleImportItems}
+      />
+
+      <ExportInventarioModal
+        open={showExportModal}
+        onOpenChange={setShowExportModal}
+        items={items}
+        observacoes={observacoes}
+        codigoVendedor={profile?.codigo_vendedor}
+        editingInventarioId={editingInventarioId}
       />
     </AppLayout>
   );
