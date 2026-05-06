@@ -71,6 +71,7 @@ export default function Inventario() {
   const [brandFilter, setBrandFilter] = useState<'all' | 'oben' | 'power' | 'outros'>('all');
   const [showClearAllDialog, setShowClearAllDialog] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
 
   const { data: codigosCorrecao = [] } = useCodigosCorrecaoQuery();
 
