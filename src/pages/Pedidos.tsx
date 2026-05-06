@@ -723,6 +723,15 @@ function NotaRetornoTab() {
                   <Undo2 className="h-4 w-4 mr-2" />
                   Gerar Nota de Retorno
                 </Button>
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  size="sm"
+                  onClick={() => setXmlInv(inv)}
+                >
+                  <FileCode className="h-4 w-4 mr-2" />
+                  Exportar XML Ciclone
+                </Button>
               </CardContent>
             </Card>
           ))}
