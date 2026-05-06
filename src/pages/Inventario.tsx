@@ -142,6 +142,11 @@ export default function Inventario() {
     () => searchedItems.reduce((acc, item) => acc + item.quantidade_fisica, 0),
     [searchedItems]
   );
+  const totalAllQuantity = useMemo(
+    () => items.reduce((acc, item) => acc + item.quantidade_fisica, 0),
+    [items]
+  );
+  const isFiltering = brandFilter !== 'all' || searchTerm.trim() !== '';
 
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
