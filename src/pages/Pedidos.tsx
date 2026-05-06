@@ -954,7 +954,7 @@ export default function Pedidos() {
               </TabsTrigger>
               <TabsTrigger value="nota-retorno" className="gap-2">
                 <Undo2 className="h-4 w-4" />
-                Nota de Retorno
+                Gerar Nota de Retorno
               </TabsTrigger>
             </TabsList>
             <TabsContent value="consultar">
