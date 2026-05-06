@@ -406,6 +406,40 @@ function ConsultarPedidosTab() {
   );
 }
 
+// ─── Banner: última nota de retorno recente ─────────────────
+
+function UltimaNotaRetornoBanner({ codigoVendedor }: { codigoVendedor: string }) {
+  const { data } = usePedidosPaginatedQuery({
+    codigoVendedor,
+    isGerente: true,
+    tipoFilter: '3',
+    vendedorFilter: codigoVendedor,
+    searchTerm: '',
+    page: 1,
+    pageSize: 1,
+  });
+
+  const ultima = data?.data?.[0];
+  if (!ultima) return null;
+
+  const horas = (Date.now() - new Date(ultima.data_emissao).getTime()) / 36e5;
+  if (horas > 24) return null;
+
+  return (
+    <div className="rounded border-2 border-green-500/40 bg-green-50 dark:bg-green-950/30 p-3 text-xs text-green-900 dark:text-green-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div>
+        <strong>Última nota de retorno gerada:</strong>{' '}
+        <span className="font-mono">#{ultima.numero_pedido}</span> em{' '}
+        {format(new Date(ultima.data_emissao), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })} —{' '}
+        {Number(ultima.valor_total).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.
+      </div>
+      <span className="text-[11px] opacity-80">
+        Veja detalhes em <strong>Consultar Pedidos</strong> (filtro Retorno).
+      </span>
+    </div>
+  );
+}
+
 // ─── Nota de Retorno Tab ─────────────────────────────────────
 
 function NotaRetornoTab() {
@@ -530,8 +564,12 @@ function NotaRetornoTab() {
       {/* Seleção do Vendedor */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Selecionar Vendedor</CardTitle>
-          <CardDescription>Escolha o vendedor para gerar a nota de retorno do estoque</CardDescription>
+          <CardTitle className="text-lg">Gerar Nova Nota de Retorno</CardTitle>
+          <CardDescription>
+            Esta tela cria uma <strong>nova</strong> nota de retorno com base no estoque real
+            atual do vendedor. Para consultar notas já emitidas, use a aba{' '}
+            <strong>Consultar Pedidos</strong> com o filtro <strong>Tipo: Retorno</strong>.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4">
@@ -559,10 +597,13 @@ function NotaRetornoTab() {
 
       {selectedVendedor && (
         <>
+          <UltimaNotaRetornoBanner codigoVendedor={selectedVendedor} />
           <div className="rounded border-2 bg-blue-50 dark:bg-blue-950/30 p-3 text-xs text-blue-900 dark:text-blue-200">
-            <strong>Atenção:</strong> esta nota usa o estoque real <em>mais recente</em> do vendedor (último inventário aprovado + movimentações posteriores).
-            Para gerar uma nota a partir de um inventário aprovado específico, vá em <strong>Conferência</strong>, abra o inventário e use{' '}
-            <em>Ações do Gerente → Gerar Nota de Retorno</em>.
+            <strong>Atenção:</strong> esta tela mostra o estoque real <em>atual</em> do vendedor,
+            não o histórico de notas. Se você já emitiu uma nota de retorno recentemente,
+            ela <strong>não aparece aqui</strong> — consulte na aba <strong>Consultar Pedidos</strong> (filtro Retorno).
+            Para gerar uma nota a partir de um inventário aprovado específico, vá em{' '}
+            <strong>Conferência</strong> → <em>Ações do Gerente → Gerar Nota de Retorno</em>.
           </div>
           {/* Resumo */}
           <Card>
@@ -954,7 +995,7 @@ export default function Pedidos() {
               </TabsTrigger>
               <TabsTrigger value="nota-retorno" className="gap-2">
                 <Undo2 className="h-4 w-4" />
-                Nota de Retorno
+                Gerar Nota de Retorno
               </TabsTrigger>
             </TabsList>
             <TabsContent value="consultar">
