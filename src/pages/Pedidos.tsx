@@ -499,7 +499,7 @@ function useInventariosAprovadosPendentes() {
 
 function NotaRetornoTab() {
   const { data: inventarios = [], isLoading, isFetching } = useInventariosAprovadosPendentes();
-  const gerarNotaMutation = useGerarNotaRetornoMutation();
+  const gerarNotaMutation = useGerarNotaRetornoDeInventarioMutation();
   const [confirmInv, setConfirmInv] = useState<InventarioAprovado | null>(null);
   const [vendedorFilter, setVendedorFilter] = useState<string>('todos');
 
