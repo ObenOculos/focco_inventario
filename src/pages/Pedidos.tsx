@@ -530,8 +530,12 @@ function NotaRetornoTab() {
       {/* Seleção do Vendedor */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Selecionar Vendedor</CardTitle>
-          <CardDescription>Escolha o vendedor para gerar a nota de retorno do estoque</CardDescription>
+          <CardTitle className="text-lg">Gerar Nova Nota de Retorno</CardTitle>
+          <CardDescription>
+            Esta tela cria uma <strong>nova</strong> nota de retorno com base no estoque real
+            atual do vendedor. Para consultar notas já emitidas, use a aba{' '}
+            <strong>Consultar Pedidos</strong> com o filtro <strong>Tipo: Retorno</strong>.
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div className="flex flex-col sm:flex-row gap-4">
