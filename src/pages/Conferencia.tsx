@@ -831,6 +831,19 @@ export default function Conferencia() {
               </div>
             </div>
 
+            {selectedInventario.observacoes?.trim() && (
+              <Card className="border-2 border-l-4 border-l-primary shadow-none">
+                <CardContent className="pt-4 pb-4">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                    Observações do Vendedor
+                  </p>
+                  <p className="text-sm whitespace-pre-wrap break-words">
+                    {selectedInventario.observacoes}
+                  </p>
+                </CardContent>
+              </Card>
+            )}
+
             <DivergenciaStats {...stats} />
 
             {/* Resumo Financeiro */}
