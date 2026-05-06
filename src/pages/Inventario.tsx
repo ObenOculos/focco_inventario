@@ -30,6 +30,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination } from '@/components/Pagination';
 import { useCodigosCorrecaoQuery } from '@/hooks/useCodigosCorrecaoQuery';
 import { ImportInventarioModal, ImportedInventarioItem } from '@/components/ImportInventarioModal';
+import { ExportInventarioModal } from '@/components/ExportInventarioModal';
 
 interface InventarioItem {
   codigo_auxiliar: string;
