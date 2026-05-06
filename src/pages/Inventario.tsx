@@ -976,6 +976,15 @@ export default function Inventario() {
         onOpenChange={setShowImportModal}
         onImport={handleImportItems}
       />
+
+      <ExportInventarioModal
+        open={showExportModal}
+        onOpenChange={setShowExportModal}
+        items={items}
+        observacoes={observacoes}
+        codigoVendedor={profile?.codigo_vendedor}
+        editingInventarioId={editingInventarioId}
+      />
     </AppLayout>
   );
 }
