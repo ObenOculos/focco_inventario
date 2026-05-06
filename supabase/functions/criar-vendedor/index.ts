@@ -49,39 +49,28 @@ Deno.serve(async (req) => {
   }
 
   try {
-    // Validação da entrada
-    const body: CriarVendedorRequest = await req.json();
-    const { email, nome, codigo_vendedor, telefone } = body;
-
-    // Validações obrigatórias
-    if (!email || typeof email !== 'string' || !email.includes('@')) {
-      return new Response(JSON.stringify({ error: 'Email válido é obrigatório' }), {
+    // Validação com zod
+    let parsedBody: CriarVendedorRequest;
+    try {
+      const raw = await req.json();
+      const result = CriarVendedorSchema.safeParse(raw);
+      if (!result.success) {
+        return new Response(
+          JSON.stringify({
+            error: 'Dados inválidos',
+            details: result.error.flatten().fieldErrors,
+          }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      parsedBody = result.data;
+    } catch {
+      return new Response(JSON.stringify({ error: 'JSON inválido' }), {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-
-    if (!nome || typeof nome !== 'string' || nome.trim().length < 2) {
-      return new Response(
-        JSON.stringify({ error: 'Nome é obrigatório e deve ter pelo menos 2 caracteres' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Validações opcionais
-    if (codigo_vendedor && typeof codigo_vendedor !== 'string') {
-      return new Response(JSON.stringify({ error: 'Código do vendedor deve ser uma string' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
-    if (telefone && typeof telefone !== 'string') {
-      return new Response(JSON.stringify({ error: 'Telefone deve ser uma string' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
+    const { email, nome, codigo_vendedor, telefone } = parsedBody;
 
     // Cliente admin do Supabase
     const supabaseAdmin = createClient(
