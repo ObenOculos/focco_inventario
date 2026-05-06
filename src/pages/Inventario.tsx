@@ -798,7 +798,7 @@ export default function Inventario() {
                     <Button
                       variant="outline"
                       size={isMobile ? 'sm' : 'default'}
-                      onClick={handleExportFile}
+                      onClick={() => setShowExportModal(true)}
                     >
                       <Download size={16} className="mr-2" />
                       Exportar
