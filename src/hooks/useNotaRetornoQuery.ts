@@ -169,85 +169,14 @@ export function useGerarNotaRetornoDeInventarioMutation() {
       inventario_id: string;
       codigo_vendedor: string;
       observacoes?: string;
-      apenas_com_quantidade?: boolean;
     }) => {
-      const { inventario_id, codigo_vendedor, observacoes, apenas_com_quantidade = true } = params;
-
-      const itensInventario: { codigo_auxiliar: string; quantidade_fisica: number; nome_produto: string | null }[] = [];
-      const BATCH = 1000;
-      let from = 0;
-      // eslint-disable-next-line no-constant-condition
-      while (true) {
-        const { data, error } = await supabase
-          .from('itens_inventario')
-          .select('codigo_auxiliar, quantidade_fisica, nome_produto')
-          .eq('inventario_id', inventario_id)
-          .order('id', { ascending: true })
-          .range(from, from + BATCH - 1);
-        if (error) throw error;
-        if (!data || data.length === 0) break;
-        itensInventario.push(...data.map((d) => ({
-          codigo_auxiliar: d.codigo_auxiliar,
-          quantidade_fisica: Number(d.quantidade_fisica),
-          nome_produto: d.nome_produto,
-        })));
-        if (data.length < BATCH) break;
-        from += BATCH;
-      }
-
-      const agrupado = new Map<string, { quantidade: number; nome_produto: string | null }>();
-      for (const it of itensInventario) {
-        const cur = agrupado.get(it.codigo_auxiliar);
-        if (cur) {
-          cur.quantidade += it.quantidade_fisica;
-        } else {
-          agrupado.set(it.codigo_auxiliar, { quantidade: it.quantidade_fisica, nome_produto: it.nome_produto });
-        }
-      }
-
-      const codigos = Array.from(agrupado.entries())
-        .filter(([, v]) => (apenas_com_quantidade ? v.quantidade > 0 : true))
-        .map(([k]) => k);
-
-      if (codigos.length === 0) {
-        throw new Error('Nenhum item com quantidade para retornar neste inventário.');
-      }
-
-      const produtosMap = new Map<string, { nome_produto: string; valor_produto: number }>();
-      for (let i = 0; i < codigos.length; i += 500) {
-        const lote = codigos.slice(i, i + 500);
-        const { data: produtos, error } = await supabase
-          .from('produtos')
-          .select('codigo_auxiliar, nome_produto, valor_produto')
-          .in('codigo_auxiliar', lote);
-        if (error) throw error;
-        produtos?.forEach((p) => {
-          produtosMap.set(p.codigo_auxiliar, {
-            nome_produto: p.nome_produto,
-            valor_produto: p.valor_produto || 0,
-          });
-        });
-      }
-
-      const itens: ItemRetorno[] = codigos.map((codigo) => {
-        const agg = agrupado.get(codigo)!;
-        const prod = produtosMap.get(codigo);
-        return {
-          codigo_auxiliar: codigo,
-          nome_produto: prod?.nome_produto || agg.nome_produto || codigo,
-          quantidade: agg.quantidade,
-          valor_produto: prod?.valor_produto || 0,
-        };
-      });
-
+      const { inventario_id, codigo_vendedor, observacoes } = params;
       const response = await supabase.functions.invoke<NotaRetornoResponse>('criar-nota-retorno', {
-        body: { codigo_vendedor, itens, observacoes } as NotaRetornoRequest,
+        body: { codigo_vendedor, inventario_id, observacoes },
       });
-
       if (response.error) {
         throw new Error(response.error.message || 'Erro ao criar nota de retorno.');
       }
-
       return response.data;
     },
     onSuccess: (data) => {
