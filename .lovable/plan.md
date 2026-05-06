@@ -1,49 +1,62 @@
-## Reverter aprovação de inventário
+# Reorganização do header "Itens do Inventário"
 
-Sim, é totalmente possível. Vou adicionar uma ação "Reverter Aprovação" para o gerente, que devolve o inventário ao status `pendente` e desfaz o snapshot de estoque real criado pela aprovação.
+## Problema
+Hoje, no card de itens do inventário, a linha de filtros mistura **filtros de marca** (Todos / Oben / Power / Outros) com **ações destrutivas/secundárias** (Importar, Exportar, Limpar Tudo). No mobile (390px), os botões quebram em várias linhas, "empurram" os filtros e competem com eles visualmente. Não há hierarquia clara entre "filtrar a lista" e "agir sobre o inventário inteiro".
 
-### Comportamento
+## Solução proposta
 
-- Disponível **apenas para gerentes** e **apenas em inventários com status `aprovado`**.
-- Acessível na página **Conferência**, dentro do menu de ações do card do inventário (mesmo lugar de "Gerar Nota de Retorno").
-- Abre um diálogo de confirmação explicando o impacto antes de executar.
+### 1. Mover ações para o título do card (canto direito)
+As ações **Importar / Exportar / Limpar Tudo** deixam de ficar na linha de filtros e passam para a linha do título `Itens do Inventário (N)`, alinhadas à direita. Isso segue o padrão do shadcn/ui (CardHeader com action no canto) e separa claramente "ações sobre os dados" de "filtros que afetam a visualização".
 
-### O que acontece ao reverter
+### 2. Agrupar em menu de overflow
+As três ações são consolidadas num único botão "kebab" (`MoreVertical`) com `DropdownMenu`:
+- Importar (sempre visível)
+- Exportar (desabilitado se `items.length === 0`)
+- Separador
+- Limpar Tudo (em vermelho/destructive, desabilitado se vazio)
 
-1. Status do inventário volta de `aprovado` para `pendente` (gerente pode aprovar/rejeitar de novo, e vendedor não consegue editar pois não está em `revisao`).
-2. Os registros de `estoque_real` criados por essa aprovação (filtrados por `inventario_id = X`) são **deletados**, restaurando o snapshot anterior daquele vendedor como o mais recente.
-3. `updated_at` do inventário é atualizado.
-4. Cache do React Query é invalidado (`inventariosPendentes`, `estoqueReal`, `estoqueTeorico`, dashboard) para refletir imediatamente.
+Isso reduz drasticamente o ruído visual no mobile e segue a memória [Secondary Dropdowns](mem://design/secondary-actions-dropdown-pattern).
 
-### Salvaguardas
+### 3. Linha de filtros mais limpa
+Sobra apenas: campo de busca + chips de marca (Todos/Oben/Power/Outros). Os chips ganham destaque por serem o único controle visível ali.
 
-- **Bloqueio se não for o snapshot mais recente do vendedor**: se já existir um inventário aprovado mais recente do mesmo vendedor (ou seja, este não é mais o "ativo"), reverter quebraria o histórico subsequente. Nesse caso bloqueamos com mensagem clara: "Existe um inventário mais recente aprovado em DD/MM/AAAA. Reverta-o primeiro."
-- **Aviso se já houver Nota de Retorno gerada a partir deste inventário**: mostramos alerta no diálogo, mas permitimos prosseguir (a nota já foi exportada, é responsabilidade do gerente).
-- Confirmação obrigatória via texto/switch para evitar clique acidental.
+### 4. Indicador de filtro ativo no contador
+O título passa de `Itens do Inventário (N)` para algo como:
+- Sem filtro: `Itens do Inventário · 25 peças`
+- Com filtro: `Itens do Inventário · 12 de 25 peças` + badge "Oben" ao lado
 
-### Implementação técnica
+Isso torna óbvio que o número refletido considera o filtro (encadeando com o ajuste anterior).
 
-**Edge function nova:** `supabase/functions/reverter-aprovacao-inventario/index.ts`
-- Valida JWT e role `gerente`.
-- Verifica que o inventário está `aprovado`.
-- Verifica que é o aprovado mais recente do vendedor (consulta `inventarios` por `codigo_vendedor`, status `aprovado`, `data_inventario > X`).
-- `DELETE FROM estoque_real WHERE inventario_id = :id`.
-- `UPDATE inventarios SET status='pendente', updated_at=now() WHERE id=:id`.
-- Retorna contagem de registros removidos.
-- Registrada em `supabase/config.toml` com `verify_jwt = false` (validação manual no código, padrão das outras funções).
+## Layout resultante (mobile 390px)
 
-**Frontend:**
-- `src/hooks/useConferenciaQuery.ts`: adicionar `useReverterAprovacaoMutation` que invoca a edge function e invalida caches relevantes.
-- `src/pages/Conferencia.tsx`:
-  - Novo item "Reverter Aprovação" no `DropdownMenu`/diálogo de ações de gerente para inventários aprovados.
-  - Novo `AlertDialog` de confirmação com texto explicando o impacto e o `Switch` "Confirmo que entendo".
-  - Mostrar erro retornado pela edge function (ex.: "existe inventário mais recente").
+```text
+┌────────────────────────────────────────┐
+│ Itens do Inventário · 12 peças    [⋮] │  ← ações em dropdown
+│ [Oben]                                  │  ← badge se filtro ativo
+│                                         │
+│ [🔍 Filtrar por código ou nome...    ] │
+│                                         │
+│ [Todos] [Oben] [Power] [Outros]        │  ← chips limpos
+├────────────────────────────────────────┤
+│ ABC123 PRETO                  [- 5 +]  │
+│ ...                                     │
+└────────────────────────────────────────┘
+```
 
-### Arquivos afetados
+## Outros ajustes de UX/UI identificados
 
-- `supabase/functions/reverter-aprovacao-inventario/index.ts` (novo)
-- `supabase/config.toml` (registrar função)
-- `src/hooks/useConferenciaQuery.ts` (nova mutation)
-- `src/pages/Conferencia.tsx` (UI de ação + diálogo)
+1. **Chips de marca como `ToggleGroup`** — hoje são 4 `Button` individuais; usar `ToggleGroup` semântica (a11y), mantém visual.
+2. **Estado vazio do filtro** — quando o usuário filtra por marca e não há resultados, a mensagem atual ("Nenhum item adicionado ainda") fica errada. Mostrar: "Nenhum item da marca **Oben** encontrado" + botão "Limpar filtro".
+3. **"Limpar Tudo" no dropdown vermelho** — manter `destructive` no item do menu para reforçar o perigo, e reaproveitar o `AlertDialog` de confirmação existente.
+4. **Busca + chips num bloco coeso** — agrupar visualmente busca e chips (mesmo container, sem `mt-4` quebrando), reforçando que ambos filtram a mesma lista.
 
-Sem mudanças de schema.
+## Arquivos a alterar
+
+- `src/pages/Inventario.tsx`
+  - Imports: adicionar `MoreVertical`, `DropdownMenu*`, `Badge`, `ToggleGroup*`.
+  - `CardHeader` da seção "Itens do Inventário": novo layout (título + dropdown à direita; busca + chips agrupados abaixo).
+  - Substituir os 4 `Button` de marca por `ToggleGroup` com `ToggleGroupItem`.
+  - Ajustar mensagem de estado vazio considerando `brandFilter !== 'all'` ou `searchTerm`.
+  - Remover a `<div>` antiga que misturava filtros e ações.
+
+Nenhum componente novo precisa ser criado. Os modais `ImportInventarioModal` / `ExportInventarioModal` e o `AlertDialog` de "Limpar Tudo" continuam funcionando exatamente como antes.
