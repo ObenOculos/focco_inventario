@@ -38,6 +38,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { XmlPorExcelTab } from '@/components/pedidos/XmlPorExcelTab';
 import {
   Package,
   DollarSign,
