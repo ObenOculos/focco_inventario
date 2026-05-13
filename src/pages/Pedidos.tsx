@@ -945,12 +945,19 @@ export default function Pedidos() {
                 <Undo2 className="h-4 w-4" />
                 Gerar Nota de Retorno
               </TabsTrigger>
+              <TabsTrigger value="xml-excel" className="gap-2">
+                <FileCode className="h-4 w-4" />
+                XML por Excel
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="consultar">
               <ConsultarPedidosTab />
             </TabsContent>
             <TabsContent value="nota-retorno">
               <NotaRetornoTab />
+            </TabsContent>
+            <TabsContent value="xml-excel">
+              <XmlPorExcelTab />
             </TabsContent>
           </Tabs>
         ) : (
