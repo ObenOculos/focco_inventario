@@ -46,32 +46,41 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
+    let active = true;
+
+    const applySession = (session: Session | null) => {
       setSession(session);
       setUser(session?.user ?? null);
 
       if (session?.user) {
-        setTimeout(() => {
-          fetchProfile(session.user.id);
+        // Busca o perfil de forma adiada (evita deadlock dentro do
+        // onAuthStateChange) e só libera o loading DEPOIS que o perfil/role
+        // foi resolvido. Assim nenhum layout específico de papel é renderizado
+        // antes de sabermos quem é o usuário — elimina o "flash" de layout.
+        setTimeout(async () => {
+          await fetchProfile(session.user.id);
+          if (active) setLoading(false);
         }, 0);
       } else {
         setProfile(null);
+        setLoading(false);
       }
-      setLoading(false);
+    };
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (active) applySession(session);
     });
 
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchProfile(session.user.id);
-      }
-      setLoading(false);
+      if (active) applySession(session);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const signIn = async (email: string, password: string) => {

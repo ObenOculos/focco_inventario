@@ -28,7 +28,22 @@ const HistoricoEstoqueReal = lazy(() => import('./pages/HistoricoEstoqueReal'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const HomeRedirect = () => {
-  const { profile } = useAuth();
+  const { profile, user, loading } = useAuth();
+
+  // Aguarda auth + perfil carregarem antes de decidir o destino, evitando
+  // redirecionar para a área do papel errado enquanto o role ainda é nulo.
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="w-12 h-12 border-4 border-foreground border-t-transparent animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+
   const redirectPath = profile?.role === 'vendedor' ? '/inventario' : '/dashboard';
   return <Navigate to={redirectPath} replace />;
 };
