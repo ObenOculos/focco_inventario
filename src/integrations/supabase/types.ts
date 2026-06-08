@@ -325,6 +325,15 @@ export type Database = {
     }
     Functions: {
       atualizar_valores_produtos: { Args: { p_updates: Json }; Returns: number }
+      salvar_inventario: {
+        Args: {
+          p_inventario_id: string
+          p_observacoes: string
+          p_items: Json
+          p_status?: Database['public']['Enums']['inventory_status']
+        }
+        Returns: string
+      }
       calcular_estoque_teorico_pos_inventario: {
         Args: { p_codigo_vendedor: string }
         Returns: {

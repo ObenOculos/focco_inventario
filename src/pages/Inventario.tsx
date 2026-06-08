@@ -29,6 +29,16 @@ import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination } from '@/components/Pagination';
 import { useCodigosCorrecaoQuery } from '@/hooks/useCodigosCorrecaoQuery';
+import type { Json } from '@/integrations/supabase/types';
+
+const PENDING_SYNC_KEY = 'inventario_pending_sync';
+const NEW_ID_DRAFT_KEY = 'inventario_new_id_draft';
+
+const isNetworkError = (err: unknown): boolean => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return true;
+  const msg = (err as { message?: string })?.message?.toLowerCase() ?? '';
+  return msg.includes('failed to fetch') || msg.includes('network') || msg.includes('fetch');
+};
 import { ImportInventarioModal, ImportedInventarioItem } from '@/components/ImportInventarioModal';
 import { ExportInventarioModal } from '@/components/ExportInventarioModal';
 import {
@@ -59,6 +69,11 @@ export default function Inventario() {
   const [loading, setLoading] = useState(false); // Loading para envio
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  // Espelho síncrono de `items` para decisões fora do ciclo de render (evita race em scans rápidos)
+  const itemsRef = useRef<InventarioItem[]>([]);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
   const [searchTerm, setSearchTerm] = useState('');
   const [isLoaded, setIsLoaded] = useState(false);
 
@@ -176,6 +191,18 @@ export default function Inventario() {
     localStorage.removeItem('inventario_items_draft');
     localStorage.removeItem('inventario_observacoes_draft');
     localStorage.removeItem('inventario_editing_id_draft');
+    localStorage.removeItem(NEW_ID_DRAFT_KEY);
+  };
+
+  // Id estável para um inventário NOVO, persistido no rascunho. Garante que
+  // retentativas (ex.: após queda de conexão) usem sempre o mesmo id e o RPC
+  // seja idempotente — nunca cria inventários duplicados.
+  const getOrCreateNewInventarioId = (): string => {
+    const existing = localStorage.getItem(NEW_ID_DRAFT_KEY);
+    if (existing) return existing;
+    const id = crypto.randomUUID();
+    localStorage.setItem(NEW_ID_DRAFT_KEY, id);
+    return id;
   };
 
   const loadDraft = () => {
@@ -291,7 +318,15 @@ export default function Inventario() {
     return { codigoFinal: codigo, foiCorrigido: false };
   };
 
-  const processCode = async (code: string) => {
+  const processCode = async (rawCode: string) => {
+    // Normaliza o código (trim + upper) para casar com a captura manual e os
+    // produtos cadastrados, evitando duplicatas por diferença de caixa.
+    const code = rawCode.trim().toUpperCase();
+    if (!code) {
+      resumeScanner();
+      return;
+    }
+
     // 1. Verificar se o código precisa ser corrigido
     const { codigoFinal, foiCorrigido } = await getCodigoCorrigido(code);
 
@@ -299,18 +334,18 @@ export default function Inventario() {
       toast.info(`Código corrigido: ${code} → ${codigoFinal}`);
     }
 
-    // 2. Verificar se o item já existe na lista (usando código corrigido)
-    const existingItemIndex = items.findIndex((item) => item.codigo_auxiliar === codigoFinal);
-
-    if (existingItemIndex !== -1) {
-      const existingItem = items[existingItemIndex];
-      incrementItemQuantity(existingItem.codigo_auxiliar);
+    // 2. Caminho rápido: se já está na lista, apenas incrementa (a mutação real
+    //    ocorre dentro de incrementOrAddItem via functional update, garantindo
+    //    atomicidade mesmo em scans simultâneos).
+    const existingItem = itemsRef.current.find((item) => item.codigo_auxiliar === codigoFinal);
+    if (existingItem) {
+      incrementOrAddItem(codigoFinal, existingItem.nome_produto);
       toast.success(`'${existingItem.nome_produto}' incrementado.`);
       resumeScanner();
       return;
     }
 
-    // Se for um item novo, buscar informações do produto com código CORRETO
+    // 3. Item potencialmente novo: validar produto no banco
     const { data: produtoData } = await supabase
       .from('produtos')
       .select('nome_produto')
@@ -324,30 +359,29 @@ export default function Inventario() {
       return;
     }
 
-    // Produto existe, adicionar normalmente
-    const newItem: InventarioItem = {
-      codigo_auxiliar: codigoFinal,
-      nome_produto: produtoData.nome_produto,
-      quantidade_fisica: 1,
-    };
-    setItems((prev) => [newItem, ...prev]);
+    // Produto existe: adiciona (ou incrementa, caso outro scan tenha chegado
+    // antes — o functional update reconcilia e nunca cria linha duplicada).
+    incrementOrAddItem(codigoFinal, produtoData.nome_produto);
     toast.success(`Produto ${codigoFinal} adicionado`);
     resumeScanner();
-    return;
   };
 
-  const incrementItemQuantity = (codigo_auxiliar: string) => {
+  // Incrementa o item se já existir ou adiciona um novo no topo — tudo dentro de
+  // um functional update, de modo que chamadas concorrentes nunca produzam dois
+  // itens com o mesmo codigo_auxiliar (origem do erro de SKU duplicado).
+  const incrementOrAddItem = (codigo_auxiliar: string, nome_produto: string) => {
     setItems((prevItems) => {
       const itemIndex = prevItems.findIndex((i) => i.codigo_auxiliar === codigo_auxiliar);
-      if (itemIndex === -1) return prevItems;
+
+      if (itemIndex === -1) {
+        return [{ codigo_auxiliar, nome_produto, quantidade_fisica: 1 }, ...prevItems];
+      }
 
       const updatedItems = [...prevItems];
       const item = updatedItems[itemIndex];
-
-      // Incrementa a quantidade
       updatedItems[itemIndex] = { ...item, quantidade_fisica: item.quantidade_fisica + 1 };
 
-      // Move o item para o topo da lista
+      // Move o item incrementado para o topo da lista
       const [movedItem] = updatedItems.splice(itemIndex, 1);
       updatedItems.unshift(movedItem);
 
@@ -407,126 +441,124 @@ export default function Inventario() {
     if (obs && !observacoes) setObservacoes(obs);
   };
 
+  const resetAfterSave = () => {
+    clearDraft();
+    localStorage.removeItem(PENDING_SYNC_KEY);
+    setItems([]);
+    setObservacoes('');
+    setEditingInventarioId(null);
+    setObservacoesGerente('');
+    setInventarioInfo(null);
+  };
+
   const handleSubmit = async () => {
     if (!profile?.codigo_vendedor || !user) {
       toast.error('Você precisa ter um código de vendedor configurado');
       return;
     }
 
-    // Correção 1: Enviar TODOS os itens escaneados, inclusive com quantidade = 0
-    // Isso permite diferenciar "contou e tem 0" de "não contou"
+    // Enviar TODOS os itens escaneados, inclusive com quantidade = 0,
+    // para diferenciar "contou e tem 0" de "não contou".
     if (items.length === 0) {
       toast.error('Adicione pelo menos um item para enviar o inventário');
       return;
     }
 
-    // Correção 5: Verificar se já existe inventário pendente/revisão (apenas para novos)
-    if (!editingInventarioId) {
-      const { data: existingInventario } = await supabase
-        .from('inventarios')
-        .select('id, status')
-        .eq('codigo_vendedor', profile.codigo_vendedor)
-        .in('status', ['pendente', 'revisao'])
-        .maybeSingle();
-
-      if (existingInventario) {
-        const statusText = existingInventario.status === 'revisao' ? 'em revisão' : 'pendente';
-        toast.error(`Você já possui um inventário ${statusText}. Edite-o ou aguarde a aprovação.`);
-        return;
-      }
-    }
-
     setLoading(true);
 
+    // Id estável: edição usa o id existente; novo reaproveita/gera um id persistido
+    // no rascunho, tornando o RPC idempotente em caso de retry.
+    const isEditing = !!editingInventarioId;
+    const inventarioId = editingInventarioId ?? getOrCreateNewInventarioId();
+
     try {
-      if (editingInventarioId) {
-        // Atualizar inventário existente
-        const { error: invError } = await supabase
-          .from('inventarios')
-          .update({
-            observacoes,
-            status: 'pendente',
-          })
-          .eq('id', editingInventarioId);
+      const { error } = await supabase.rpc('salvar_inventario', {
+        p_inventario_id: inventarioId,
+        p_observacoes: observacoes,
+        p_items: items as unknown as Json,
+        p_status: 'pendente',
+      });
 
-        if (invError) throw invError;
+      if (error) throw error;
 
-        // Remover itens antigos
-        const { error: deleteError } = await supabase
-          .from('itens_inventario')
-          .delete()
-          .eq('inventario_id', editingInventarioId);
-
-        if (deleteError) throw deleteError;
-
-        // Inserir itens atualizados (todos os itens, inclusive com quantidade 0)
-        const itensData = items.map((item) => ({
-          inventario_id: editingInventarioId,
-          codigo_auxiliar: item.codigo_auxiliar,
-          nome_produto: item.nome_produto,
-          quantidade_fisica: item.quantidade_fisica,
-        }));
-
-        const { error: itensError } = await supabase.from('itens_inventario').insert(itensData);
-
-        if (itensError) throw itensError;
-
-        toast.success('Inventário atualizado e reenviado para conferência!');
-      } else {
-        // Criar novo inventário
-        const { data: inventario, error: invError } = await supabase
-          .from('inventarios')
-          .insert({
-            codigo_vendedor: profile.codigo_vendedor,
-            user_id: user.id,
-            observacoes,
-          })
-          .select()
-          .single();
-
-        if (invError) throw invError;
-
-        // Inserir todos os itens (inclusive com quantidade 0)
-        const itensData = items.map((item) => ({
-          inventario_id: inventario.id,
-          codigo_auxiliar: item.codigo_auxiliar,
-          nome_produto: item.nome_produto,
-          quantidade_fisica: item.quantidade_fisica,
-        }));
-
-        const { error: itensError } = await supabase.from('itens_inventario').insert(itensData);
-
-        if (itensError) throw itensError;
-
-        toast.success(
-          editingInventarioId
-            ? 'Inventário atualizado e reenviado!'
-            : 'Inventário enviado para conferência!'
-        );
-      }
-
-      // Invalidar cache para atualizar lista de inventários
       await queryClient.invalidateQueries({ queryKey: ['inventarios'] });
-
-      // Limpar estado e rascunho após sucesso
-      clearDraft();
-      setItems([]);
-      setObservacoes('');
-      setEditingInventarioId(null);
-      setObservacoesGerente('');
-      setInventarioInfo(null);
-    } catch (error: any) {
+      resetAfterSave();
+      toast.success(
+        isEditing
+          ? 'Inventário atualizado e reenviado para conferência!'
+          : 'Inventário enviado para conferência!'
+      );
+    } catch (error) {
       console.error('Erro ao salvar inventário:', error);
-      const msg =
-        error?.message ||
-        error?.error_description ||
-        error?.details ||
-        (typeof error === 'string' ? error : 'Erro desconhecido');
-      toast.error('Erro ao salvar inventário', { description: msg });
+
+      // Falha de conexão: enfileira para reenvio automático e libera a tela.
+      // O id estável garante que o flush não crie inventário duplicado.
+      if (isNetworkError(error)) {
+        localStorage.setItem(
+          PENDING_SYNC_KEY,
+          JSON.stringify({ inventarioId, observacoes, items })
+        );
+        resetAfterSave();
+        toast.warning('Sem conexão no momento', {
+          description: 'O inventário foi salvo e será enviado automaticamente quando a conexão voltar.',
+        });
+      } else {
+        const err = error as { message?: string; error_description?: string; details?: string };
+        const msg =
+          err?.message ||
+          err?.error_description ||
+          err?.details ||
+          (typeof error === 'string' ? error : 'Erro desconhecido');
+        toast.error('Erro ao salvar inventário', { description: msg });
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  // Reenvia um inventário que ficou pendente por falta de conexão. Idempotente:
+  // usa o mesmo id, então repetir é seguro (nunca duplica nem cria registro vazio).
+  const flushPendingSync = async () => {
+    const raw = localStorage.getItem(PENDING_SYNC_KEY);
+    if (!raw) return;
+
+    let payload: { inventarioId: string; observacoes: string; items: InventarioItem[] };
+    try {
+      payload = JSON.parse(raw);
+    } catch {
+      localStorage.removeItem(PENDING_SYNC_KEY);
+      return;
+    }
+
+    const { error } = await supabase.rpc('salvar_inventario', {
+      p_inventario_id: payload.inventarioId,
+      p_observacoes: payload.observacoes,
+      p_items: payload.items as unknown as Json,
+      p_status: 'pendente',
+    });
+
+    if (!error) {
+      localStorage.removeItem(PENDING_SYNC_KEY);
+      await queryClient.invalidateQueries({ queryKey: ['inventarios'] });
+      toast.success('Inventário sincronizado com sucesso!');
+    } else if (!isNetworkError(error)) {
+      // Erro definitivo (ex.: inventário já aprovado): não adianta retentar.
+      localStorage.removeItem(PENDING_SYNC_KEY);
+      toast.error('Não foi possível sincronizar o inventário pendente', {
+        description: error.message,
+      });
+    }
+    // Erro de rede: mantém a fila para a próxima tentativa.
+  };
+
+  // Tenta sincronizar pendências ao montar e sempre que a conexão voltar.
+  useEffect(() => {
+    flushPendingSync();
+    const onOnline = () => flushPendingSync();
+    window.addEventListener('online', onOnline);
+    return () => window.removeEventListener('online', onOnline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (profile?.codigo_vendedor) {

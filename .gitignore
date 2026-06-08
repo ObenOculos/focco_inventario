@@ -29,3 +29,9 @@ Pasta_Esquema_SQL_Ciclone/
 .env*.local
 .env
 .env.local
+
+# Supabase CLI local metadata
+supabase/.temp/
+
+# Vite temp config files
+vite.config.ts.timestamp-*.mjs
