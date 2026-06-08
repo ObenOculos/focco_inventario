@@ -1,0 +1,105 @@
+-- Atualização da função calcular_estoque_vendedor para considerar estoque_real como base
+-- após aprovação de inventário
+
+CREATE OR REPLACE FUNCTION public.calcular_estoque_vendedor(p_codigo_vendedor text)
+RETURNS TABLE (
+  codigo_auxiliar text,
+  nome_produto text,
+  modelo text,
+  cor text,
+  quantidade_remessa numeric,
+  quantidade_venda numeric,
+  estoque_teorico numeric
+)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  RETURN QUERY
+  WITH ultimo_inventario AS (
+    -- Busca a data do último inventário aprovado para este vendedor
+    SELECT MAX(i.data_inventario) as data_ultimo_inventario
+    FROM inventarios i
+    WHERE i.codigo_vendedor = p_codigo_vendedor
+    AND i.status = 'aprovado'
+  ),
+  estoque_real_atual AS (
+    -- Busca o estoque real mais recente
+    SELECT DISTINCT ON (er.codigo_auxiliar)
+      er.codigo_auxiliar,
+      er.quantidade_real,
+      er.data_atualizacao
+    FROM estoque_real er
+    WHERE er.codigo_vendedor = p_codigo_vendedor
+    ORDER BY er.codigo_auxiliar, er.data_atualizacao DESC
+  ),
+  itens_agregados AS (
+    -- Agrega itens de pedidos por codigo_auxiliar
+    -- Só considera pedidos APÓS o último inventário (se existir)
+    SELECT
+      ip.codigo_auxiliar,
+      ip.nome_produto,
+      SUM(CASE WHEN p.codigo_tipo IN (7, 99) THEN ip.quantidade ELSE 0 END) as qtd_remessa,
+      SUM(CASE WHEN p.codigo_tipo = 2 THEN ip.quantidade ELSE 0 END) as qtd_venda
+    FROM itens_pedido ip
+    INNER JOIN pedidos p ON p.id = ip.pedido_id
+    WHERE p.codigo_vendedor = p_codigo_vendedor
+    AND (SELECT data_ultimo_inventario FROM ultimo_inventario) IS NULL
+       OR p.data_pedido > (SELECT data_ultimo_inventario FROM ultimo_inventario)
+    GROUP BY ip.codigo_auxiliar, ip.nome_produto
+  ),
+  movimentacoes_agregadas AS (
+    -- Agrega movimentações avulsas
+    -- Só considera movimentações APÓS o último inventário (se existir)
+    SELECT
+      me.codigo_auxiliar,
+      me.nome_produto,
+      SUM(CASE
+            WHEN me.tipo_movimentacao IN ('ajuste_entrada'::public.movimentacao_tipo, 'devolucao_cliente'::public.movimentacao_tipo) THEN me.quantidade
+            WHEN me.tipo_movimentacao IN ('ajuste_saida'::public.movimentacao_tipo, 'devolucao_empresa'::public.movimentacao_tipo, 'perda_avaria'::public.movimentacao_tipo) THEN -me.quantidade
+            ELSE 0
+          END) as qtd_movimentacao
+    FROM movimentacoes_estoque me
+    WHERE me.codigo_vendedor = p_codigo_vendedor
+    AND (SELECT data_ultimo_inventario FROM ultimo_inventario) IS NULL
+       OR me.created_at > (SELECT data_ultimo_inventario FROM ultimo_inventario)
+    GROUP BY me.codigo_auxiliar, me.nome_produto
+  ),
+  estoque_final AS (
+    -- Combina itens e movimentações
+    SELECT
+      COALESCE(ia.codigo_auxiliar, ma.codigo_auxiliar) as codigo_auxiliar,
+      COALESCE(ia.nome_produto, ma.nome_produto) as nome_produto,
+      COALESCE(ia.qtd_remessa, 0) as qtd_remessa,
+      COALESCE(ia.qtd_venda, 0) as qtd_venda,
+      COALESCE(ma.qtd_movimentacao, 0) as qtd_movimentacao
+    FROM itens_agregados ia
+    FULL OUTER JOIN movimentacoes_agregadas ma
+      ON ia.codigo_auxiliar = ma.codigo_auxiliar
+  ),
+  estoque_com_base AS (
+    -- Adiciona o estoque real como base quando disponível
+    SELECT
+      ef.codigo_auxiliar,
+      ef.nome_produto,
+      ef.qtd_remessa,
+      ef.qtd_venda,
+      ef.qtd_movimentacao,
+      COALESCE(era.quantidade_real, 0) as base_estoque_real
+    FROM estoque_final ef
+    FULL OUTER JOIN estoque_real_atual era ON ef.codigo_auxiliar = era.codigo_auxiliar
+  )
+  SELECT
+    ecb.codigo_auxiliar,
+    ecb.nome_produto,
+    SPLIT_PART(ecb.codigo_auxiliar, ' ', 1) as modelo,
+    SPLIT_PART(ecb.codigo_auxiliar, ' ', 2) as cor,
+    ecb.qtd_remessa as quantidade_remessa,
+    ecb.qtd_venda as quantidade_venda,
+    (ecb.base_estoque_real + ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao) as estoque_teorico
+  FROM estoque_com_base ecb
+  WHERE (ecb.base_estoque_real + ecb.qtd_remessa - ecb.qtd_venda + ecb.qtd_movimentacao) != 0
+  ORDER BY ecb.codigo_auxiliar;
+END;
+$$;
