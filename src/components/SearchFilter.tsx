@@ -27,7 +27,7 @@ export function SearchFilter({
         value={value}
         onChange={(e) => onChange(e.target.value)}
         placeholder={placeholder}
-        className="pl-10 border-2"
+        className="h-11 pl-10 rounded-xl border-input shadow-2xs focus-visible:ring-primary"
       />
     </div>
   );

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { toast } from 'sonner';
-import { QrCode, Eye, EyeOff } from 'lucide-react';
+import { QrCode, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { z } from 'zod';
 
 const loginSchema = z.object({
@@ -79,56 +79,59 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-4 antialiased">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="flex flex-col items-center mb-8">
-          <div className="w-20 h-20 bg-foreground flex items-center justify-center mb-4">
-            <QrCode className="text-background" size={48} />
+        <div className="flex flex-col items-center mb-8 text-center">
+          <div className="w-14 h-14 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center mb-3 shadow-md">
+            <QrCode size={28} />
           </div>
-          <h1 className="text-3xl font-bold tracking-tight">OPTISTOCK</h1>
-          <p className="text-muted-foreground mt-2">Controle de Estoque para Óculos</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">OPTISTOCK</h1>
+          <p className="text-sm text-muted-foreground mt-1 font-medium">
+            Controle Inteligente de Estoque para Óculos
+          </p>
         </div>
 
-        {/* Form */}
-        <div className="border-2 border-foreground bg-card p-6 shadow-md">
-          <div className="flex mb-6">
+        {/* Form Container */}
+        <div className="border border-border/80 bg-card p-6 sm:p-8 rounded-2xl shadow-lg">
+          {/* Segmented Control Tab Switcher */}
+          <div className="flex p-1 bg-muted/70 rounded-xl mb-6">
             <button
               type="button"
               onClick={() => setIsLogin(true)}
-              className={`flex-1 py-3 font-medium border-2 border-r-0 transition-all ${
+              className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
                 isLogin
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'border-foreground hover:bg-secondary'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              ENTRAR
+              Entrar
             </button>
             <button
               type="button"
               onClick={() => setIsLogin(false)}
-              className={`flex-1 py-3 font-medium border-2 transition-all ${
+              className={`flex-1 py-2 text-sm font-semibold rounded-lg transition-all ${
                 !isLogin
-                  ? 'bg-foreground text-background border-foreground'
-                  : 'border-foreground hover:bg-secondary'
+                  ? 'bg-card text-foreground shadow-xs'
+                  : 'text-muted-foreground hover:text-foreground'
               }`}
             >
-              CADASTRAR
+              Cadastrar
             </button>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             {!isLogin && (
               <div>
-                <Label htmlFor="nome" className="font-medium">
-                  Nome
+                <Label htmlFor="nome" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">
+                  Nome Completo
                 </Label>
                 <Input
                   id="nome"
                   type="text"
                   value={nome}
                   onChange={(e) => setNome(e.target.value)}
-                  className="mt-1 border-2"
+                  className="h-11 rounded-xl border-input focus-visible:ring-primary"
                   placeholder="Seu nome completo"
                   required={!isLogin}
                 />
@@ -136,7 +139,7 @@ export default function Auth() {
             )}
 
             <div>
-              <Label htmlFor="email" className="font-medium">
+              <Label htmlFor="email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">
                 Email
               </Label>
               <Input
@@ -144,7 +147,7 @@ export default function Auth() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="mt-1 border-2"
+                className="h-11 rounded-xl border-input focus-visible:ring-primary"
                 placeholder="seu@email.com"
                 autoComplete="email"
                 required
@@ -152,7 +155,7 @@ export default function Auth() {
             </div>
 
             <div>
-              <Label htmlFor="password" className="font-medium">
+              <Label htmlFor="password" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">
                 Senha
               </Label>
               <div className="relative">
@@ -161,29 +164,39 @@ export default function Auth() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="mt-1 border-2 pr-10"
-                  placeholder="••••••"
+                  className="h-11 rounded-xl border-input pr-10 focus-visible:ring-primary"
+                  placeholder="••••••••"
                   autoComplete={isLogin ? 'current-password' : 'new-password'}
                   required
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground rounded-md transition-colors"
+                  tabIndex={-1}
                 >
                   {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
                 </button>
               </div>
             </div>
 
-            <Button type="submit" className="w-full mt-6" disabled={loading}>
-              {loading ? 'Aguarde...' : isLogin ? 'ENTRAR' : 'CRIAR CONTA'}
+            <Button type="submit" className="w-full h-11 mt-6 rounded-xl font-semibold shadow-xs hover:shadow-md transition-all" disabled={loading}>
+              {loading ? (
+                <span className="flex items-center justify-center gap-2">
+                  <Loader2 className="animate-spin" size={18} />
+                  Aguarde...
+                </span>
+              ) : isLogin ? (
+                'Entrar na plataforma'
+              ) : (
+                'Criar conta'
+              )}
             </Button>
           </form>
 
           {!isLogin && (
-            <p className="text-xs text-muted-foreground mt-4 text-center">
-              Novos cadastros serão criados como vendedores.
+            <p className="text-xs text-muted-foreground mt-4 text-center font-medium">
+              Novos cadastros são registrados com a função de vendedor.
             </p>
           )}
         </div>

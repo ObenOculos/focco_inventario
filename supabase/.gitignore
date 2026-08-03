@@ -1,0 +1,6 @@
+# Estado local da CLI (ref do projeto linkado, versões detectadas, caches).
+# É por máquina — versionar isso gera conflito entre computadores.
+# Depois de clonar, rode: npm run db:link
+.temp
+.branches
+.env

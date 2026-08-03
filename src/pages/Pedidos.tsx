@@ -685,7 +685,7 @@ function NotaRetornoTab() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {filtered.map((inv) => (
-            <Card key={inv.id} className="border-2 shadow-none">
+            <Card key={inv.id} className="border border-border/80 rounded-2xl shadow-xs hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-2">
                   <div>

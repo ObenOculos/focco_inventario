@@ -155,12 +155,12 @@ export default function Vendedores() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 antialiased">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="flex items-start gap-4">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Vendedores</h1>
-              <p className="text-muted-foreground">Gerencie os representantes comerciais</p>
+              <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Vendedores</h1>
+              <p className="text-sm text-muted-foreground mt-1 font-medium">Gerencie os representantes comerciais e seus códigos de sistema</p>
             </div>
             <RefetchIndicator isFetching={isFetching && !loading} />
           </div>
@@ -172,44 +172,44 @@ export default function Vendedores() {
             }}
           >
             <DialogTrigger asChild>
-              <Button>
+              <Button className="rounded-xl shadow-xs font-semibold">
                 <Plus className="mr-2" size={16} />
                 Novo Vendedor
               </Button>
             </DialogTrigger>
-            <DialogContent className="border-2">
+            <DialogContent className="border border-border/80 rounded-2xl shadow-lg sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>{editingVendedor ? 'Editar Vendedor' : 'Novo Vendedor'}</DialogTitle>
+                <DialogTitle className="text-xl font-bold tracking-tight">{editingVendedor ? 'Editar Vendedor' : 'Novo Vendedor'}</DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className="space-y-4">
+              <form onSubmit={handleSubmit} className="space-y-4 pt-2">
                 <div>
-                  <Label htmlFor="vendedor-email">Email</Label>
+                  <Label htmlFor="vendedor-email" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Email</Label>
                   <Input
                     id="vendedor-email"
                     name="email"
                     type="email"
                     value={formData.email}
                     onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                    className="border-2"
+                    className="h-11 rounded-xl border-input focus-visible:ring-primary shadow-2xs"
                     disabled={!!editingVendedor}
                     autoComplete="email"
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="vendedor-nome">Nome</Label>
+                  <Label htmlFor="vendedor-nome" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Nome</Label>
                   <Input
                     id="vendedor-nome"
                     name="nome"
                     value={formData.nome}
                     onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
-                    className="border-2"
+                    className="h-11 rounded-xl border-input focus-visible:ring-primary shadow-2xs"
                     autoComplete="name"
                     required
                   />
                 </div>
                 <div>
-                  <Label htmlFor="vendedor-codigo">Código do Vendedor</Label>
+                  <Label htmlFor="vendedor-codigo" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Código do Vendedor</Label>
                   {editingVendedor ? (
                     <Input
                       id="vendedor-codigo"
@@ -218,7 +218,7 @@ export default function Vendedores() {
                       onChange={(e) =>
                         setFormData({ ...formData, codigo_vendedor: e.target.value })
                       }
-                      className="border-2"
+                      className="h-11 rounded-xl border-input font-mono shadow-2xs"
                       placeholder="Ex: 11"
                     />
                   ) : (
@@ -229,10 +229,10 @@ export default function Vendedores() {
                         setFormData({ ...formData, codigo_vendedor: value })
                       }
                     >
-                      <SelectTrigger className="border-2">
+                      <SelectTrigger className="h-11 rounded-xl border-input shadow-2xs">
                         <SelectValue placeholder="Selecione um código" />
                       </SelectTrigger>
-                      <SelectContent className="bg-background border-2 z-50">
+                      <SelectContent className="bg-popover border border-border/80 rounded-xl z-50">
                         {codigosDisponiveis.length === 0 ? (
                           <SelectItem value="_empty" disabled>
                             Nenhum código disponível
@@ -249,19 +249,19 @@ export default function Vendedores() {
                   )}
                 </div>
                 <div>
-                  <Label htmlFor="vendedor-telefone">Telefone</Label>
+                  <Label htmlFor="vendedor-telefone" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Telefone</Label>
                   <Input
                     id="vendedor-telefone"
                     name="telefone"
                     value={formData.telefone}
                     onChange={(e) => setFormData({ ...formData, telefone: e.target.value })}
-                    className="border-2"
+                    className="h-11 rounded-xl border-input focus-visible:ring-primary shadow-2xs"
                     placeholder="(00) 00000-0000"
                     autoComplete="tel"
                   />
                 </div>
-                <Button type="submit" className="w-full">
-                  {editingVendedor ? 'Salvar Alterações' : 'Cadastrar'}
+                <Button type="submit" className="w-full h-11 rounded-xl font-semibold shadow-xs transition-all mt-4">
+                  {editingVendedor ? 'Salvar Alterações' : 'Cadastrar Vendedor'}
                 </Button>
               </form>
             </DialogContent>
@@ -271,19 +271,19 @@ export default function Vendedores() {
         <SearchFilter
           value={searchTerm}
           onChange={setSearchTerm}
-          placeholder="Buscar vendedor..."
+          placeholder="Buscar vendedor por nome, email ou código..."
         />
 
         {loading ? (
-          <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+          <div className="text-center py-12 text-muted-foreground font-medium">Carregando vendedores...</div>
         ) : totalItems === 0 ? (
-          <Card className="border-2">
+          <Card className="border border-border/80 rounded-2xl shadow-xs">
             <CardContent className="py-12 text-center">
-              <Users size={48} className="mx-auto mb-4 text-muted-foreground" />
+              <Users size={48} className="mx-auto mb-4 text-muted-foreground/60" />
               <h2 className="text-xl font-bold mb-2">
                 {searchTerm ? 'Nenhum vendedor encontrado' : 'Nenhum vendedor cadastrado'}
               </h2>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 {searchTerm
                   ? 'Tente outro termo de busca'
                   : 'Adicione vendedores para começar a gerenciar o estoque.'}
@@ -292,32 +292,32 @@ export default function Vendedores() {
           </Card>
         ) : (
           <>
-            <div className="grid gap-4">
+            <div className="grid gap-3.5">
               {paginatedVendedores.map((vendedor) => (
                 <Card
                   key={vendedor.id}
-                  className={`border-2 ${!vendedor.ativo ? 'opacity-60' : ''}`}
+                  className={`border border-border/80 rounded-2xl shadow-xs transition-shadow hover:shadow-md ${!vendedor.ativo ? 'opacity-60 bg-muted/20' : ''}`}
                 >
                   <CardContent className="py-4">
                     <div className="flex items-center justify-between gap-4">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <h3 className="font-bold truncate">{vendedor.nome}</h3>
+                          <h3 className="font-semibold text-base truncate tracking-tight">{vendedor.nome}</h3>
                           {!vendedor.ativo && (
-                            <span className="text-xs px-2 py-0.5 bg-secondary font-medium">
-                              INATIVO
+                            <span className="text-[10px] px-2 py-0.5 bg-muted text-muted-foreground font-semibold rounded-md uppercase tracking-wider">
+                              Inativo
                             </span>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground">{vendedor.email}</p>
-                        <div className="flex gap-4 mt-1 text-sm">
+                        <p className="text-xs text-muted-foreground mt-0.5">{vendedor.email}</p>
+                        <div className="flex items-center gap-3 mt-2 text-xs">
                           {vendedor.codigo_vendedor && (
-                            <span className="font-mono bg-secondary px-2">
+                            <span className="font-mono bg-primary/10 text-primary font-semibold px-2 py-0.5 rounded-md">
                               Cód: {vendedor.codigo_vendedor}
                             </span>
                           )}
                           {vendedor.telefone && (
-                            <span className="text-muted-foreground">{vendedor.telefone}</span>
+                            <span className="text-muted-foreground font-medium">{vendedor.telefone}</span>
                           )}
                         </div>
                       </div>
@@ -325,7 +325,7 @@ export default function Vendedores() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className="border-2"
+                          className="rounded-xl h-9 w-9 shadow-2xs"
                           onClick={() => openEdit(vendedor)}
                         >
                           <Pencil size={16} />
@@ -333,7 +333,7 @@ export default function Vendedores() {
                         <Button
                           variant="outline"
                           size="icon"
-                          className={`border-2 ${vendedor.ativo ? 'text-destructive' : 'text-green-600'}`}
+                          className={`rounded-xl h-9 w-9 shadow-2xs ${vendedor.ativo ? 'text-destructive hover:bg-destructive/10' : 'text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/10'}`}
                           onClick={() => toggleAtivo(vendedor)}
                         >
                           {vendedor.ativo ? <UserX size={16} /> : <UserCheck size={16} />}

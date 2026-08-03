@@ -801,20 +801,20 @@ function ProdutosTab() {
         </Card>
       ) : (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
             {produtos.map((produto) => (
-              <Card key={produto.id} className="border-2">
+              <Card key={produto.id} className="border border-border/80 rounded-2xl shadow-xs transition-shadow hover:shadow-md">
                 <CardContent className="py-4">
-                  <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
-                      <p className="font-mono font-bold">{produto.codigo_auxiliar}</p>
-                      <p className="text-sm text-muted-foreground truncate">{produto.nome_produto}</p>
-                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-1 text-sm">
-                        <span>Venda: <strong>R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
-                        <span className="text-muted-foreground">Remessa: <strong>R$ {Number(produto.valor_remessa ?? 0).toFixed(2)}</strong></span>
+                      <p className="font-mono font-bold text-sm text-foreground">{produto.codigo_auxiliar}</p>
+                      <p className="text-xs text-muted-foreground truncate font-medium mt-0.5">{produto.nome_produto}</p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-xs">
+                        <span className="font-medium text-foreground">Venda: <strong className="font-bold text-emerald-600 dark:text-emerald-400">R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
+                        <span className="text-muted-foreground font-medium">Remessa: <strong className="font-semibold text-foreground">R$ {Number(produto.valor_remessa ?? 0).toFixed(2)}</strong></span>
                       </div>
                     </div>
-                    <Button variant="outline" size="icon" className="border-2 flex-shrink-0" onClick={() => generateQRCode(produto)}>
+                    <Button variant="outline" size="icon" className="rounded-xl h-9 w-9 shadow-2xs shrink-0" onClick={() => generateQRCode(produto)}>
                       <QrCode size={16} />
                     </Button>
                   </div>
@@ -1044,19 +1044,19 @@ function CodigosCorrecaoTab() {
 export default function Produtos() {
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 antialiased">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Produtos & Correções</h1>
-          <p className="text-muted-foreground">Gerencie produtos, QR Codes e mapeamentos de correção</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Produtos & Correções</h1>
+          <p className="text-sm text-muted-foreground mt-1 font-medium">Gerencie o catálogo de produtos, QR Codes e mapeamentos de correção de etiquetas</p>
         </div>
 
-        <Tabs defaultValue="produtos">
-          <TabsList>
-            <TabsTrigger value="produtos" className="gap-2">
+        <Tabs defaultValue="produtos" className="w-full">
+          <TabsList className="grid w-full sm:w-auto sm:inline-grid grid-cols-2 rounded-xl bg-muted/60 p-1 mb-4">
+            <TabsTrigger value="produtos" className="gap-2 rounded-lg text-xs font-semibold">
               <Package size={16} />
-              Produtos
+              Catálogo de Produtos
             </TabsTrigger>
-            <TabsTrigger value="codigos-correcao" className="gap-2">
+            <TabsTrigger value="codigos-correcao" className="gap-2 rounded-lg text-xs font-semibold">
               <Tags size={16} />
               Códigos de Correção
             </TabsTrigger>

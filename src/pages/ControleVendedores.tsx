@@ -226,12 +226,12 @@ export default function ControleVendedores() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 antialiased">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Painel de Vendedores</h1>
-            <p className="text-muted-foreground">
-              Visão geral do desempenho e inventário dos vendedores.
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Painel de Vendedores</h1>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">
+              Visão geral do desempenho, inventário e acuracidade dos representantes.
             </p>
           </div>
           <RefetchIndicator isFetching={isFetching && !isLoading} />
@@ -243,57 +243,57 @@ export default function ControleVendedores() {
         ) : (
           metricas && (
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Card>
+              <Card className="border border-border/80 rounded-2xl shadow-xs">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-primary/10">
-                      <Users className="h-5 w-5 text-primary" />
+                    <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                      <Users className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{metricas.vendedoresAtivos}</p>
-                      <p className="text-xs text-muted-foreground">Vendedores Ativos</p>
+                      <p className="text-2xl font-bold tracking-tight">{metricas.vendedoresAtivos}</p>
+                      <p className="text-xs text-muted-foreground font-medium">Vendedores Ativos</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border border-border/80 rounded-2xl shadow-xs">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-green-500/10">
-                      <CheckCircle className="h-5 w-5 text-green-600" />
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                      <CheckCircle className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{metricas.comInventarioRecente}</p>
-                      <p className="text-xs text-muted-foreground">Inventário em dia</p>
+                      <p className="text-2xl font-bold tracking-tight">{metricas.comInventarioRecente}</p>
+                      <p className="text-xs text-muted-foreground font-medium">Inventário em dia</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border border-border/80 rounded-2xl shadow-xs">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-yellow-500/10">
-                      <Clock className="h-5 w-5 text-yellow-600" />
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                      <Clock className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{metricas.semInventario}</p>
-                      <p className="text-xs text-muted-foreground">Sem inventário recente</p>
+                      <p className="text-2xl font-bold tracking-tight">{metricas.semInventario}</p>
+                      <p className="text-xs text-muted-foreground font-medium">Sem inventário recente</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
 
-              <Card>
+              <Card className="border border-border/80 rounded-2xl shadow-xs">
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
-                    <div className="p-2 rounded-full bg-destructive/10">
-                      <AlertTriangle className="h-5 w-5 text-destructive" />
+                    <div className="w-10 h-10 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+                      <AlertTriangle className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold">{metricas.baixaAcuracidade}</p>
-                      <p className="text-xs text-muted-foreground">Baixa acuracidade</p>
+                      <p className="text-2xl font-bold tracking-tight">{metricas.baixaAcuracidade}</p>
+                      <p className="text-xs text-muted-foreground font-medium">Baixa acuracidade</p>
                     </div>
                   </div>
                 </CardContent>
@@ -306,9 +306,9 @@ export default function ControleVendedores() {
         {vendedores &&
           vendedores.filter((v) => v.dias_sem_inventario === null || v.dias_sem_inventario > 60)
             .length > 0 && (
-            <Alert className="border-yellow-500/50 bg-yellow-500/10">
-              <Clock className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-yellow-700">
+            <Alert className="border border-amber-500/30 bg-amber-500/10 rounded-2xl text-amber-800 dark:text-amber-300">
+              <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+              <AlertDescription className="text-sm font-medium">
                 <strong>
                   {
                     vendedores.filter(
@@ -316,17 +316,17 @@ export default function ControleVendedores() {
                     ).length
                   }
                 </strong>{' '}
-                vendedor(es) sem inventário há mais de 60 dias.
+                vendedor(es) sem inventário realizado há mais de 60 dias.
               </AlertDescription>
             </Alert>
           )}
 
         {/* Tabela */}
-        <Card className="border-2">
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader>
-            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-base sm:text-lg font-semibold tracking-tight">
               <span className="flex items-center gap-2">
-                <Users size={20} />
+                <Users size={20} className="text-primary" />
                 Desempenho por Vendedor
               </span>
               <div className="flex flex-wrap gap-2">
@@ -338,10 +338,10 @@ export default function ControleVendedores() {
                   />
                 </div>
                 <Select value={periodo} onValueChange={setPeriodo}>
-                  <SelectTrigger className="w-full sm:w-36">
+                  <SelectTrigger className="w-full sm:w-36 h-11 rounded-xl border-input shadow-2xs">
                     <SelectValue placeholder="Período" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl border border-border/80">
                     <SelectItem value="7">Últimos 7 dias</SelectItem>
                     <SelectItem value="30">Últimos 30 dias</SelectItem>
                     <SelectItem value="90">Últimos 90 dias</SelectItem>
@@ -352,7 +352,7 @@ export default function ControleVendedores() {
                   onClick={handleExport}
                   variant="outline"
                   size={isMobile ? 'icon' : 'default'}
-                  className={!isMobile ? 'flex items-center gap-2' : ''}
+                  className={`h-11 rounded-xl shadow-2xs ${!isMobile ? 'flex items-center gap-2 px-4' : ''}`}
                 >
                   <FileDown size={16} />
                   {!isMobile && 'Exportar'}
@@ -365,21 +365,21 @@ export default function ControleVendedores() {
             {isLoading ? (
               <TableSkeleton columns={7} rows={6} />
             ) : vendedoresFiltrados.length === 0 ? (
-              <div className="text-center py-8">
-                <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">
+              <div className="text-center py-12 text-muted-foreground">
+                <Package size={48} className="mx-auto mb-4 text-muted-foreground/60" />
+                <p className="text-sm font-medium">
                   {searchTerm
                     ? 'Nenhum vendedor encontrado para a busca.'
                     : 'Nenhum vendedor cadastrado.'}
                 </p>
               </div>
             ) : (
-              <div className="border rounded-lg overflow-x-auto">
+              <div className="border border-border/80 rounded-xl overflow-hidden shadow-2xs">
                 <Table>
                   <TableHeader>
-                    <TableRow>
+                    <TableRow className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
                       <TableHead
-                        className="cursor-pointer hover:bg-muted/50"
+                        className="cursor-pointer hover:bg-muted/60 font-semibold"
                         onClick={() => handleSort('nome')}
                       >
                         <span className="flex items-center gap-1">
@@ -388,7 +388,7 @@ export default function ControleVendedores() {
                         </span>
                       </TableHead>
                       <TableHead
-                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
                         onClick={() => handleSort('estoque_total')}
                       >
                         <span className="flex items-center justify-center gap-1">
@@ -396,24 +396,24 @@ export default function ControleVendedores() {
                           <ArrowUpDown size={14} className="text-muted-foreground" />
                         </span>
                       </TableHead>
-                      <TableHead className="text-center">
+                      <TableHead className="text-center font-semibold">
                         <span className="flex items-center justify-center gap-1">
                           <TrendingUp size={14} className="text-blue-500" />
                           Remessas
                         </span>
                       </TableHead>
                       <TableHead
-                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
                         onClick={() => handleSort('total_vendas')}
                       >
                         <span className="flex items-center justify-center gap-1">
-                          <TrendingDown size={14} className="text-green-500" />
+                          <TrendingDown size={14} className="text-emerald-500" />
                           Vendas
                           <ArrowUpDown size={14} className="text-muted-foreground" />
                         </span>
                       </TableHead>
                       <TableHead
-                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
                         onClick={() => handleSort('dias_sem_inventario')}
                       >
                         <span className="flex items-center justify-center gap-1">
@@ -421,9 +421,9 @@ export default function ControleVendedores() {
                           <ArrowUpDown size={14} className="text-muted-foreground" />
                         </span>
                       </TableHead>
-                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-center font-semibold">Status</TableHead>
                       <TableHead
-                        className="cursor-pointer hover:bg-muted/50 text-center"
+                        className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
                         onClick={() => handleSort('acuracidade')}
                       >
                         <span className="flex items-center justify-center gap-1">
@@ -437,42 +437,42 @@ export default function ControleVendedores() {
                     {vendedoresFiltrados.map((vendedor) => (
                       <TableRow
                         key={vendedor.codigo_vendedor}
-                        className={!vendedor.ativo ? 'opacity-50' : ''}
+                        className={`hover:bg-muted/30 transition-colors ${!vendedor.ativo ? 'opacity-50' : ''}`}
                       >
                         <TableCell>
                           <div>
-                            <p className="font-medium">{vendedor.nome}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {vendedor.codigo_vendedor}
+                            <p className="font-semibold text-sm text-foreground">{vendedor.nome}</p>
+                            <p className="text-xs text-muted-foreground font-mono">
+                              Cód: {vendedor.codigo_vendedor}
                             </p>
                           </div>
                         </TableCell>
-                        <TableCell className="text-center font-bold">
+                        <TableCell className="text-center font-bold text-sm">
                           {vendedor.estoque_total}
                         </TableCell>
-                        <TableCell className="text-center text-blue-600 font-medium">
+                        <TableCell className="text-center text-blue-600 dark:text-blue-400 font-semibold text-sm">
                           +{vendedor.total_remessas}
                         </TableCell>
-                        <TableCell className="text-center text-green-600 font-medium">
+                        <TableCell className="text-center text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
                           -{vendedor.total_vendas}
                         </TableCell>
                         <TableCell className="text-center">
                           {vendedor.ultimo_inventario ? (
                             <div>
-                              <p className="text-sm">
+                              <p className="text-sm font-medium">
                                 {new Date(vendedor.ultimo_inventario.data).toLocaleDateString(
                                   'pt-BR'
                                 )}
                               </p>
                               {vendedor.dias_sem_inventario !== null &&
                                 vendedor.dias_sem_inventario > 30 && (
-                                  <p className="text-xs text-yellow-600">
+                                  <p className="text-xs text-amber-600 dark:text-amber-400 font-semibold">
                                     ({vendedor.dias_sem_inventario} dias)
                                   </p>
                                 )}
                             </div>
                           ) : (
-                            <span className="text-muted-foreground text-sm">Nunca</span>
+                            <span className="text-muted-foreground text-xs font-medium">Nunca</span>
                           )}
                         </TableCell>
                         <TableCell className="text-center">

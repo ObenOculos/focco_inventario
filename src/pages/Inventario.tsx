@@ -327,6 +327,15 @@ export default function Inventario() {
       return;
     }
 
+    // Feedback tátil em dispositivos móveis (vribração suave ao bipar)
+    if (typeof window !== 'undefined' && 'navigator' in window && navigator.vibrate) {
+      try {
+        navigator.vibrate(50);
+      } catch (e) {
+        // Ignora em browsers sem permissão de vibração
+      }
+    }
+
     // 1. Verificar se o código precisa ser corrigido
     const { codigoFinal, foiCorrigido } = await getCodigoCorrigido(code);
 
@@ -618,11 +627,11 @@ export default function Inventario() {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-[50vh]">
-          <Card className="border-2 max-w-md">
+          <Card className="border border-border/80 rounded-2xl shadow-xs max-w-md">
             <CardContent className="pt-6 text-center">
-              <QrCode size={48} className="mx-auto mb-4 text-muted-foreground" />
+              <QrCode size={48} className="mx-auto mb-4 text-muted-foreground/60" />
               <h2 className="text-xl font-bold mb-2">Código de Vendedor Necessário</h2>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-sm">
                 Você precisa ter um código de vendedor configurado para realizar inventários. Entre
                 em contato com o gerente.
               </p>
@@ -635,65 +644,65 @@ export default function Inventario() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="space-y-6 max-w-4xl mx-auto antialiased">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
             {editingInventarioId ? 'Editar Inventário' : 'Novo Inventário'}
           </h1>
-          <p className="text-muted-foreground">
+          <p className="text-sm text-muted-foreground mt-1 font-medium">
             {editingInventarioId
               ? 'Edite os itens do seu inventário e reenvie para conferência.'
               : 'Use o scanner ou a adição manual para começar a montar seu inventário.'}
           </p>
           {inventarioInfo && (
-            <div className="mt-4 p-4 bg-blue-50 border-2 border-blue-200 rounded-lg">
-              <h3 className="font-medium text-blue-800">
+            <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-2xl">
+              <h3 className="font-semibold text-blue-700 dark:text-blue-300 text-sm">
                 Editando Inventário de{' '}
                 {format(new Date(inventarioInfo.data_inventario), "dd/MM/yyyy 'às' HH:mm", {
                   locale: ptBR,
                 })}
               </h3>
-              <p className="text-sm text-blue-700 mt-1">
+              <p className="text-xs text-muted-foreground mt-1">
                 Status atual:{' '}
-                {inventarioInfo.status === 'revisao' ? 'Não aprovado' : inventarioInfo.status}
+                <span className="font-medium text-foreground">{inventarioInfo.status === 'revisao' ? 'Não aprovado' : inventarioInfo.status}</span>
               </p>
             </div>
           )}
         </div>
 
         {/* Scanner */}
-        <Card className="border-2 overflow-hidden">
-          <CardContent className="p-6">
+        <Card className="border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+          <CardContent className="p-5 sm:p-6">
             {isMobile ? (
               <Tabs defaultValue="scanner" className="w-full">
-                <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="scanner">
+                <TabsList className="grid w-full grid-cols-2 rounded-xl bg-muted/60 p-1">
+                  <TabsTrigger value="scanner" className="rounded-lg text-xs font-semibold">
                     <Camera className="mr-2 h-4 w-4" />
                     Scanner
                   </TabsTrigger>
-                  <TabsTrigger value="manual">
+                  <TabsTrigger value="manual" className="rounded-lg text-xs font-semibold">
                     <Plus className="mr-2 h-4 w-4" />
                     Manual
                   </TabsTrigger>
                 </TabsList>
                 <TabsContent value="scanner">
                   <div className="text-center pt-4">
-                    <p className="text-sm text-muted-foreground mb-4">
+                    <p className="text-sm text-muted-foreground mb-4 font-medium">
                       Aponte a câmera para o código de barras ou QR code.
                     </p>
                     {scanning ? (
-                      <Button variant="destructive" onClick={stopScanner} className="w-full">
+                      <Button variant="destructive" onClick={stopScanner} className="w-full rounded-xl font-semibold">
                         Parar Scanner
                       </Button>
                     ) : (
-                      <Button onClick={startScanner} className="w-full">
+                      <Button onClick={startScanner} className="w-full rounded-xl font-semibold shadow-xs">
                         <Camera className="mr-2 h-4 w-4" />
                         Iniciar Scanner
                       </Button>
                     )}
                     <div
                       id="qr-reader"
-                      className={`w-full aspect-square max-w-sm mx-auto bg-secondary mt-4 rounded-lg ${
+                      className={`w-full aspect-square max-w-sm mx-auto bg-secondary mt-4 rounded-xl ${
                         !scanning ? 'hidden' : ''
                       }`}
                     />
@@ -701,7 +710,7 @@ export default function Inventario() {
                 </TabsContent>
                 <TabsContent value="manual">
                   <div className="pt-4">
-                    <p className="text-sm text-muted-foreground mb-4 text-center">
+                    <p className="text-sm text-muted-foreground mb-4 text-center font-medium">
                       Digite o código do produto manualmente.
                     </p>
                     <div className="flex w-full items-center gap-2">
@@ -712,10 +721,10 @@ export default function Inventario() {
                         value={manualCode}
                         onChange={(e) => setManualCode(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
-                        className="border-2 font-mono"
+                        className="h-11 rounded-xl border-input font-mono shadow-2xs"
                       />
-                      <Button onClick={handleManualAdd}>
-                        <Plus size={16} />
+                      <Button onClick={handleManualAdd} className="h-11 px-4 rounded-xl shadow-xs">
+                        <Plus size={18} />
                       </Button>
                     </div>
                   </div>
@@ -727,18 +736,20 @@ export default function Inventario() {
                   {/* Camera Scanner Section */}
                   <div className="flex flex-col items-center text-center h-full">
                     <div className="flex-1">
-                      <Camera size={40} className="text-primary mb-3 mx-auto" />
-                      <h3 className="font-semibold text-lg mb-1">Scanner pela Câmera</h3>
-                      <p className="text-muted-foreground text-sm mb-4">
+                      <div className="w-12 h-12 rounded-2xl bg-primary/10 text-primary flex items-center justify-center mb-3 mx-auto">
+                        <Camera size={24} />
+                      </div>
+                      <h3 className="font-semibold text-lg mb-1 tracking-tight">Scanner pela Câmera</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm mb-4">
                         Use a câmera para ler códigos de forma automática e rápida.
                       </p>
                     </div>
                     {scanning ? (
-                      <Button variant="destructive" onClick={stopScanner} className="w-full">
+                      <Button variant="destructive" onClick={stopScanner} className="w-full rounded-xl font-semibold">
                         Parar Scanner
                       </Button>
                     ) : (
-                      <Button onClick={startScanner} className="w-full">
+                      <Button onClick={startScanner} className="w-full rounded-xl font-semibold shadow-xs">
                         <Camera className="mr-2" size={16} />
                         Iniciar Scanner
                       </Button>
@@ -746,11 +757,13 @@ export default function Inventario() {
                   </div>
 
                   {/* Manual Add Section */}
-                  <div className="flex flex-col items-center text-center h-full md:border-l-2 md:pl-6">
+                  <div className="flex flex-col items-center text-center h-full md:border-l border-border/80 md:pl-6">
                     <div className="flex-1">
-                      <Plus size={40} className="text-primary mb-3 mx-auto" />
-                      <h3 className="font-semibold text-lg mb-1">Adição Manual</h3>
-                      <p className="text-muted-foreground text-sm mb-4">
+                      <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-3 mx-auto">
+                        <Plus size={24} />
+                      </div>
+                      <h3 className="font-semibold text-lg mb-1 tracking-tight">Adição Manual</h3>
+                      <p className="text-muted-foreground text-xs sm:text-sm mb-4">
                         Digite o código do produto se a câmera não funcionar.
                       </p>
                     </div>
@@ -762,17 +775,17 @@ export default function Inventario() {
                         value={manualCode}
                         onChange={(e) => setManualCode(e.target.value)}
                         onKeyDown={(e) => e.key === 'Enter' && handleManualAdd()}
-                        className="border-2 font-mono"
+                        className="h-11 rounded-xl border-input font-mono shadow-2xs"
                       />
-                      <Button onClick={handleManualAdd}>
-                        <Plus size={16} />
+                      <Button onClick={handleManualAdd} className="h-11 px-4 rounded-xl shadow-xs">
+                        <Plus size={18} />
                       </Button>
                     </div>
                   </div>
                 </div>
                 <div
                   id="qr-reader"
-                  className={`w-full aspect-square max-w-sm mx-auto bg-secondary mt-6 rounded-lg ${
+                  className={`w-full aspect-square max-w-sm mx-auto bg-secondary mt-6 rounded-xl ${
                     !scanning ? 'hidden' : ''
                   }`}
                 />
@@ -782,31 +795,31 @@ export default function Inventario() {
         </Card>
 
         {/* Items */}
-        <Card className="border-2">
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader className="space-y-4">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
-                <CardTitle className="flex items-center gap-2 flex-wrap">
+                <CardTitle className="flex items-center gap-2 flex-wrap text-base sm:text-lg font-semibold tracking-tight">
                   <span>Itens do Inventário</span>
-                  <span className="text-sm font-normal text-muted-foreground">
+                  <span className="text-xs font-medium text-muted-foreground">
                     {isFiltering
                       ? `${totalQuantity} de ${totalAllQuantity} peças`
                       : `${totalAllQuantity} ${totalAllQuantity === 1 ? 'peça' : 'peças'}`}
                   </span>
                 </CardTitle>
                 {brandFilter !== 'all' && (
-                  <Badge variant="secondary" className="mt-2 capitalize">
+                  <Badge variant="secondary" className="mt-2 capitalize rounded-md">
                     Marca: {brandFilter}
                   </Badge>
                 )}
               </div>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="icon" aria-label="Ações do inventário">
+                  <Button variant="outline" size="icon" aria-label="Ações do inventário" className="rounded-xl shadow-2xs">
                     <MoreVertical size={18} />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuContent align="end" className="w-48 rounded-xl">
                   <DropdownMenuItem onClick={() => setShowImportModal(true)}>
                     <Upload size={16} className="mr-2" />
                     Importar
@@ -834,7 +847,7 @@ export default function Inventario() {
             <div className="space-y-2">
               <div className="relative">
                 <Search
-                  className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                  className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
                   size={16}
                 />
                 <Input
@@ -843,7 +856,7 @@ export default function Inventario() {
                   placeholder="Filtrar por código ou nome..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-9 border-2"
+                  className="h-11 pl-10 rounded-xl border-input shadow-2xs"
                 />
               </div>
               <ToggleGroup
@@ -852,16 +865,16 @@ export default function Inventario() {
                 onValueChange={(v) => v && setBrandFilter(v as typeof brandFilter)}
                 className="flex flex-wrap justify-start gap-2"
               >
-                <ToggleGroupItem value="all" size={isMobile ? 'sm' : 'default'} variant="outline">
+                <ToggleGroupItem value="all" size={isMobile ? 'sm' : 'default'} variant="outline" className="rounded-lg text-xs">
                   Todos
                 </ToggleGroupItem>
-                <ToggleGroupItem value="oben" size={isMobile ? 'sm' : 'default'} variant="outline">
+                <ToggleGroupItem value="oben" size={isMobile ? 'sm' : 'default'} variant="outline" className="rounded-lg text-xs">
                   Oben
                 </ToggleGroupItem>
-                <ToggleGroupItem value="power" size={isMobile ? 'sm' : 'default'} variant="outline">
+                <ToggleGroupItem value="power" size={isMobile ? 'sm' : 'default'} variant="outline" className="rounded-lg text-xs">
                   Power
                 </ToggleGroupItem>
-                <ToggleGroupItem value="outros" size={isMobile ? 'sm' : 'default'} variant="outline">
+                <ToggleGroupItem value="outros" size={isMobile ? 'sm' : 'default'} variant="outline" className="rounded-lg text-xs">
                   Outros
                 </ToggleGroupItem>
               </ToggleGroup>
@@ -869,8 +882,8 @@ export default function Inventario() {
           </CardHeader>
           <CardContent>
             {paginatedItems.length === 0 ? (
-              <div className="border-2 rounded-lg p-8 text-center text-muted-foreground space-y-3">
-                <p>
+              <div className="border border-border/80 rounded-xl p-8 text-center text-muted-foreground space-y-3 bg-muted/20">
+                <p className="text-sm font-medium">
                   {searchTerm
                     ? `Nenhum item encontrado para "${searchTerm}".`
                     : brandFilter !== 'all'
@@ -881,6 +894,7 @@ export default function Inventario() {
                   <Button
                     variant="outline"
                     size="sm"
+                    className="rounded-xl shadow-2xs"
                     onClick={() => {
                       setSearchTerm('');
                       setBrandFilter('all');
@@ -891,15 +905,18 @@ export default function Inventario() {
                 )}
               </div>
             ) : (
-              <div className="space-y-0">
+              <div className="space-y-0 border border-border/80 rounded-xl overflow-hidden shadow-2xs">
                 <table className="w-full">
                   <tbody>
                     {paginatedItems.map((item) => (
-                      <tr key={item.codigo_auxiliar} className="border-b">
-                        <td className="py-3 pr-2 align-middle">
-                          <p className="font-mono font-medium text-sm">{item.codigo_auxiliar}</p>
+                      <tr key={item.codigo_auxiliar} className="border-b border-border/60 hover:bg-muted/30 transition-colors">
+                        <td className="py-3 px-4 align-middle">
+                          <p className="font-mono font-medium text-sm text-foreground">{item.codigo_auxiliar}</p>
+                          {item.nome_produto && (
+                            <p className="text-xs text-muted-foreground font-medium">{item.nome_produto}</p>
+                          )}
                         </td>
-                        <td className="py-3 pl-2 text-right">
+                        <td className="py-3 px-4 text-right">
                           <div className="flex items-center justify-end gap-3">
                             <Input
                               id={`qty-${item.codigo_auxiliar}`}
@@ -913,13 +930,13 @@ export default function Inventario() {
                                   parseInt(e.target.value) || 0
                                 )
                               }
-                              className="w-20 border-2 text-center shrink-0 font-mono"
+                              className="w-20 h-9 rounded-lg border-input text-center shrink-0 font-bold shadow-2xs"
                             />
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => removeItem(item.codigo_auxiliar)}
-                              className="text-destructive hover:bg-destructive/10 shrink-0"
+                              className="h-9 w-9 text-destructive hover:bg-destructive/10 rounded-lg shrink-0"
                             >
                               <Trash2 size={16} />
                             </Button>
@@ -938,23 +955,23 @@ export default function Inventario() {
               </div>
             )}
 
-            <div className="mt-6 pt-6 border-t-2">
+            <div className="mt-6 pt-6 border-t border-border/80">
               {observacoesGerente && (
-                <div className="mb-4 p-4 bg-yellow-50 border-2 border-yellow-200 rounded-lg">
-                  <Label className="font-medium text-yellow-800">Observações do Gerente</Label>
-                  <p className="text-yellow-700 mt-1">{observacoesGerente}</p>
+                <div className="mb-4 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl">
+                  <Label className="font-semibold text-amber-700 dark:text-amber-400 text-xs uppercase tracking-wider">Observações do Gerente</Label>
+                  <p className="text-amber-800 dark:text-amber-300 text-sm mt-1 font-medium">{observacoesGerente}</p>
                 </div>
               )}
-              <Label htmlFor="inventario-observacoes" className="font-medium">
-                Observações
+              <Label htmlFor="inventario-observacoes" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">
+                Observações do Inventário
               </Label>
               <Textarea
                 id="inventario-observacoes"
                 name="observacoes"
-                placeholder="Observações sobre o inventário..."
+                placeholder="Observações adicionais sobre o inventário..."
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
-                className="mt-2 border-2"
+                className="mt-1 border-input rounded-xl shadow-2xs min-h-[90px]"
               />
             </div>
 

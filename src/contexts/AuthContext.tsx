@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { queryClient } from '@/lib/queryClient';
 import { Profile } from '@/types/app';
 
 interface AuthContextType {
@@ -8,6 +9,8 @@ interface AuthContextType {
   session: Session | null;
   profile: Profile | null;
   loading: boolean;
+  /** true depois que uma busca de perfil terminou (com ou sem resultado). */
+  profileLoaded: boolean;
   signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUp: (
     email: string,
@@ -21,11 +24,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Remove na marra os tokens que o supabase-js guarda no localStorage.
+ * Usado como rede de segurança quando o SDK não consegue limpar a sessão
+ * sozinho — sem isso o autoRefreshToken ressuscita o usuário segundos depois
+ * de ele ter clicado em "Sair".
+ */
+const clearStoredSession = () => {
+  for (const key of Object.keys(localStorage)) {
+    if (key.startsWith('sb-') && key.includes('-auth-token')) {
+      localStorage.removeItem(key);
+    }
+  }
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [profileLoaded, setProfileLoaded] = useState(false);
+
+  // Cada troca de sessão recebe um número. Buscas de perfil em voo que
+  // pertencem a uma sessão antiga são descartadas ao resolver — senão um
+  // fetch lento reescreve o profile depois do logout.
+  const sessionSeqRef = useRef(0);
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
@@ -34,21 +57,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .eq('id', userId)
       .maybeSingle();
 
-    if (!error && data) {
-      setProfile(data as Profile);
-    }
+    return !error && data ? (data as Profile) : null;
   };
 
   const refreshProfile = async () => {
-    if (user) {
-      await fetchProfile(user.id);
-    }
+    if (!user) return;
+
+    const seq = sessionSeqRef.current;
+    const data = await fetchProfile(user.id);
+    if (sessionSeqRef.current !== seq) return;
+
+    setProfileLoaded(true);
+    if (data) setProfile(data);
   };
 
   useEffect(() => {
     let active = true;
 
     const applySession = (session: Session | null) => {
+      const seq = ++sessionSeqRef.current;
+
       setSession(session);
       setUser(session?.user ?? null);
 
@@ -58,11 +86,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         // foi resolvido. Assim nenhum layout específico de papel é renderizado
         // antes de sabermos quem é o usuário — elimina o "flash" de layout.
         setTimeout(async () => {
-          await fetchProfile(session.user.id);
-          if (active) setLoading(false);
+          const data = await fetchProfile(session.user.id);
+          if (!active || sessionSeqRef.current !== seq) return;
+
+          setProfile(data);
+          setProfileLoaded(true);
+          setLoading(false);
         }, 0);
       } else {
         setProfile(null);
+        setProfileLoaded(false);
         setLoading(false);
       }
     };
@@ -107,13 +140,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    // Invalida qualquer busca de perfil em voo e derruba o estado local antes
+    // de falar com o servidor: o logout tem que valer mesmo se a chamada HTTP
+    // falhar.
+    sessionSeqRef.current++;
+    setSession(null);
+    setUser(null);
     setProfile(null);
+    setProfileLoaded(false);
+    setLoading(false);
+
+    try {
+      // 'local' encerra apenas esta sessão. O padrão ('global') revoga todas
+      // as sessões do usuário e devolve 403 quando o refresh token já não é
+      // mais aceito — e nesse caso a sessão local sobrevivia, fazendo o
+      // gerente "voltar" logado alguns segundos depois.
+      const { error } = await supabase.auth.signOut({ scope: 'local' });
+      if (error) throw error;
+    } catch {
+      clearStoredSession();
+    }
+
+    // Evita que dados do usuário anterior apareçam para quem logar depois.
+    queryClient.clear();
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, loading, signIn, signUp, signOut, refreshProfile }}
+      value={{
+        user,
+        session,
+        profile,
+        loading,
+        profileLoaded,
+        signIn,
+        signUp,
+        signOut,
+        refreshProfile,
+      }}
     >
       {children}
     </AuthContext.Provider>

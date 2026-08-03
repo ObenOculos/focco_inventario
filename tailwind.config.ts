@@ -92,7 +92,7 @@ export default {
       },
       fontFamily: {
         sans: [
-          'Space Grotesk',
+          'Plus Jakarta Sans',
           'ui-sans-serif',
           'system-ui',
           '-apple-system',
@@ -105,7 +105,6 @@ export default {
           'sans-serif',
         ],
         mono: [
-          'Space Mono',
           'ui-monospace',
           'SFMono-Regular',
           'Menlo',

@@ -1,5 +1,58 @@
 project_id = "evsneoercdzzwxmhuxid"
 
+# ---------------------------------------------------------------------------
+# Portas locais
+#
+# Este projeto NÃO usa a faixa padrão (54320-54329). Como há vários projetos
+# Supabase nesta máquina, cada um precisa da sua própria faixa: sem isso, dois
+# `supabase start` simultâneos brigam pela mesma porta e o `db diff` de um
+# projeto pode acabar apontando para o shadow database de outro.
+#
+# Convenção adotada: padrão + 100 (os dois últimos dígitos continuam iguais
+# aos da porta padrão, o que facilita lembrar qual serviço é qual).
+# ---------------------------------------------------------------------------
+
+[api]
+enabled = true
+port = 54421
+# Schemas expostos pela API — também define o que entra no types.ts gerado.
+# Alterar aqui muda o resultado de `npm run db:types`.
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54422
+# Banco descartável onde a CLI aplica as migrations do zero para comparar com
+# o remoto (`db diff` / `db pull`).
+shadow_port = 54420
+# Precisa acompanhar a versão do projeto remoto.
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 54429
+
+[studio]
+enabled = true
+port = 54423
+
+# Caixa de e-mail falsa do stack local (confirmação de cadastro, reset de senha).
+# Chamava-se [inbucket] até a CLI 2.11x.
+[local_smtp]
+enabled = true
+port = 54424
+
+[storage]
+enabled = true
+
+[realtime]
+enabled = true
+
+[analytics]
+enabled = false
+port = 54427
+
 [functions.aprovar-e-ajustar-inventario]
 verify_jwt = false
 

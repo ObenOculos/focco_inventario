@@ -62,14 +62,14 @@ export function Pagination({
   const visiblePages = getVisiblePages();
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-4 border-2 p-4 bg-card sm:justify-between">
+    <div className="flex flex-wrap items-center justify-center gap-4 border border-border/80 rounded-2xl p-4 bg-card shadow-xs sm:justify-between antialiased">
       <div className="flex items-center gap-2">
-        <span className="text-sm text-muted-foreground">Itens por página:</span>
+        <span className="text-xs font-medium text-muted-foreground">Itens por página:</span>
         <Select value={String(itemsPerPage)} onValueChange={onItemsPerPageChange}>
-          <SelectTrigger className="w-20 border-2">
+          <SelectTrigger className="w-20 h-9 rounded-xl border-input shadow-2xs text-xs font-semibold">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-background border-2 z-50">
+          <SelectContent className="bg-popover border border-border/80 rounded-xl z-50">
             <SelectItem value="10">10</SelectItem>
             <SelectItem value="20">20</SelectItem>
             <SelectItem value="50">50</SelectItem>
@@ -78,7 +78,7 @@ export function Pagination({
         </Select>
       </div>
 
-      <div className="text-sm text-muted-foreground">
+      <div className="text-xs font-medium text-muted-foreground">
         Mostrando {startIndex + 1} até {displayedEnd} de {totalItems} itens
       </div>
 
@@ -89,7 +89,7 @@ export function Pagination({
           size="icon"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="border-2"
+          className="rounded-xl h-9 w-9 border-input shadow-2xs"
         >
           <ChevronLeft size={16} />
         </Button>
@@ -98,7 +98,7 @@ export function Pagination({
           {visiblePages.map((page, index) => {
             if (page === '...') {
               return (
-                <span key={`dots-${index}`} className="px-2 py-1 text-muted-foreground">
+                <span key={`dots-${index}`} className="px-2 py-1 text-xs text-muted-foreground font-medium">
                   ...
                 </span>
               );
@@ -110,7 +110,7 @@ export function Pagination({
                 variant={currentPage === page ? 'default' : 'outline'}
                 size="icon"
                 onClick={() => onPageChange(page as number)}
-                className="border-2"
+                className="rounded-xl h-9 w-9 text-xs font-semibold shadow-2xs"
               >
                 {page}
               </Button>
@@ -123,7 +123,7 @@ export function Pagination({
           size="icon"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="border-2"
+          className="rounded-xl h-9 w-9 border-input shadow-2xs"
         >
           <ChevronRight size={16} />
         </Button>
@@ -136,12 +136,12 @@ export function Pagination({
           size="sm"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="border-2"
+          className="rounded-xl h-9 border-input shadow-2xs"
         >
           <ChevronLeft size={16} />
         </Button>
 
-        <span className="text-sm font-medium min-w-[80px] text-center">
+        <span className="text-xs font-bold min-w-[80px] text-center text-foreground">
           {currentPage} / {totalPages}
         </span>
 
@@ -150,7 +150,7 @@ export function Pagination({
           size="sm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="border-2"
+          className="rounded-xl h-9 border-input shadow-2xs"
         >
           <ChevronRight size={16} />
         </Button>

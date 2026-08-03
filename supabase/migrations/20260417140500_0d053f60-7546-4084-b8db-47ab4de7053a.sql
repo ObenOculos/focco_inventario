@@ -42,19 +42,40 @@ WITH CHECK (codigo_vendedor = public.get_user_codigo_vendedor(auth.uid()));
 
 -- 3) FIX: Realtime — restrict channel subscriptions to authenticated users only
 -- (default-deny + minimal allow; tables not needing realtime stay blocked)
-ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
+--
+-- realtime.messages pertence a supabase_admin. No banco real temos privilégio
+-- e o bloco roda inteiro; no shadow database do `supabase db diff` as migrations
+-- são aplicadas como `postgres`, que não é dono da tabela — sem esta guarda a
+-- migration aborta com "must be owner of table messages" e o diff nem chega a
+-- rodar. O IF checa a posse em vez de engolir qualquer erro de privilégio, para
+-- que uma falha de permissão de verdade continue aparecendo.
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_class c
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    WHERE n.nspname = 'realtime'
+      AND c.relname = 'messages'
+      AND pg_has_role(current_user, c.relowner, 'USAGE')
+  ) THEN
+    ALTER TABLE realtime.messages ENABLE ROW LEVEL SECURITY;
 
-DROP POLICY IF EXISTS "Authenticated users can receive broadcasts" ON realtime.messages;
-DROP POLICY IF EXISTS "Authenticated users can send broadcasts" ON realtime.messages;
+    DROP POLICY IF EXISTS "Authenticated users can receive broadcasts" ON realtime.messages;
+    DROP POLICY IF EXISTS "Authenticated users can send broadcasts" ON realtime.messages;
 
-CREATE POLICY "Authenticated users can receive broadcasts"
-ON realtime.messages
-FOR SELECT
-TO authenticated
-USING (true);
+    CREATE POLICY "Authenticated users can receive broadcasts"
+    ON realtime.messages
+    FOR SELECT
+    TO authenticated
+    USING (true);
 
-CREATE POLICY "Authenticated users can send broadcasts"
-ON realtime.messages
-FOR INSERT
-TO authenticated
-WITH CHECK (true);
+    CREATE POLICY "Authenticated users can send broadcasts"
+    ON realtime.messages
+    FOR INSERT
+    TO authenticated
+    WITH CHECK (true);
+  ELSE
+    RAISE NOTICE 'Sem posse de realtime.messages: RLS de broadcast nao aplicada (esperado no shadow database).';
+  END IF;
+END $$;

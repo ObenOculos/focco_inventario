@@ -11,7 +11,17 @@
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "db:link": "supabase link --project-ref evsneoercdzzwxmhuxid",
+    "db:status": "supabase migration list --linked --output pretty",
+    "db:types": "supabase gen types typescript --linked > src/integrations/supabase/types.ts",
+    "db:diff": "supabase db diff --linked --schema public",
+    "db:pull": "supabase db pull --linked",
+    "db:push": "supabase db push --linked",
+    "db:check": "npm run db:status && npm run db:types && git --no-pager diff --stat -- src/integrations/supabase/types.ts && npm run db:diff",
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:local": "supabase status"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -85,7 +95,7 @@
     "globals": "^15.15.0",
     "postcss": "^8.5.6",
     "prettier": "^3.7.4",
-    "supabase": "^2.65.7",
+    "supabase": "^2.111.0",
     "tailwindcss": "^3.4.17",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.38.0",

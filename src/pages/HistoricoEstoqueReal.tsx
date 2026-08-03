@@ -119,53 +119,58 @@ export default function HistoricoEstoqueReal() {
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 antialiased">
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Histórico de Estoque Real</h1>
-            <p className="text-muted-foreground">
-              Visualize todas as atualizações do estoque real ao longo do tempo
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Histórico de Estoque Real</h1>
+            <p className="text-sm text-muted-foreground mt-1 font-medium">
+              Visualize todas as atualizações do estoque físico registradas ao longo do tempo
             </p>
           </div>
           <RefetchIndicator isFetching={isFetching && !loading} />
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Card className="border-2">
+          <Card className="border border-border/80 rounded-2xl shadow-xs">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Calendar size={16} />
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                  <Calendar size={14} />
+                </div>
                 Total de Atualizações
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{totalAtualizacoes}</p>
+              <p className="text-3xl font-bold tracking-tight text-foreground">{totalAtualizacoes}</p>
             </CardContent>
           </Card>
 
-          <Card className="border-2">
+          <Card className="border border-border/80 rounded-2xl shadow-xs">
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                <Package size={16} />
+              <CardTitle className="text-xs font-semibold text-muted-foreground uppercase tracking-wider flex items-center gap-2">
+                <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                  <Package size={14} />
+                </div>
                 Total de Registros
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-3xl font-bold">{totalRegistros}</p>
+              <p className="text-3xl font-bold tracking-tight text-foreground">{totalRegistros}</p>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="border-2">
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader>
-            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <CardTitle className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-base sm:text-lg font-semibold tracking-tight">
               <span className="flex items-center gap-2">
-                <Package size={20} />
+                <Package size={20} className="text-primary" />
                 Histórico de Atualizações
               </span>
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-xl shadow-2xs h-9 px-3.5"
                 onClick={handleExportExcel}
                 disabled={historicoFiltrado.length === 0}
               >
@@ -183,10 +188,10 @@ export default function HistoricoEstoqueReal() {
               />
               {isGerente && (
                 <Select value={selectedVendor} onValueChange={setSelectedVendor}>
-                  <SelectTrigger className="w-full md:w-48">
+                  <SelectTrigger className="w-full md:w-48 h-11 rounded-xl border-input shadow-2xs">
                     <SelectValue placeholder="Vendedor" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="rounded-xl border border-border/80">
                     <SelectItem value="todos">Todos os Vendedores</SelectItem>
                     {vendedores.map((vendor) => (
                       <SelectItem key={vendor.id} value={vendor.codigo_vendedor}>
@@ -203,23 +208,24 @@ export default function HistoricoEstoqueReal() {
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
-                  className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full flex h-11 rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   placeholder="Data inicial"
                 />
-                <span className="text-muted-foreground hidden sm:inline">até</span>
+                <span className="text-xs text-muted-foreground font-medium hidden sm:inline">até</span>
                 <input
                   id="endDate"
                   name="endDate"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
-                  className="w-full flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="w-full flex h-11 rounded-xl border border-input bg-background px-3 py-2 text-sm shadow-2xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                   placeholder="Data final"
                 />
                 {(startDate || endDate) && (
                   <Button
                     variant="ghost"
                     size="sm"
+                    className="rounded-lg text-xs"
                     onClick={() => {
                       setStartDate('');
                       setEndDate('');
@@ -234,25 +240,25 @@ export default function HistoricoEstoqueReal() {
             {loading ? (
               <HistoricoSkeleton />
             ) : historicoFiltrado.length === 0 ? (
-              <div className="text-center py-8">
-                <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
-                <p className="text-muted-foreground">
+              <div className="text-center py-12 text-muted-foreground">
+                <Package size={48} className="mx-auto mb-4 text-muted-foreground/60" />
+                <p className="text-sm font-medium">
                   {searchTerm ? 'Nenhum registro encontrado' : 'Nenhum histórico de estoque real'}
                 </p>
               </div>
             ) : (
-              <Accordion type="single" collapsible className="space-y-2">
+              <Accordion type="single" collapsible className="space-y-3">
                 {historicoFiltrado.map((group, index) => (
                   <AccordionItem
                     key={`${group.data_atualizacao}_${group.codigo_vendedor}`}
                     value={`item-${index}`}
-                    className="border-2 rounded-lg px-4"
+                    className="border border-border/80 rounded-xl px-4 shadow-2xs"
                   >
                     <AccordionTrigger className="hover:no-underline py-4">
                       <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-6 text-left w-full">
                         <div className="flex items-center gap-2">
                           <Calendar size={16} className="text-muted-foreground" />
-                          <span className="font-bold">
+                          <span className="font-semibold text-sm">
                             {new Date(group.data_atualizacao).toLocaleDateString('pt-BR', {
                               day: '2-digit',
                               month: '2-digit',
@@ -265,34 +271,34 @@ export default function HistoricoEstoqueReal() {
                         {isGerente && (
                           <div className="flex items-center gap-2">
                             <User size={16} className="text-muted-foreground" />
-                            <span>{group.nome_vendedor}</span>
-                            <Badge variant="outline">{group.codigo_vendedor}</Badge>
+                            <span className="text-sm font-medium">{group.nome_vendedor}</span>
+                            <Badge variant="outline" className="rounded-md font-mono text-xs">{group.codigo_vendedor}</Badge>
                           </div>
                         )}
-                        <div className="flex gap-4 self-start md:ml-auto md:self-center">
-                          <Badge variant="secondary">{group.itens.length} itens</Badge>
-                          <Badge className="bg-purple-500/10 text-purple-600 border-purple-500/30">
+                        <div className="flex gap-2.5 self-start md:ml-auto md:self-center">
+                          <Badge variant="secondary" className="rounded-md text-xs">{group.itens.length} itens</Badge>
+                          <Badge className="bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/30 rounded-md text-xs">
                             Total: {group.total_quantidade}
                           </Badge>
                         </div>
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <div className="border-t pt-4">
+                      <div className="border-t border-border/80 pt-4">
                         <Table>
                           <TableHeader>
-                            <TableRow>
-                              <TableHead className="w-[60%]">Código</TableHead>
-                              <TableHead className="text-right">Quantidade</TableHead>
+                            <TableRow className="bg-muted/40 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              <TableHead className="w-[60%] font-semibold">Código</TableHead>
+                              <TableHead className="text-right font-semibold">Quantidade</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {group.itens.slice(0, 50).map((item) => (
-                              <TableRow key={item.id}>
-                                <TableCell className="font-mono font-bold">
+                              <TableRow key={item.id} className="hover:bg-muted/30">
+                                <TableCell className="font-mono font-medium text-sm">
                                   {item.codigo_auxiliar}
                                 </TableCell>
-                                <TableCell className="text-right font-bold text-purple-600">
+                                <TableCell className="text-right font-bold text-purple-600 dark:text-purple-400 text-sm">
                                   {item.quantidade_real}
                                 </TableCell>
                               </TableRow>
@@ -301,7 +307,7 @@ export default function HistoricoEstoqueReal() {
                               <TableRow>
                                 <TableCell
                                   colSpan={2}
-                                  className="text-center text-muted-foreground"
+                                  className="text-center text-xs text-muted-foreground py-3"
                                 >
                                   ... e mais {group.itens.length - 50} itens
                                 </TableCell>

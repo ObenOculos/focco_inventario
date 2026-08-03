@@ -711,22 +711,22 @@ export default function Conferencia() {
               <Badge variant="secondary">{inventarios.length}</Badge>
             </h2>
             {inventarios.length === 0 ? (
-              <Card className="border-2 shadow-none">
+              <Card className="border border-border/80 rounded-2xl shadow-xs">
                 <CardContent className="py-12 text-center">
-                  <CheckCircle size={48} className="mx-auto mb-4 text-green-500" />
+                  <CheckCircle size={48} className="mx-auto mb-4 text-emerald-500" />
                   <h2 className="text-xl font-bold mb-2">Nenhum inventário encontrado</h2>
                   <p className="text-muted-foreground">Ajuste os filtros ou aguarde novos inventários.</p>
                 </CardContent>
               </Card>
             ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                 {inventarios.map((inv) => {
                   const isRevisao = inv.status === 'revisao';
                   const isAprovado = inv.status === 'aprovado';
                   return (
                     <Card
                       key={inv.id}
-                      className="border-2 transition-all cursor-pointer group shadow-none hover:border-blue-300"
+                      className="border border-border/80 hover:border-primary/50 transition-all rounded-2xl shadow-2xs hover:shadow-md cursor-pointer group"
                       onClick={() => handleSelectInventario(inv)}
                     >
                       <CardHeader className="pb-3">
@@ -736,17 +736,18 @@ export default function Conferencia() {
                           </CardTitle>
                           <div className="flex items-center gap-1.5">
                             {isAprovado && inv.is_mais_recente && (
-                              <Badge variant="outline" className="border-green-600 text-green-700 text-[10px]">
+                              <Badge variant="outline" className="border-emerald-600 text-emerald-700 dark:text-emerald-400 text-[10px] rounded-md">
                                 Mais recente
                               </Badge>
                             )}
                             {isAprovado && inv.is_mais_recente === false && (
-                              <Badge variant="outline" className="text-[10px] text-muted-foreground">
+                              <Badge variant="outline" className="text-[10px] text-muted-foreground rounded-md">
                                 Histórico
                               </Badge>
                             )}
                             <Badge
                               variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
+                              className="rounded-md"
                             >
                               <span className="capitalize">{inv.status}</span>
                             </Badge>
@@ -770,7 +771,7 @@ export default function Conferencia() {
                             {format(new Date(inv.data_inventario), 'dd/MM/yy')}
                           </span>
                         </div>
-                        <div className="text-xs text-muted-foreground pt-1">
+                        <div className="text-xs text-muted-foreground pt-1 font-medium">
                           Enviado{' '}
                           {formatDistanceToNow(new Date(inv.created_at), {
                             addSuffix: true,
@@ -786,7 +787,7 @@ export default function Conferencia() {
           </div>
         ) : isDetailLoading ? (
           <div className="flex items-center justify-center py-24 text-muted-foreground">
-            <Loader2 className="mr-2 h-8 w-8 animate-spin" /> Carregando detalhes...
+            <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Carregando detalhes...
           </div>
         ) : (
           <div className="space-y-4">
@@ -795,6 +796,7 @@ export default function Conferencia() {
               <Button
                 variant="outline"
                 size="sm"
+                className="rounded-xl shadow-2xs"
                 onClick={() => {
                   setSelectedInventario(null);
                   setDivergencias([]);
@@ -809,10 +811,10 @@ export default function Conferencia() {
                 Voltar para lista
               </Button>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 font-medium">
                   <User size={14} /> {selectedInventario.profiles?.nome || selectedInventario.codigo_vendedor}
                 </span>
-                <span className="flex items-center gap-1.5">
+                <span className="flex items-center gap-1.5 font-medium">
                   <Calendar size={14} />{' '}
                   {format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
                 </span>
@@ -824,6 +826,7 @@ export default function Conferencia() {
                         ? 'default'
                         : 'outline'
                   }
+                  className="rounded-md"
                 >
                   <span className="capitalize">{selectedInventario.status}</span>
                 </Badge>
@@ -831,9 +834,9 @@ export default function Conferencia() {
             </div>
 
             {selectedInventario.observacoes?.trim() && (
-              <Card className="border-2 border-l-4 border-l-primary shadow-none">
+              <Card className="border border-border/80 border-l-4 border-l-primary rounded-2xl shadow-2xs">
                 <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Observações do Vendedor
                   </p>
                   <p className="text-sm whitespace-pre-wrap break-words">
@@ -848,26 +851,26 @@ export default function Conferencia() {
             {/* Resumo Financeiro */}
             {(financeiro.totalFaltas !== 0 || financeiro.totalSobras !== 0) && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <Card className="border-2 shadow-none">
+                <Card className="border border-border/80 rounded-2xl shadow-2xs">
                   <CardContent className="pt-4 pb-4">
-                    <p className="text-xs text-muted-foreground mb-1">Total Faltas (R$)</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Faltas (R$)</p>
                     <p className="text-2xl font-bold text-destructive">
                       {financeiro.totalFaltas.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-2 shadow-none">
+                <Card className="border border-border/80 rounded-2xl shadow-2xs">
                   <CardContent className="pt-4 pb-4">
-                    <p className="text-xs text-muted-foreground mb-1">Total Sobras (R$)</p>
-                    <p className="text-2xl font-bold text-blue-600">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Total Sobras (R$)</p>
+                    <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
                       {financeiro.totalSobras.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
                   </CardContent>
                 </Card>
-                <Card className="border-2 shadow-none">
+                <Card className="border border-border/80 rounded-2xl shadow-2xs">
                   <CardContent className="pt-4 pb-4">
-                    <p className="text-xs text-muted-foreground mb-1">Saldo Devedor (R$)</p>
-                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor < 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Saldo Devedor (R$)</p>
+                    <p className={`text-2xl font-bold ${financeiro.saldoDevedor < 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
                       {financeiro.saldoDevedor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                     </p>
                   </CardContent>
@@ -980,7 +983,7 @@ export default function Conferencia() {
                         para <strong>{selectedInventario?.profiles?.nome || selectedInventario?.codigo_vendedor}</strong>.
                       </div>
                       {selectedInventario && (
-                        <div className="rounded border-2 p-3 bg-muted/30 text-xs space-y-1">
+                        <div className="rounded-xl border border-border/80 p-3.5 bg-muted/40 text-xs space-y-1">
                           <div>
                             <strong>{new Set(selectedInventario.itens_inventario.map((i) => i.codigo_auxiliar)).size}</strong> SKUs ·{' '}
                             <strong>
@@ -1001,14 +1004,14 @@ export default function Conferencia() {
                           checked={retornoApenasComQtd}
                           onCheckedChange={setRetornoApenasComQtd}
                         />
-                        <Label htmlFor="apenas-com-qtd" className="text-xs cursor-pointer">
+                        <Label htmlFor="apenas-com-qtd" className="text-xs cursor-pointer font-medium">
                           Apenas itens com quantidade contada &gt; 0
                         </Label>
                       </div>
                       {movimentosPosteriores === null ? (
-                        <div className="text-xs text-muted-foreground">Verificando movimentações posteriores...</div>
+                        <div className="text-xs text-muted-foreground font-medium">Verificando movimentações posteriores...</div>
                       ) : movimentosPosteriores > 0 ? (
-                        <div className="rounded border-2 border-destructive/50 bg-destructive/10 p-3 text-xs space-y-2">
+                        <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs space-y-2">
                           <div className="font-semibold text-destructive flex items-center gap-1.5">
                             <AlertTriangle size={14} />
                             Atenção: existem {movimentosPosteriores} movimentações após esta data
@@ -1023,13 +1026,13 @@ export default function Conferencia() {
                               checked={retornoForceConfirm}
                               onCheckedChange={setRetornoForceConfirm}
                             />
-                            <Label htmlFor="force-confirm" className="text-xs cursor-pointer">
+                            <Label htmlFor="force-confirm" className="text-xs cursor-pointer font-medium">
                               Eu sei o que estou fazendo, prosseguir mesmo assim
                             </Label>
                           </div>
                         </div>
                       ) : (
-                        <div className="text-xs text-green-700">
+                        <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
                           Nenhuma movimentação após este inventário — seguro para gerar.
                         </div>
                       )}
@@ -1037,12 +1040,13 @@ export default function Conferencia() {
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel disabled={gerarRetornoInvMutation.isPending}>Cancelar</AlertDialogCancel>
+                  <AlertDialogCancel disabled={gerarRetornoInvMutation.isPending} className="rounded-xl">Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={(e) => {
                       e.preventDefault();
                       handleConfirmGerarRetorno();
                     }}
+                    className="rounded-xl"
                     disabled={
                       gerarRetornoInvMutation.isPending ||
                       movimentosPosteriores === null ||
@@ -1063,7 +1067,7 @@ export default function Conferencia() {
 
             {/* Dialog: Reverter Aprovação */}
             <AlertDialog open={showReverterDialog} onOpenChange={(o) => { setShowReverterDialog(o); if (!o) setReverterConfirm(false); }}>
-              <AlertDialogContent className="max-w-lg">
+              <AlertDialogContent className="max-w-lg rounded-2xl">
                 <AlertDialogHeader>
                   <AlertDialogTitle>Reverter Aprovação do Inventário</AlertDialogTitle>
                   <AlertDialogDescription asChild>
@@ -1077,7 +1081,7 @@ export default function Conferencia() {
                         </strong>{' '}
                         voltará ao status <strong>pendente</strong>.
                       </div>
-                      <div className="rounded border-2 border-destructive/50 bg-destructive/10 p-3 text-xs space-y-1">
+                      <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-3.5 text-xs space-y-1">
                         <div className="font-semibold text-destructive flex items-center gap-1.5">
                           <AlertTriangle size={14} /> O que será desfeito:
                         </div>
@@ -1094,7 +1098,7 @@ export default function Conferencia() {
                           checked={reverterConfirm}
                           onCheckedChange={setReverterConfirm}
                         />
-                        <Label htmlFor="confirm-reverter" className="text-xs cursor-pointer">
+                        <Label htmlFor="confirm-reverter" className="text-xs cursor-pointer font-medium">
                           Confirmo que entendo e quero reverter a aprovação
                         </Label>
                       </div>
@@ -1102,10 +1106,11 @@ export default function Conferencia() {
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel disabled={reverting}>Cancelar</AlertDialogCancel>
+                  <AlertDialogCancel disabled={reverting} className="rounded-xl">Cancelar</AlertDialogCancel>
                   <AlertDialogAction
                     onClick={(e) => { e.preventDefault(); handleReverterAprovacao(); }}
                     disabled={reverting || !reverterConfirm}
+                    className="rounded-xl"
                   >
                     {reverting ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Revertendo...</>) : 'Reverter Aprovação'}
                   </AlertDialogAction>
@@ -1113,22 +1118,22 @@ export default function Conferencia() {
               </AlertDialogContent>
             </AlertDialog>
 
-            <Card className="border-2 shadow-none">
-              <CardHeader>
+            <Card className="border border-border/80 rounded-2xl shadow-xs">
+              <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-lg">Comparativo de Estoque</CardTitle>
+                  <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">Comparativo de Estoque</CardTitle>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
                         variant="outline"
                         size="icon"
                         disabled={divergencias.length === 0}
-                        className="shrink-0 h-9 w-9"
+                        className="shrink-0 h-9 w-9 rounded-xl shadow-2xs"
                       >
                         <Download className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="rounded-xl">
                       <DropdownMenuItem onClick={() => handleExportExcel(false)}>
                         Exportar Filtrado
                       </DropdownMenuItem>
@@ -1146,11 +1151,11 @@ export default function Conferencia() {
                     className="min-w-0 flex-1 basis-40"
                   />
                   <Select value={filtroResultado} onValueChange={setFiltroResultado}>
-                    <SelectTrigger className="w-full basis-44 sm:w-48">
+                    <SelectTrigger className="w-full basis-44 sm:w-48 rounded-xl shadow-2xs">
                       <AlertTriangle className="mr-1.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       <SelectValue placeholder="Filtrar resultado" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl">
                       <SelectItem value="todos">Todos os itens</SelectItem>
                       <SelectItem value="com_diferenca">Com diferença</SelectItem>
                       <SelectItem value="sobras">Sobras (+)</SelectItem>
@@ -1167,7 +1172,7 @@ export default function Conferencia() {
                       className="shadow-none"
                     />
                     <div className="flex flex-col">
-                      <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer">
+                      <Label htmlFor="soma-negativo" className="text-xs text-muted-foreground whitespace-nowrap cursor-pointer font-medium">
                         {usaSomaParaNegativo ? 'Somando quando teórico negativo' : 'Subtraindo sempre'}
                       </Label>
                       <span className="text-[10px] text-muted-foreground/70">
@@ -1178,7 +1183,7 @@ export default function Conferencia() {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="border-2 rounded-lg overflow-hidden">
+                <div className="border border-border/80 rounded-xl overflow-hidden shadow-2xs">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -1219,7 +1224,7 @@ export default function Conferencia() {
                               <TableCell className="font-medium">
                                 <span className="font-mono text-sm">{item.codigo_auxiliar}</span>
                                 {isNaoContado && (
-                                  <Badge variant="outline" className="ml-2 text-xs">
+                                  <Badge variant="outline" className="ml-2 text-xs rounded-md">
                                     Não contado
                                   </Badge>
                                 )}
@@ -1235,7 +1240,7 @@ export default function Conferencia() {
                                     onChange={(e) =>
                                       handleEditValue(item.codigo_auxiliar, e.target.value)
                                     }
-                                    className="w-20 h-8 text-center font-bold border-2 mx-auto"
+                                    className="w-20 h-8 text-center font-bold border border-input rounded-lg mx-auto shadow-2xs"
                                   />
                                 ) : (
                                   <span className="font-semibold">{currentFisica}</span>

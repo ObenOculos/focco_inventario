@@ -324,31 +324,31 @@ export default function Importar() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl mx-auto">
+      <div className="space-y-6 max-w-4xl mx-auto antialiased">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Importar Pedidos</h1>
-          <p className="text-muted-foreground">
-            Importe pedidos de remessa e venda via arquivo Excel
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Importar Pedidos</h1>
+          <p className="text-sm text-muted-foreground mt-1 font-medium">
+            Importe dados de remessa e venda via planilha Excel ou arquivo CSV
           </p>
         </div>
 
-        <Card className="border-2">
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileSpreadsheet size={20} />
+            <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-semibold tracking-tight">
+              <FileSpreadsheet size={20} className="text-primary" />
               Upload de Arquivo
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div
-              className="border-2 border-dashed border-muted-foreground/50 p-8 text-center cursor-pointer hover:border-foreground transition-colors"
+              className="border-2 border-dashed border-border/80 rounded-xl p-8 text-center cursor-pointer hover:border-primary/50 hover:bg-muted/30 transition-all"
               onClick={() => fileInputRef.current?.click()}
             >
-              <Upload size={48} className="mx-auto mb-4 text-muted-foreground" />
-              <p className="font-medium">
-                {file ? file.name : 'Clique para selecionar um arquivo Excel'}
+              <Upload size={44} className="mx-auto mb-3 text-muted-foreground/60" />
+              <p className="font-semibold text-sm text-foreground">
+                {file ? file.name : 'Clique para selecionar um arquivo Excel ou CSV'}
               </p>
-              <p className="text-sm text-muted-foreground mt-1">Formato: .xlsx, .xls ou .csv</p>
+              <p className="text-xs text-muted-foreground mt-1 font-medium">Formato aceito: .xlsx, .xls ou .csv (delimitador ;)</p>
               <input
                 id="file-upload"
                 name="file"
@@ -361,30 +361,30 @@ export default function Importar() {
             </div>
 
             {preview.length > 0 && (
-              <div className="border-2 border-border p-4">
-                <p className="font-medium mb-2">Preview (primeiros 5 registros):</p>
-                <div className="overflow-x-auto">
+              <div className="border border-border/80 rounded-xl p-4 shadow-2xs">
+                <p className="font-semibold text-xs uppercase tracking-wider text-muted-foreground mb-3">Preview (primeiros 5 registros):</p>
+                <div className="overflow-x-auto rounded-lg border border-border/80">
                   <table className="w-full text-xs">
                     <thead>
-                      <tr className="border-b-2 border-foreground">
-                        <th className="text-left py-2 px-1">Pedido</th>
-                        <th className="text-left py-2 px-1">Vendedor</th>
-                        <th className="text-left py-2 px-1">Tipo</th>
-                        <th className="text-left py-2 px-1">Produto</th>
-                        <th className="text-right py-2 px-1">Qtd</th>
+                      <tr className="border-b border-border bg-muted/40 text-muted-foreground font-semibold uppercase tracking-wider">
+                        <th className="text-left py-2.5 px-3">Pedido</th>
+                        <th className="text-left py-2.5 px-3">Vendedor</th>
+                        <th className="text-left py-2.5 px-3">Tipo</th>
+                        <th className="text-left py-2.5 px-3">Produto</th>
+                        <th className="text-right py-2.5 px-3">Qtd</th>
                       </tr>
                     </thead>
                     <tbody>
                       {preview.map((row, i) => (
-                        <tr key={i} className="border-b border-border">
-                          <td className="py-2 px-1 font-mono">{row.pedido}</td>
-                          <td className="py-2 px-1">{row.codigo_vendedor}</td>
-                          <td className="py-2 px-1">
+                        <tr key={i} className="border-b border-border/60 hover:bg-muted/30">
+                          <td className="py-2 px-3 font-mono font-medium">{row.pedido}</td>
+                          <td className="py-2 px-3">{row.codigo_vendedor}</td>
+                          <td className="py-2 px-3">
                             <span
-                              className={`px-2 py-0.5 text-xs font-bold ${
+                              className={`px-2 py-0.5 text-[10px] font-semibold rounded-md ${
                                 row.codigo_tipo === 7 || row.codigo_tipo === 99
-                                  ? 'bg-blue-100 text-blue-800'
-                                  : 'bg-green-100 text-green-800'
+                                  ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300'
+                                  : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
                               }`}
                             >
                               {row.codigo_tipo === 7 || row.codigo_tipo === 99
@@ -392,8 +392,8 @@ export default function Importar() {
                                 : 'VENDA'}
                             </span>
                           </td>
-                          <td className="py-2 px-1 font-mono">{row.codigo_auxiliar}</td>
-                          <td className="py-2 px-1 text-right">{row.quantidade}</td>
+                          <td className="py-2 px-3 font-mono">{row.codigo_auxiliar}</td>
+                          <td className="py-2 px-3 text-right font-bold">{row.quantidade}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -405,34 +405,34 @@ export default function Importar() {
             {/* Resultado da Validação */}
             {validation && (
               <div
-                className={`p-4 border-2 ${validation.isValid ? 'border-green-500 bg-green-50' : 'border-destructive bg-destructive/10'}`}
+                className={`p-4 border rounded-2xl ${validation.isValid ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-destructive/30 bg-destructive/5'}`}
               >
-                <div className="flex items-start gap-2">
+                <div className="flex items-start gap-3">
                   {validation.isValid ? (
-                    <ShieldCheck className="text-green-600 mt-0.5" size={20} />
+                    <ShieldCheck className="text-emerald-600 dark:text-emerald-400 mt-0.5 shrink-0" size={20} />
                   ) : (
-                    <AlertCircle className="text-destructive mt-0.5" size={20} />
+                    <AlertCircle className="text-destructive mt-0.5 shrink-0" size={20} />
                   )}
                   <div className="flex-1">
-                    <p className="font-medium">
+                    <p className="font-semibold text-sm">
                       {validation.isValid
                         ? 'Validação concluída com sucesso!'
                         : 'Validação encontrou problemas'}
                     </p>
 
-                    <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-                      <div className="bg-background p-2 rounded border">
-                        <span className="text-muted-foreground">Pedidos novos:</span>
-                        <span className="font-bold ml-2">{validation.newPedidos}</span>
+                    <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                      <div className="bg-background p-2.5 rounded-xl border border-border/80">
+                        <span className="text-muted-foreground font-medium">Pedidos novos:</span>
+                        <span className="font-bold ml-2 text-foreground">{validation.newPedidos}</span>
                       </div>
-                      <div className="bg-background p-2 rounded border">
-                        <span className="text-muted-foreground">Produtos:</span>
-                        <span className="font-bold ml-2">{validation.totalProdutos}</span>
+                      <div className="bg-background p-2.5 rounded-xl border border-border/80">
+                        <span className="text-muted-foreground font-medium">Produtos:</span>
+                        <span className="font-bold ml-2 text-foreground">{validation.totalProdutos}</span>
                       </div>
                       {validation.duplicates.length > 0 && (
-                        <div className="bg-yellow-50 p-2 rounded border border-yellow-300 col-span-2">
-                          <span className="text-yellow-700">Duplicatas ignoradas:</span>
-                          <span className="font-bold ml-2 text-yellow-800">
+                        <div className="bg-amber-500/10 p-2.5 rounded-xl border border-amber-500/30 col-span-2">
+                          <span className="text-amber-700 dark:text-amber-400 font-medium">Duplicatas ignoradas:</span>
+                          <span className="font-bold ml-2 text-amber-800 dark:text-amber-300">
                             {validation.duplicates.length}
                           </span>
                         </div>
@@ -441,7 +441,7 @@ export default function Importar() {
 
                     {validation.errors.length > 0 && (
                       <div className="mt-3 space-y-2">
-                        <p className="text-sm font-medium text-foreground">
+                        <p className="text-xs font-semibold text-foreground">
                           Detalhes ({validation.errors.length}{' '}
                           {validation.errors.length === 1 ? 'item' : 'itens'}):
                         </p>
@@ -449,20 +449,16 @@ export default function Importar() {
                           {validation.errors.map((error, index) => (
                             <div
                               key={index}
-                              className="text-xs bg-background border border-border p-2 rounded"
+                              className="text-xs bg-background border border-border/80 p-2.5 rounded-xl"
                             >
                               <div className="flex items-center gap-2">
                                 <span
-                                  className={`px-1.5 py-0.5 font-medium uppercase ${
+                                  className={`px-2 py-0.5 text-[10px] font-semibold rounded-md uppercase ${
                                     error.tipo === 'validacao'
-                                      ? 'bg-red-100 text-red-800'
+                                      ? 'bg-destructive/10 text-destructive'
                                       : error.tipo === 'duplicata'
-                                        ? 'bg-yellow-100 text-yellow-800'
-                                        : error.tipo === 'produto'
-                                          ? 'bg-blue-100 text-blue-800'
-                                          : error.tipo === 'pedido'
-                                            ? 'bg-orange-100 text-orange-800'
-                                            : 'bg-purple-100 text-purple-800'
+                                        ? 'bg-amber-500/10 text-amber-700'
+                                        : 'bg-blue-500/10 text-blue-700'
                                   }`}
                                 >
                                   {error.tipo}
@@ -472,8 +468,8 @@ export default function Importar() {
                               <p
                                 className={
                                   error.tipo === 'duplicata'
-                                    ? 'text-yellow-700 mt-1'
-                                    : 'text-destructive mt-1'
+                                    ? 'text-amber-700 dark:text-amber-400 mt-1 font-medium'
+                                    : 'text-destructive mt-1 font-medium'
                                 }
                               >
                                 {error.mensagem}
@@ -494,55 +490,22 @@ export default function Importar() {
             {/* Resultado da Importação */}
             {importResult && (
               <div
-                className={`p-4 border-2 ${importResult.errors > 0 ? 'border-destructive bg-destructive/10' : 'border-green-500 bg-green-50'}`}
+                className={`p-4 border rounded-2xl ${importResult.errors > 0 ? 'border-destructive/30 bg-destructive/5' : 'border-emerald-500/30 bg-emerald-500/5'}`}
               >
                 <div className="flex items-start gap-2">
                   {importResult.errors > 0 ? (
                     <AlertCircle className="text-destructive mt-0.5" size={20} />
                   ) : (
-                    <CheckCircle className="text-green-600 mt-0.5" size={20} />
+                    <CheckCircle className="text-emerald-600 dark:text-emerald-400 mt-0.5" size={20} />
                   )}
                   <div className="flex-1">
-                    <p className="font-medium">
+                    <p className="font-semibold text-sm">
                       {importResult.success} pedidos importados com sucesso
                     </p>
                     {importResult.errors > 0 && (
-                      <p className="text-sm text-destructive font-medium">
+                      <p className="text-xs text-destructive font-semibold mt-1">
                         {importResult.errors} erros - Importação interrompida
                       </p>
-                    )}
-
-                    {importResult.errorDetails.length > 0 && (
-                      <div className="mt-3 space-y-2">
-                        <p className="text-sm font-medium text-foreground">Detalhes dos erros:</p>
-                        <div className="max-h-48 overflow-y-auto space-y-2">
-                          {importResult.errorDetails.map((error, index) => (
-                            <div
-                              key={index}
-                              className="text-xs bg-background border border-border p-2 rounded"
-                            >
-                              <div className="flex items-center gap-2">
-                                <span
-                                  className={`px-1.5 py-0.5 font-medium uppercase ${
-                                    error.tipo === 'produto'
-                                      ? 'bg-blue-100 text-blue-800'
-                                      : error.tipo === 'pedido'
-                                        ? 'bg-orange-100 text-orange-800'
-                                        : 'bg-purple-100 text-purple-800'
-                                  }`}
-                                >
-                                  {error.tipo}
-                                </span>
-                                <span className="font-mono font-medium">{error.identificador}</span>
-                              </div>
-                              <p className="text-destructive mt-1">{error.mensagem}</p>
-                              {error.detalhes && (
-                                <p className="text-muted-foreground mt-0.5">{error.detalhes}</p>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
                     )}
                   </div>
                 </div>
@@ -550,30 +513,30 @@ export default function Importar() {
             )}
 
             {/* Botões de Ação */}
-            <div className="flex gap-3">
+            <div className="flex gap-3 pt-2">
               {status === 'idle' && file && (
-                <Button onClick={handleValidate} className="flex-1">
+                <Button onClick={handleValidate} className="flex-1 h-11 rounded-xl font-semibold shadow-xs">
                   <Search className="mr-2" size={16} />
                   Validar Dados
                 </Button>
               )}
 
               {status === 'validating' && (
-                <Button disabled className="flex-1">
+                <Button disabled className="flex-1 h-11 rounded-xl">
                   <Loader2 className="mr-2 animate-spin" size={16} />
                   Validando...
                 </Button>
               )}
 
               {status === 'validated' && validation?.isValid && importStatus !== 'importing' && (
-                <Button onClick={handleImport} className="flex-1 bg-green-600 hover:bg-green-700">
+                <Button onClick={handleImport} className="flex-1 h-11 rounded-xl font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs">
                   <Upload className="mr-2" size={16} />
                   Importar {validation.newPedidos} Pedidos
                 </Button>
               )}
 
               {(importStatus === 'error' || importStatus === 'completed') && (
-                <Button onClick={resetImport} variant="outline" className="flex-1 border-2">
+                <Button onClick={resetImport} variant="outline" className="flex-1 h-11 rounded-xl shadow-2xs">
                   Nova Importação
                 </Button>
               )}
@@ -582,7 +545,7 @@ export default function Importar() {
                 status !== 'validating' &&
                 importStatus !== 'importing' &&
                 importStatus !== 'completed' && (
-                  <Button variant="outline" onClick={resetImport} className="border-2">
+                  <Button variant="outline" onClick={resetImport} className="h-11 rounded-xl shadow-2xs px-4">
                     Limpar
                   </Button>
                 )}
@@ -590,15 +553,15 @@ export default function Importar() {
           </CardContent>
         </Card>
 
-        <Card className="border-2">
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader>
-            <CardTitle>Formato Esperado</CardTitle>
+            <CardTitle className="text-base font-semibold tracking-tight">Formato Esperado</CardTitle>
           </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">
+          <CardContent className="space-y-4">
+            <p className="text-xs text-muted-foreground font-medium">
               O arquivo Excel/CSV deve conter as seguintes colunas (delimitador: ponto e vírgula):
             </p>
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-sm font-mono">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs font-mono">
               {[
                 'codigo_empresa',
                 'empresa',
@@ -618,30 +581,18 @@ export default function Importar() {
                 'quantidade',
                 'valor_produto',
               ].map((col) => (
-                <span key={col} className="bg-secondary px-2 py-1">
+                <span key={col} className="bg-muted px-2.5 py-1 rounded-md text-foreground">
                   {col}
                 </span>
               ))}
             </div>
-            <div className="mt-4 p-3 bg-secondary">
-              <p className="text-sm font-medium">Tipos de Movimentação (codigo_tipo):</p>
-              <ul className="text-sm text-muted-foreground mt-2 space-y-1">
-                <li>
-                  <strong>2</strong> = Venda (saída de estoque)
-                </li>
-                <li>
-                  <strong>7</strong> = Remessa (entrada de estoque)
-                </li>
-                <li>
-                  <strong>99</strong> = Remessa (entrada de estoque)
-                </li>
+            <div className="p-3.5 bg-muted/40 rounded-xl border border-border/60">
+              <p className="text-xs font-semibold text-foreground uppercase tracking-wider mb-1">Tipos de Movimentação (codigo_tipo):</p>
+              <ul className="text-xs text-muted-foreground space-y-1">
+                <li><strong>2</strong> = Venda (saída de estoque)</li>
+                <li><strong>7</strong> = Remessa (entrada de estoque)</li>
+                <li><strong>99</strong> = Remessa (entrada de estoque)</li>
               </ul>
-            </div>
-            <div className="mt-3 p-3 bg-secondary">
-              <p className="text-sm font-medium">Identificação de Duplicatas:</p>
-              <p className="text-sm text-muted-foreground mt-1">
-                Combinação única: <strong>codigo_empresa + pedido + codigo_tipo</strong>
-              </p>
             </div>
           </CardContent>
         </Card>

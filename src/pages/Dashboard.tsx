@@ -9,7 +9,6 @@ import { useEstoqueTeoricoQuery } from '@/hooks/useEstoqueTeoricoQuery';
 import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
 import { useAcuracidadeMetricsQuery } from '@/hooks/useDashboardMetricsQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import {
   Package,
   TrendingUp,
@@ -68,7 +67,6 @@ export default function Dashboard() {
     'revisao'
   );
 
-  const { data: divergencias = [] } = useDivergenciasQuery(isGerente);
   const { data: acuracidadeMetrics, isLoading: loadingAcuracidade } =
     useAcuracidadeMetricsQuery(isGerente);
 
@@ -79,8 +77,6 @@ export default function Dashboard() {
   const totalItens = estoqueArray.reduce((acc, item) => acc + item.estoque_teorico, 0);
   const totalModelos = new Set(estoqueArray.map((e) => e.modelo)).size;
 
-  // Usar o mesmo cálculo de itens da página "Estoque (Teórico x Real)" para garantir
-  // que contamos todos os códigos auxiliares (incluindo estoques zero)
   const vendorParam = isGerente ? 'todos' : (profile?.codigo_vendedor ?? '');
   const { data: comparacaoDados = [] } = useEstoqueTeoricoQuery(
     isGerente,
@@ -110,14 +106,16 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="space-y-8">
-        <div className="flex items-center justify-between">
-          <div className="space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-            <p className="text-muted-foreground text-base">
+      <div className="space-y-8 antialiased">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="space-y-1">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Dashboard
+            </h1>
+            <p className="text-sm text-muted-foreground">
               {isGerente
-                ? 'Visão geral do sistema - Últimos 30 dias'
-                : 'Seu resumo de atividades - Últimos 30 dias'}
+                ? 'Visão geral do sistema • Últimos 30 dias'
+                : 'Seu resumo de atividades • Últimos 30 dias'}
             </p>
           </div>
           <Button
@@ -125,50 +123,54 @@ export default function Dashboard() {
             size="sm"
             onClick={handleRefresh}
             disabled={isRefreshing}
-            className="gap-2"
+            className="gap-2 rounded-xl shadow-xs self-start sm:self-auto"
           >
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? 'Atualizando...' : 'Atualizar'}
           </Button>
         </div>
 
-        {/* Alertas - apenas para problemas críticos */}
+        {/* Alertas Críticos */}
         {(produtosNegativos.length > 0 ||
           (isGerente && inventariosPendentes + inventariosRevisao > 0)) && (
           <div className="space-y-3">
             {produtosNegativos.length > 0 && (
-              <div className="flex items-center gap-4 p-5 bg-destructive/10 border-2 border-destructive rounded-lg">
-                <AlertTriangle className="text-destructive shrink-0 h-6 w-6" />
-                <div className="flex-1">
-                  <p className="font-semibold text-destructive text-base">
+              <div className="flex items-center gap-4 p-4 sm:p-5 bg-destructive/10 border border-destructive/30 rounded-2xl shadow-xs">
+                <div className="w-10 h-10 rounded-xl bg-destructive/20 text-destructive flex items-center justify-center shrink-0">
+                  <AlertTriangle size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-destructive text-sm sm:text-base">
                     {produtosNegativos.length} produto(s) com estoque negativo
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    Verifique divergências de inventário
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                    Existem itens com saldo teórico inconsistente que precisam de verificação.
                   </p>
                 </div>
                 <Link to="/estoque-teorico">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="rounded-xl border-destructive/40 text-destructive hover:bg-destructive/10">
                     Ver detalhes
                   </Button>
                 </Link>
               </div>
             )}
             {isGerente && inventariosPendentes + inventariosRevisao > 0 && (
-              <div className="flex items-center gap-4 p-5 bg-orange-100 dark:bg-orange-900/20 border-2 border-orange-500 rounded-lg">
-                <Clock className="text-orange-600 shrink-0 h-6 w-6" />
-                <div className="flex-1">
-                  <p className="font-semibold text-orange-700 dark:text-orange-400 text-base">
+              <div className="flex items-center gap-4 p-4 sm:p-5 bg-amber-500/10 border border-amber-500/30 rounded-2xl shadow-xs">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Clock size={20} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-amber-700 dark:text-amber-400 text-sm sm:text-base">
                     {inventariosPendentes + inventariosRevisao} inventário(s) aguardando ação
                   </p>
-                  <p className="text-sm text-muted-foreground mt-1">
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
                     {inventariosPendentes > 0 && `${inventariosPendentes} pendente(s)`}
-                    {inventariosPendentes > 0 && inventariosRevisao > 0 && ', '}
+                    {inventariosPendentes > 0 && inventariosRevisao > 0 && ' • '}
                     {inventariosRevisao > 0 && `${inventariosRevisao} em revisão`}
                   </p>
                 </div>
                 <Link to="/conferencia">
-                  <Button variant="outline" size="sm">
+                  <Button variant="outline" size="sm" className="rounded-xl border-amber-500/40 text-amber-700 dark:text-amber-400 hover:bg-amber-500/10">
                     Conferir
                   </Button>
                 </Link>
@@ -178,38 +180,42 @@ export default function Dashboard() {
         )}
 
         {/* Resumo de Movimentações */}
-        <Card className="border-2">
-          <CardHeader>
-            <CardTitle className="text-lg">Resumo de Movimentações</CardTitle>
+        <Card className="border border-border/80 shadow-xs rounded-2xl">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">Resumo de Movimentações</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 rounded-lg bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-800 p-4 space-y-2">
-                <div className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                  <TrendingUp size={18} />
+              <div className="flex-1 rounded-xl bg-blue-500/5 border border-blue-500/20 p-4 sm:p-5 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                    <TrendingUp size={16} />
+                  </div>
                   {isGerente ? 'Remessas Enviadas' : 'Remessas Recebidas'}
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-blue-800 dark:text-blue-200">
+                  <p className="text-3xl font-bold tracking-tight text-blue-700 dark:text-blue-300">
                     {movimentacao.unidadesRemessa.toLocaleString('pt-BR')}
                   </p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                    unidades em {movimentacao.totalRemessas} remessa(s)
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">
+                    unidades movimentadas em {movimentacao.totalRemessas} remessa(s)
                   </p>
                 </div>
               </div>
 
-              <div className="flex-1 rounded-lg bg-green-50 dark:bg-green-950/20 border-2 border-green-200 dark:border-green-800 p-4 space-y-2">
-                <div className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
-                  <TrendingDown size={18} />
+              <div className="flex-1 rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-4 sm:p-5 space-y-3">
+                <div className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                  <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                    <TrendingDown size={16} />
+                  </div>
                   Vendas Realizadas
                 </div>
                 <div>
-                  <p className="text-3xl font-bold text-green-800 dark:text-green-200">
+                  <p className="text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
                     {movimentacao.unidadesVenda.toLocaleString('pt-BR')}
                   </p>
-                  <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                    unidades em {movimentacao.totalVendas} venda(s)
+                  <p className="text-xs text-muted-foreground mt-1 font-medium">
+                    unidades faturadas em {movimentacao.totalVendas} venda(s)
                   </p>
                 </div>
               </div>
@@ -221,82 +227,92 @@ export default function Dashboard() {
         {isGerente ? (
           <>
             {/* Métricas Principais */}
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="text-lg">Métricas Principais</CardTitle>
+            <Card className="border border-border/80 shadow-xs rounded-2xl">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">Métricas Principais</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-4">
-                  <div className="flex-1 basis-44 rounded-lg border-2 p-4 space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <Package size={18} />
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                  <div className="rounded-xl border border-border/70 bg-card p-4 space-y-3 shadow-2xs">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                        <Package size={16} />
+                      </div>
                       Estoque Total
                     </div>
                     <div>
-                      <p className="text-3xl font-bold">{totalItens.toLocaleString('pt-BR')}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{totalProdutos} itens</p>
+                      <p className="text-2xl sm:text-3xl font-bold tracking-tight">{totalItens.toLocaleString('pt-BR')}</p>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">{totalProdutos} itens catalogados</p>
                     </div>
                   </div>
 
-                  <div className="flex-1 basis-44 rounded-lg border-2 p-4 space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <Target size={18} />
+                  <div className="rounded-xl border border-border/70 bg-card p-4 space-y-3 shadow-2xs">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-indigo-500/10 text-indigo-600 flex items-center justify-center">
+                        <Target size={16} />
+                      </div>
                       Acuracidade Geral
                     </div>
                     {loadingAcuracidade ? (
-                      <div className="h-10 bg-muted animate-pulse rounded" />
+                      <div className="h-9 bg-muted animate-pulse rounded-lg" />
                     ) : (
                       <div>
                         <p
-                          className={`text-3xl font-bold ${
+                          className={`text-2xl sm:text-3xl font-bold tracking-tight ${
                             (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 95
-                              ? 'text-green-600'
+                              ? 'text-emerald-600 dark:text-emerald-400'
                               : (acuracidadeMetrics?.taxaAcuracidadeGeral || 0) >= 85
-                                ? 'text-yellow-600'
+                                ? 'text-amber-600 dark:text-amber-400'
                                 : 'text-destructive'
                           }`}
                         >
                           {(acuracidadeMetrics?.taxaAcuracidadeGeral || 0).toFixed(1)}%
                         </p>
-                        <p className="text-xs text-muted-foreground mt-1">últimos inventários</p>
+                        <p className="text-xs text-muted-foreground mt-1 font-medium">últimos inventários</p>
                       </div>
                     )}
                   </div>
 
-                  <div className="flex-1 basis-44 rounded-lg bg-destructive/10 border-2 border-destructive p-4 space-y-2">
-                    <div className="text-sm font-medium flex items-center gap-2 text-destructive">
-                      <XCircle size={18} />
+                  <div className="rounded-xl bg-destructive/5 border border-destructive/20 p-4 space-y-3 shadow-2xs">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-destructive flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-destructive/10 flex items-center justify-center">
+                        <XCircle size={16} />
+                      </div>
                       Negativos
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-destructive">
+                      <p className="text-2xl sm:text-3xl font-bold tracking-tight text-destructive">
                         {produtosNegativos.length}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">produtos</p>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">produtos inconsistentes</p>
                     </div>
                   </div>
 
-                  <div className="flex-1 basis-44 rounded-lg bg-orange-50 dark:bg-orange-900/20 border-2 border-orange-500 p-4 space-y-2">
-                    <div className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                      <AlertTriangle size={18} />
-                      Itens Divergentes
+                  <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-4 space-y-3 shadow-2xs">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                        <AlertTriangle size={16} />
+                      </div>
+                      Divergentes
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+                      <p className="text-2xl sm:text-3xl font-bold tracking-tight text-amber-700 dark:text-amber-400">
                         {comparacaoDados.filter((d) => d.diferenca !== 0).length}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">itens</p>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">itens com divergência</p>
                     </div>
                   </div>
 
-                  <div className="flex-1 basis-44 rounded-lg border-2 p-4 space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                      <AlertTriangle size={18} />
+                  <div className="rounded-xl border border-border/70 bg-card p-4 space-y-3 shadow-2xs">
+                    <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                      <div className="w-7 h-7 rounded-lg bg-slate-500/10 text-slate-600 flex items-center justify-center">
+                        <AlertTriangle size={16} />
+                      </div>
                       Críticos
                     </div>
                     <div>
-                      <p className="text-3xl font-bold">{produtosCriticos}</p>
-                      <p className="text-xs text-muted-foreground mt-1">≤ 5 unidades</p>
+                      <p className="text-2xl sm:text-3xl font-bold tracking-tight">{produtosCriticos}</p>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">≤ 5 unidades</p>
                     </div>
                   </div>
                 </div>
@@ -304,50 +320,56 @@ export default function Dashboard() {
             </Card>
 
             {/* Status de Inventários */}
-            <Card className="border-2">
-              <CardHeader>
-                <CardTitle className="text-lg">Status de Inventários</CardTitle>
+            <Card className="border border-border/80 shadow-xs rounded-2xl">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">Status de Inventários</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-col lg:flex-row gap-4">
-                  <div className="flex-1 rounded-lg bg-blue-50 dark:bg-blue-950/20 border-2 border-blue-200 dark:border-blue-800 p-4 space-y-2">
-                    <div className="text-sm font-medium flex items-center gap-2 text-blue-700 dark:text-blue-300">
-                      <Clock size={18} />
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="rounded-xl bg-blue-500/5 border border-blue-500/20 p-4 sm:p-5 space-y-3">
+                    <div className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                      <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                        <Clock size={16} />
+                      </div>
                       Pendentes
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+                      <p className="text-3xl font-bold tracking-tight text-blue-700 dark:text-blue-300">
                         {inventariosPendentes}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">
                         inventários para conferir
                       </p>
                     </div>
                   </div>
 
-                  <div className="flex-1 rounded-lg bg-orange-50 dark:bg-orange-950/20 border-2 border-orange-200 dark:border-orange-800 p-4 space-y-2">
-                    <div className="text-sm font-medium flex items-center gap-2 text-orange-700 dark:text-orange-300">
-                      <AlertTriangle size={18} />
+                  <div className="rounded-xl bg-amber-500/5 border border-amber-500/20 p-4 sm:p-5 space-y-3">
+                    <div className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                      <div className="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                        <AlertTriangle size={16} />
+                      </div>
                       Em Revisão
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-orange-700 dark:text-orange-300">
+                      <p className="text-3xl font-bold tracking-tight text-amber-700 dark:text-amber-300">
                         {inventariosRevisao}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">aguardando correção</p>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">aguardando correção</p>
                     </div>
                   </div>
 
-                  <div className="flex-1 rounded-lg bg-green-50 dark:bg-green-950/20 border-2 border-green-200 dark:border-green-800 p-4 space-y-2">
-                    <div className="text-sm font-medium flex items-center gap-2 text-green-700 dark:text-green-300">
-                      <CheckCircle2 size={18} />
+                  <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/20 p-4 sm:p-5 space-y-3">
+                    <div className="text-xs font-semibold uppercase tracking-wider flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
+                      <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                        <CheckCircle2 size={16} />
+                      </div>
                       Aprovados
                     </div>
                     <div>
-                      <p className="text-3xl font-bold text-green-700 dark:text-green-300">
+                      <p className="text-3xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">
                         {inventariosAprovados}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">inventários finalizados</p>
+                      <p className="text-xs text-muted-foreground mt-1 font-medium">inventários finalizados</p>
                     </div>
                   </div>
                 </div>
@@ -359,35 +381,39 @@ export default function Dashboard() {
               acuracidadeMetrics &&
               (acuracidadeMetrics.vendedoresSemInventario60Dias > 0 ||
                 acuracidadeMetrics.vendedoresBaixaAcuracidade > 0) && (
-                <Card className="border-2">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-2 text-lg">
+                <Card className="border border-border/80 shadow-xs rounded-2xl">
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">
                       Alertas de Vendedores
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       {acuracidadeMetrics.vendedoresSemInventario60Dias > 0 && (
-                        <div className="flex items-center gap-3 p-4 border-2 rounded-lg bg-orange-50 dark:bg-orange-950/20 border-orange-200 dark:border-orange-800">
-                          <Clock className="text-orange-600 shrink-0" size={24} />
+                        <div className="flex items-center gap-3.5 p-4 border border-amber-500/30 rounded-xl bg-amber-500/5">
+                          <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                            <Clock size={20} />
+                          </div>
                           <div>
-                            <p className="font-semibold text-orange-700 dark:text-orange-300">
+                            <p className="font-semibold text-amber-700 dark:text-amber-300 text-sm sm:text-base">
                               {acuracidadeMetrics.vendedoresSemInventario60Dias} vendedor(es)
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               sem inventário há mais de 60 dias
                             </p>
                           </div>
                         </div>
                       )}
                       {acuracidadeMetrics.vendedoresBaixaAcuracidade > 0 && (
-                        <div className="flex items-center gap-3 p-4 border-2 rounded-lg bg-destructive/10 border-destructive">
-                          <Target className="text-destructive shrink-0" size={24} />
+                        <div className="flex items-center gap-3.5 p-4 border border-destructive/30 rounded-xl bg-destructive/5">
+                          <div className="w-10 h-10 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
+                            <Target size={20} />
+                          </div>
                           <div>
-                            <p className="font-semibold text-destructive">
+                            <p className="font-semibold text-destructive text-sm sm:text-base">
                               {acuracidadeMetrics.vendedoresBaixaAcuracidade} vendedor(es)
                             </p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="text-xs text-muted-foreground mt-0.5">
                               com acuracidade abaixo de 85%
                             </p>
                           </div>
@@ -399,75 +425,72 @@ export default function Dashboard() {
               )}
 
             {/* Ações Rápidas */}
-            <Card className="border-2">
-              <CardHeader className="pb-4">
-                <CardTitle className="text-lg">Ações Rápidas</CardTitle>
+            <Card className="border border-border/80 shadow-xs rounded-2xl">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">Ações Rápidas</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                   <Link to="/importar">
-                    <Button variant="outline" className="w-full justify-between h-auto py-4">
-                      <div className="flex items-center gap-3 text-left">
-                        <div className="p-2.5 bg-blue-100 dark:bg-blue-900 rounded-lg">
-                          <TrendingUp className="text-blue-600 dark:text-blue-400" size={20} />
+                    <div className="group border border-border/70 hover:border-primary/40 bg-card hover:bg-accent/40 rounded-xl p-4 transition-all duration-200 shadow-2xs hover:shadow-sm flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-blue-500/10 text-blue-600 dark:text-blue-400 rounded-xl">
+                          <TrendingUp size={20} />
                         </div>
                         <div>
-                          <p className="font-medium text-sm md:text-base">Importar Pedidos</p>
+                          <p className="font-semibold text-sm text-foreground">Importar Pedidos</p>
                           <p className="text-xs text-muted-foreground mt-0.5">Remessas e vendas</p>
                         </div>
                       </div>
-                      <ArrowRight size={16} />
-                    </Button>
+                      <ArrowRight size={16} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </Link>
 
                   <Link to="/conferencia">
-                    <Button variant="outline" className="w-full justify-between h-auto py-4">
-                      <div className="flex items-center gap-3 text-left">
-                        <div className="p-2.5 bg-orange-100 dark:bg-orange-900 rounded-lg">
-                          <ClipboardList
-                            className="text-orange-600 dark:text-orange-400"
-                            size={20}
-                          />
+                    <div className="group border border-border/70 hover:border-primary/40 bg-card hover:bg-accent/40 rounded-xl p-4 transition-all duration-200 shadow-2xs hover:shadow-sm flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-xl">
+                          <ClipboardList size={20} />
                         </div>
                         <div>
-                          <p className="font-medium text-sm md:text-base">Conferir Inventários</p>
+                          <p className="font-semibold text-sm text-foreground">Conferir Inventários</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {inventariosPendentes + inventariosRevisao} aguardando
                           </p>
                         </div>
                       </div>
-                      <ArrowRight size={16} />
-                    </Button>
+                      <ArrowRight size={16} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </Link>
 
                   <Link to="/controle-vendedores">
-                    <Button variant="outline" className="w-full justify-between h-auto py-4">
-                      <div className="flex items-center gap-3 text-left">
-                        <div className="p-2.5 bg-purple-100 dark:bg-purple-900 rounded-lg">
-                          <BarChart3 className="text-purple-600 dark:text-purple-400" size={20} />
+                    <div className="group border border-border/70 hover:border-primary/40 bg-card hover:bg-accent/40 rounded-xl p-4 transition-all duration-200 shadow-2xs hover:shadow-sm flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-purple-500/10 text-purple-600 dark:text-purple-400 rounded-xl">
+                          <BarChart3 size={20} />
                         </div>
                         <div>
-                          <p className="font-medium text-sm md:text-base">Painel Vendedores</p>
+                          <p className="font-semibold text-sm text-foreground">Painel Vendedores</p>
                           <p className="text-xs text-muted-foreground mt-0.5">Desempenho geral</p>
                         </div>
                       </div>
-                      <ArrowRight size={16} />
-                    </Button>
+                      <ArrowRight size={16} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </Link>
 
                   <Link to="/vendedores">
-                    <Button variant="outline" className="w-full justify-between h-auto py-4">
-                      <div className="flex items-center gap-3 text-left">
-                        <div className="p-2.5 bg-green-100 dark:bg-green-900 rounded-lg">
-                          <Users className="text-green-600 dark:text-green-400" size={20} />
+                    <div className="group border border-border/70 hover:border-primary/40 bg-card hover:bg-accent/40 rounded-xl p-4 transition-all duration-200 shadow-2xs hover:shadow-sm flex items-center justify-between cursor-pointer">
+                      <div className="flex items-center gap-3">
+                        <div className="p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 rounded-xl">
+                          <Users size={20} />
                         </div>
                         <div>
-                          <p className="font-medium text-sm md:text-base">Gerenciar Vendedores</p>
+                          <p className="font-semibold text-sm text-foreground">Gerenciar Vendedores</p>
                           <p className="text-xs text-muted-foreground mt-0.5">Cadastros</p>
                         </div>
                       </div>
-                      <ArrowRight size={16} />
-                    </Button>
+                      <ArrowRight size={16} className="text-muted-foreground group-hover:translate-x-1 transition-transform" />
+                    </div>
                   </Link>
                 </div>
               </CardContent>
@@ -475,42 +498,48 @@ export default function Dashboard() {
           </>
         ) : (
           /* Dashboard do Vendedor */
-          <Card className="border-2">
-            <CardHeader>
-              <CardTitle className="text-lg">Resumo do Vendedor</CardTitle>
+          <Card className="border border-border/80 shadow-xs rounded-2xl">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base sm:text-lg font-semibold tracking-tight">Resumo do Vendedor</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1 rounded-lg border-2 p-4 space-y-2">
-                  <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Package size={18} />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div className="rounded-xl border border-border/70 bg-card p-4 sm:p-5 space-y-3 shadow-2xs">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                      <Package size={16} />
+                    </div>
                     Total em Estoque
                   </div>
                   <div>
-                    <p className="text-3xl font-bold">{totalItens}</p>
-                    <p className="text-xs text-muted-foreground mt-1">unidades</p>
+                    <p className="text-3xl font-bold tracking-tight">{totalItens.toLocaleString('pt-BR')}</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">unidades físicas</p>
                   </div>
                 </div>
 
-                <div className="flex-1 rounded-lg border-2 p-4 space-y-2">
-                  <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <TrendingUp size={18} />
+                <div className="rounded-xl border border-border/70 bg-card p-4 sm:p-5 space-y-3 shadow-2xs">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-600 flex items-center justify-center">
+                      <TrendingUp size={16} />
+                    </div>
                     Modelos Diferentes
                   </div>
                   <div>
-                    <p className="text-3xl font-bold">{totalModelos}</p>
-                    <p className="text-xs text-muted-foreground mt-1">modelos</p>
+                    <p className="text-3xl font-bold tracking-tight">{totalModelos}</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">modelos ativos em maleta</p>
                   </div>
                 </div>
 
-                <div className="flex-1 rounded-lg border-2 p-4 space-y-2">
-                  <div className="text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <ClipboardList size={18} />
+                <div className="rounded-xl border border-border/70 bg-card p-4 sm:p-5 space-y-3 shadow-2xs">
+                  <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-600 flex items-center justify-center">
+                      <ClipboardList size={16} />
+                    </div>
                     Inventários Pendentes
                   </div>
                   <div>
-                    <p className="text-3xl font-bold">{inventariosPendentes}</p>
-                    <p className="text-xs text-muted-foreground mt-1">aguardando</p>
+                    <p className="text-3xl font-bold tracking-tight">{inventariosPendentes}</p>
+                    <p className="text-xs text-muted-foreground mt-1 font-medium">aguardando envio/conferência</p>
                   </div>
                 </div>
               </div>

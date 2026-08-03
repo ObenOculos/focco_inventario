@@ -260,29 +260,27 @@ export default function EstoqueTeorico() {
           </Card>
         )}
 
-        {/* Segmented KPI Cards */}
+        {/* Cards de métricas */}
         <div className="grid grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-          {/* Total Produtos */}
-          <Card className="col-span-2 lg:col-span-1">
+          <Card className="col-span-2 lg:col-span-1 border border-border/80 rounded-2xl shadow-xs">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2.5 bg-blue-500/10 rounded-lg shrink-0">
-                  <Package className="h-5 w-5 text-blue-600" />
+                <div className="p-2.5 bg-blue-500/10 rounded-xl shrink-0">
+                  <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-xs text-muted-foreground font-medium">Produtos</p>
-                  <p className="text-2xl font-bold">{totalItems}</p>
+                  <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">Produtos</p>
+                  <p className="text-2xl font-bold tracking-tight">{totalItems}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* ERP */}
-          <Card>
+          <Card className="border border-border/80 rounded-2xl shadow-xs">
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground font-medium mb-1">Estoque ERP</p>
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider text-[10px] mb-1">Estoque ERP</p>
               <p
-                className={`text-2xl font-bold ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}
+                className={`text-2xl font-bold tracking-tight ${totalFiltradoTeorico < 0 ? 'text-destructive' : ''}`}
               >
                 {totalFiltradoTeorico}
               </p>
@@ -290,21 +288,19 @@ export default function EstoqueTeorico() {
             </CardContent>
           </Card>
 
-          {/* Inventário */}
-          <Card>
+          <Card className="border border-border/80 rounded-2xl shadow-xs">
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground font-medium mb-1">Inventário</p>
-              <p className="text-2xl font-bold text-purple-600">{totalFiltradoReal}</p>
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider text-[10px] mb-1">Inventário</p>
+              <p className="text-2xl font-bold tracking-tight text-purple-600 dark:text-purple-400">{totalFiltradoReal}</p>
               <p className="text-xs text-muted-foreground mt-0.5">unidades</p>
             </CardContent>
           </Card>
 
-          {/* Divergência */}
-          <Card>
+          <Card className="border border-border/80 rounded-2xl shadow-xs">
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground font-medium mb-1">Divergência Total</p>
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider text-[10px] mb-1">Divergência Total</p>
               <p
-                className={`text-2xl font-bold ${totalFiltradoDivergencia === 0 ? 'text-green-600' : totalFiltradoDivergencia > 0 ? 'text-yellow-600' : 'text-destructive'}`}
+                className={`text-2xl font-bold tracking-tight ${totalFiltradoDivergencia === 0 ? 'text-emerald-600 dark:text-emerald-400' : totalFiltradoDivergencia > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}
               >
                 {totalFiltradoDivergencia > 0
                   ? `+${totalFiltradoDivergencia}`
@@ -315,22 +311,22 @@ export default function EstoqueTeorico() {
           </Card>
 
           {/* Análise de Divergências */}
-          <Card className="col-span-2 lg:col-span-1 border-2 border-destructive/30">
+          <Card className="col-span-2 lg:col-span-1 border border-destructive/30 bg-destructive/5 rounded-2xl shadow-xs">
             <CardContent className="pt-6">
-              <p className="text-xs text-muted-foreground font-medium mb-2.5">Análise</p>
-              <div className="space-y-2">
+              <p className="text-xs text-muted-foreground font-semibold uppercase tracking-wider text-[10px] mb-2.5">Análise</p>
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Divergentes:</span>
-                  <span className="text-lg font-bold text-destructive">{itensDivergentes}</span>
+                  <span className="text-xs text-muted-foreground font-medium">Divergentes:</span>
+                  <span className="text-base font-bold text-destructive">{itensDivergentes}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-yellow-700 flex items-center gap-1">
+                  <span className="text-xs text-amber-700 dark:text-amber-400 font-medium flex items-center gap-1">
                     <TrendingUp size={12} /> Sobras:
                   </span>
                   <span className="text-sm font-semibold">{itensSobra}</span>
                 </div>
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-red-700 flex items-center gap-1">
+                  <span className="text-xs text-destructive font-medium flex items-center gap-1">
                     <TrendingDown size={12} /> Faltas:
                   </span>
                   <span className="text-sm font-semibold">{itensFalta}</span>
@@ -341,30 +337,25 @@ export default function EstoqueTeorico() {
         </div>
 
         {/* Data Table */}
-        <Card>
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader>
             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <CardTitle className="flex items-center gap-2">
-                  <Package size={20} />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg font-semibold tracking-tight">
+                  <Package size={20} className="text-primary" />
                   Comparação Detalhada
                 </CardTitle>
-                <Badge variant="secondary" className="text-lg px-3 py-1">
-                  {totalItems}
+                <Badge variant="secondary" className="text-xs px-2.5 py-0.5 rounded-md font-semibold">
+                  {totalItems} itens
                 </Badge>
               </div>
               <Button
                 variant={hasActiveFilters ? 'default' : 'outline'}
                 onClick={() => setShowFilters(!showFilters)}
-                className="gap-2"
+                className="gap-2 rounded-xl shadow-2xs"
               >
                 <Filter size={16} />
                 Filtros
-                {hasActiveFilters && (
-                  <span className="ml-1 px-1.5 py-0.5 bg-primary-foreground text-primary text-xs rounded-full">
-                    •
-                  </span>
-                )}
               </Button>
             </div>
           </CardHeader>
@@ -372,7 +363,7 @@ export default function EstoqueTeorico() {
             {/* Search Bar */}
             <div className="relative">
               <Search
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
+                className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted-foreground"
                 size={18}
               />
               <Input
@@ -380,20 +371,20 @@ export default function EstoqueTeorico() {
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="Buscar por código ou nome do produto..."
-                className="pl-10"
+                className="h-11 pl-10 rounded-xl border-input shadow-2xs"
               />
             </div>
 
             {/* Filters Panel */}
             {showFilters && (
-              <div className="pt-3 border-t space-y-3">
+              <div className="pt-3 border-t border-border/80 space-y-3">
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
                   {isGerente && (
                     <Select value={selectedVendor} onValueChange={setSelectedVendor}>
-                      <SelectTrigger>
+                      <SelectTrigger className="h-11 rounded-xl border-input shadow-2xs">
                         <SelectValue placeholder="Vendedor" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="rounded-xl border border-border/80">
                         <SelectItem value="todos">Todos Vendedores</SelectItem>
                         {vendedores.map((vendor) => (
                           <SelectItem key={vendor.id} value={vendor.codigo_vendedor}>
@@ -404,10 +395,10 @@ export default function EstoqueTeorico() {
                     </Select>
                   )}
                   <Select value={teoricoFilter} onValueChange={setTeoricoFilter}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 rounded-xl border-input shadow-2xs">
                       <SelectValue placeholder="Estoque ERP" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl border border-border/80">
                       <SelectItem value="todos">ERP: Todos</SelectItem>
                       <SelectItem value="positivo">Positivo</SelectItem>
                       <SelectItem value="zero">Zero</SelectItem>
@@ -415,10 +406,10 @@ export default function EstoqueTeorico() {
                     </SelectContent>
                   </Select>
                   <Select value={realFilter} onValueChange={setRealFilter}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 rounded-xl border-input shadow-2xs">
                       <SelectValue placeholder="Inventário" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl border border-border/80">
                       <SelectItem value="todos">Inventário: Todos</SelectItem>
                       <SelectItem value="com_real">Com Inventário</SelectItem>
                       <SelectItem value="sem_real">Sem Inventário</SelectItem>
@@ -428,10 +419,10 @@ export default function EstoqueTeorico() {
                     </SelectContent>
                   </Select>
                   <Select value={divergenciaFilter} onValueChange={setDivergenciaFilter}>
-                    <SelectTrigger>
+                    <SelectTrigger className="h-11 rounded-xl border-input shadow-2xs">
                       <SelectValue placeholder="Divergência" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="rounded-xl border border-border/80">
                       <SelectItem value="todos">Diverg.: Todas</SelectItem>
                       <SelectItem value="ok">Sem Divergência</SelectItem>
                       <SelectItem value="divergente">Com Divergência</SelectItem>
@@ -441,7 +432,7 @@ export default function EstoqueTeorico() {
                   </Select>
                 </div>
                 {hasActiveFilters && (
-                  <Button variant="ghost" size="sm" onClick={clearAllFilters} className="gap-1">
+                  <Button variant="ghost" size="sm" onClick={clearAllFilters} className="gap-1 rounded-lg">
                     <X size={14} />
                     Limpar filtros
                   </Button>
@@ -464,27 +455,27 @@ export default function EstoqueTeorico() {
             ) : (
               <>
                 {/* Desktop: Table Layout */}
-                <div className="hidden md:block border-2 rounded-lg overflow-hidden">
+                <div className="hidden md:block border border-border/80 rounded-xl overflow-hidden shadow-2xs">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-[40%]">Produto</TableHead>
-                        <TableHead className="text-center">Estoque ERP</TableHead>
-                        <TableHead className="text-center">Inventário</TableHead>
-                        <TableHead className="text-center">Divergência</TableHead>
+                      <TableRow className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground font-semibold">
+                        <TableHead className="w-[40%] font-semibold">Produto</TableHead>
+                        <TableHead className="text-center font-semibold">Estoque ERP</TableHead>
+                        <TableHead className="text-center font-semibold">Inventário</TableHead>
+                        <TableHead className="text-center font-semibold">Divergência</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {paginatedData.map((item) => (
                         <TableRow
                           key={item.codigo_auxiliar}
-                          className={
+                          className={`hover:bg-muted/30 transition-colors ${
                             item.diferenca > 0
-                              ? 'bg-yellow-500/5'
+                              ? 'bg-amber-500/5'
                               : item.diferenca < 0
-                                ? 'bg-red-500/5'
+                                ? 'bg-destructive/5'
                                 : ''
-                          }
+                          }`}
                         >
                           <TableCell>
                             <div className="flex items-center gap-2">
@@ -492,10 +483,10 @@ export default function EstoqueTeorico() {
                                 <AlertTriangle className="text-destructive shrink-0" size={16} />
                               )}
                               <div>
-                                <span className="font-mono font-bold text-sm">
+                                <span className="font-mono font-bold text-sm text-foreground">
                                   {item.codigo_auxiliar}
                                 </span>
-                                <p className="text-xs text-muted-foreground line-clamp-1">
+                                <p className="text-xs text-muted-foreground font-medium line-clamp-1">
                                   {item.nome_produto}
                                 </p>
                               </div>
@@ -503,13 +494,13 @@ export default function EstoqueTeorico() {
                           </TableCell>
                           <TableCell className="text-center">
                             <p
-                              className={`font-bold text-lg ${item.estoque_teorico < 0 ? 'text-destructive' : 'text-foreground'}`}
+                              className={`font-bold text-base ${item.estoque_teorico < 0 ? 'text-destructive' : 'text-foreground'}`}
                             >
                               {item.estoque_teorico}
                             </p>
                           </TableCell>
                           <TableCell className="text-center">
-                            <p className="font-bold text-lg text-purple-600">{item.estoque_real}</p>
+                            <p className="font-bold text-base text-purple-600 dark:text-purple-400">{item.estoque_real}</p>
                             {item.data_atualizacao_real && (
                               <p className="text-xs text-muted-foreground">
                                 {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR')}
@@ -520,16 +511,16 @@ export default function EstoqueTeorico() {
                             {item.diferenca === 0 ? (
                               <Badge
                                 variant="outline"
-                                className="bg-green-500/10 text-green-600 border-green-500/30"
+                                className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 rounded-md"
                               >
                                 OK
                               </Badge>
                             ) : (
                               <Badge
                                 variant="outline"
-                                className={`font-bold ${
+                                className={`font-bold rounded-md ${
                                   item.diferenca > 0
-                                    ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30'
+                                    ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
                                     : 'bg-destructive/10 text-destructive border-destructive/30'
                                 }`}
                               >
@@ -548,13 +539,13 @@ export default function EstoqueTeorico() {
                   {paginatedData.map((item) => (
                     <Card
                       key={item.codigo_auxiliar}
-                      className={
+                      className={`border rounded-xl shadow-2xs ${
                         item.diferenca > 0
-                          ? 'bg-yellow-500/5 border-yellow-500/30'
+                          ? 'bg-amber-500/5 border-amber-500/30'
                           : item.diferenca < 0
-                            ? 'bg-red-500/5 border-red-500/30'
-                            : ''
-                      }
+                            ? 'bg-destructive/5 border-destructive/30'
+                            : 'border-border/80'
+                      }`}
                     >
                       <CardContent className="pt-4">
                         <div className="flex items-start justify-between gap-3 mb-3">
@@ -566,7 +557,7 @@ export default function EstoqueTeorico() {
                               />
                             )}
                             <div className="min-w-0">
-                              <span className="font-mono font-bold text-sm block">
+                              <span className="font-mono font-bold text-sm block text-foreground">
                                 {item.codigo_auxiliar}
                               </span>
                               <p className="text-xs text-muted-foreground line-clamp-2">
@@ -577,16 +568,16 @@ export default function EstoqueTeorico() {
                           {item.diferenca === 0 ? (
                             <Badge
                               variant="outline"
-                              className="bg-green-500/10 text-green-600 border-green-500/30 shrink-0"
+                              className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30 rounded-md shrink-0"
                             >
                               OK
                             </Badge>
                           ) : (
                             <Badge
                               variant="outline"
-                              className={`font-bold shrink-0 ${
+                              className={`font-bold shrink-0 rounded-md ${
                                 item.diferenca > 0
-                                  ? 'bg-yellow-500/10 text-yellow-600 border-yellow-500/30'
+                                  ? 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30'
                                   : 'bg-destructive/10 text-destructive border-destructive/30'
                               }`}
                             >
@@ -605,22 +596,14 @@ export default function EstoqueTeorico() {
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Inventário</p>
-                            <p className="font-bold text-base text-purple-600">
+                            <p className="font-bold text-base text-purple-600 dark:text-purple-400">
                               {item.estoque_real}
                             </p>
-                            {item.data_atualizacao_real && (
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                {new Date(item.data_atualizacao_real).toLocaleDateString('pt-BR', {
-                                  day: '2-digit',
-                                  month: '2-digit',
-                                })}
-                              </p>
-                            )}
                           </div>
                           <div>
                             <p className="text-xs text-muted-foreground mb-1">Diverg.</p>
                             <p
-                              className={`font-bold text-base ${item.diferenca === 0 ? 'text-green-600' : item.diferenca > 0 ? 'text-yellow-600' : 'text-destructive'}`}
+                              className={`font-bold text-base ${item.diferenca === 0 ? 'text-emerald-600 dark:text-emerald-400' : item.diferenca > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-destructive'}`}
                             >
                               {item.diferenca > 0 ? `+${item.diferenca}` : item.diferenca}
                             </p>

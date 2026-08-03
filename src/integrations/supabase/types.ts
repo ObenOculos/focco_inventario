@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       codigos_correcao: {
@@ -325,15 +350,6 @@ export type Database = {
     }
     Functions: {
       atualizar_valores_produtos: { Args: { p_updates: Json }; Returns: number }
-      salvar_inventario: {
-        Args: {
-          p_inventario_id: string
-          p_observacoes: string
-          p_items: Json
-          p_status?: Database['public']['Enums']['inventory_status']
-        }
-        Returns: string
-      }
       calcular_estoque_teorico_pos_inventario: {
         Args: { p_codigo_vendedor: string }
         Returns: {
@@ -486,6 +502,15 @@ export type Database = {
         Args: { user_id: string }
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      salvar_inventario: {
+        Args: {
+          p_inventario_id: string
+          p_items: Json
+          p_observacoes: string
+          p_status?: Database["public"]["Enums"]["inventory_status"]
+        }
+        Returns: string
+      }
     }
     Enums: {
       inventory_status: "pendente" | "aprovado" | "revisao" | "baixado"
@@ -615,6 +640,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {
       inventory_status: ["pendente", "aprovado", "revisao", "baixado"],

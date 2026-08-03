@@ -55,14 +55,14 @@ export function VendedorEstoqueCard({
   const [showPedidos, setShowPedidos] = useState(false);
 
   return (
-    <Card className="border-2">
+    <Card className="border border-border/80 rounded-2xl shadow-xs hover:shadow-md transition-shadow">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <div className="flex-1 min-w-0">
-            <CardTitle className="text-base font-semibold truncate">{nome_vendedor}</CardTitle>
-            <p className="text-xs text-muted-foreground mt-1">{codigo_vendedor}</p>
+            <CardTitle className="text-base font-semibold truncate tracking-tight">{nome_vendedor}</CardTitle>
+            <p className="text-xs text-muted-foreground mt-0.5 font-mono">{codigo_vendedor}</p>
           </div>
-          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="ml-2">
+          <Button variant="ghost" size="sm" onClick={() => setExpanded(!expanded)} className="ml-2 rounded-lg">
             {expanded ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
           </Button>
         </div>
@@ -70,26 +70,26 @@ export function VendedorEstoqueCard({
       <CardContent>
         {/* Resumo sempre visível */}
         <div className="grid grid-cols-3 gap-3 mb-3">
-          <div className="p-3 border rounded-lg bg-blue-50 dark:bg-blue-950/20 border-blue-200 dark:border-blue-800">
+          <div className="p-3 border border-blue-500/20 rounded-xl bg-blue-500/5">
             <div className="flex items-center gap-1 mb-1">
               <TrendingUp size={14} className="text-blue-600 dark:text-blue-400" />
-              <span className="text-xs text-blue-700 dark:text-blue-300 font-medium">Remessas</span>
+              <span className="text-xs text-blue-700 dark:text-blue-300 font-semibold uppercase tracking-wider text-[10px]">Remessas</span>
             </div>
-            <p className="text-xl font-bold text-blue-800 dark:text-blue-200">{totalRemessas}</p>
+            <p className="text-xl font-bold tracking-tight text-blue-700 dark:text-blue-300">{totalRemessas}</p>
           </div>
-          <div className="p-3 border rounded-lg bg-green-50 dark:bg-green-950/20 border-green-200 dark:border-green-800">
+          <div className="p-3 border border-emerald-500/20 rounded-xl bg-emerald-500/5">
             <div className="flex items-center gap-1 mb-1">
-              <TrendingDown size={14} className="text-green-600 dark:text-green-400" />
-              <span className="text-xs text-green-700 dark:text-green-300 font-medium">Vendas</span>
+              <TrendingDown size={14} className="text-emerald-600 dark:text-emerald-400" />
+              <span className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold uppercase tracking-wider text-[10px]">Vendas</span>
             </div>
-            <p className="text-xl font-bold text-green-800 dark:text-green-200">{totalVendas}</p>
+            <p className="text-xl font-bold tracking-tight text-emerald-700 dark:text-emerald-300">{totalVendas}</p>
           </div>
-          <div className="p-3 border rounded-lg">
+          <div className="p-3 border border-border/70 rounded-xl bg-card">
             <div className="flex items-center gap-1 mb-1">
               <Package size={14} className="text-muted-foreground" />
-              <span className="text-xs text-muted-foreground font-medium">Estoque</span>
+              <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider text-[10px]">Estoque</span>
             </div>
-            <p className={`text-xl font-bold ${estoqueAtual < 0 ? 'text-destructive' : ''}`}>
+            <p className={`text-xl font-bold tracking-tight ${estoqueAtual < 0 ? 'text-destructive' : ''}`}>
               {estoqueAtual}
             </p>
           </div>
@@ -97,50 +97,50 @@ export function VendedorEstoqueCard({
 
         {/* Detalhes expandidos */}
         {expanded && (
-          <div className="space-y-3 pt-3 border-t">
+          <div className="space-y-3 pt-3 border-t border-border/80">
             {/* Toggle Itens */}
             <div>
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setShowItens(!showItens)}
-                className="w-full justify-between"
+                className="w-full justify-between rounded-xl shadow-2xs"
               >
                 <span className="flex items-center gap-2">
                   <Package size={14} />
                   {!isMobile && 'Itens em Estoque'}
                 </span>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{itens.length}</Badge>
+                  <Badge variant="outline" className="rounded-md">{itens.length}</Badge>
                   {showItens ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </div>
               </Button>
 
               {showItens && itens.length > 0 && (
-                <ScrollArea className="h-[200px] mt-2 border rounded-lg">
+                <ScrollArea className="h-[200px] mt-2 border border-border/80 rounded-xl">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Código</TableHead>
-                        <TableHead className="text-xs text-right">Remessas</TableHead>
-                        <TableHead className="text-xs text-right">Vendas</TableHead>
-                        <TableHead className="text-xs text-right">Estoque</TableHead>
+                      <TableRow className="bg-muted/40">
+                        <TableHead className="text-xs font-semibold">Código</TableHead>
+                        <TableHead className="text-xs text-right font-semibold">Remessas</TableHead>
+                        <TableHead className="text-xs text-right font-semibold">Vendas</TableHead>
+                        <TableHead className="text-xs text-right font-semibold">Estoque</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {itens.map((item) => (
-                        <TableRow key={item.codigo_auxiliar}>
-                          <TableCell className="text-xs font-medium">
+                        <TableRow key={item.codigo_auxiliar} className="hover:bg-muted/30">
+                          <TableCell className="text-xs font-mono font-medium">
                             {item.codigo_auxiliar}
                           </TableCell>
-                          <TableCell className="text-xs text-right text-blue-600 dark:text-blue-400">
+                          <TableCell className="text-xs text-right font-medium text-blue-600 dark:text-blue-400">
                             {item.quantidade_remessa}
                           </TableCell>
-                          <TableCell className="text-xs text-right text-green-600 dark:text-green-400">
+                          <TableCell className="text-xs text-right font-medium text-emerald-600 dark:text-emerald-400">
                             {item.quantidade_venda}
                           </TableCell>
                           <TableCell
-                            className={`text-xs text-right font-semibold ${
+                            className={`text-xs text-right font-bold ${
                               item.estoque_teorico < 0 ? 'text-destructive' : ''
                             }`}
                           >
@@ -160,33 +160,33 @@ export function VendedorEstoqueCard({
                 variant="outline"
                 size="sm"
                 onClick={() => setShowPedidos(!showPedidos)}
-                className="w-full justify-between"
+                className="w-full justify-between rounded-xl shadow-2xs"
               >
                 <span className="flex items-center gap-2">
                   <FileText size={14} />
                   {!isMobile && 'Pedidos Recentes'}
                 </span>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline">{pedidosRecentes.length}</Badge>
+                  <Badge variant="outline" className="rounded-md">{pedidosRecentes.length}</Badge>
                   {showPedidos ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                 </div>
               </Button>
 
               {showPedidos && pedidosRecentes.length > 0 && (
-                <ScrollArea className="h-[200px] mt-2 border rounded-lg">
+                <ScrollArea className="h-[200px] mt-2 border border-border/80 rounded-xl">
                   <Table>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead className="text-xs">Pedido</TableHead>
-                        <TableHead className="text-xs">Data</TableHead>
-                        <TableHead className="text-xs">Tipo</TableHead>
-                        <TableHead className="text-xs text-right">Valor</TableHead>
+                      <TableRow className="bg-muted/40">
+                        <TableHead className="text-xs font-semibold">Pedido</TableHead>
+                        <TableHead className="text-xs font-semibold">Data</TableHead>
+                        <TableHead className="text-xs font-semibold">Tipo</TableHead>
+                        <TableHead className="text-xs text-right font-semibold">Valor</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
                       {pedidosRecentes.map((pedido) => (
-                        <TableRow key={pedido.numero_pedido}>
-                          <TableCell className="text-xs font-medium">
+                        <TableRow key={pedido.numero_pedido} className="hover:bg-muted/30">
+                          <TableCell className="text-xs font-mono font-medium">
                             {pedido.numero_pedido}
                           </TableCell>
                           <TableCell className="text-xs">
@@ -197,14 +197,14 @@ export function VendedorEstoqueCard({
                               variant="secondary"
                               className={
                                 pedido.codigo_tipo === 7
-                                  ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-200'
-                                  : 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-200'
+                                  ? 'bg-blue-500/10 text-blue-700 dark:text-blue-300 rounded-md'
+                                  : 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 rounded-md'
                               }
                             >
                               {pedido.codigo_tipo === 7 ? 'Remessa' : 'Venda'}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-right">
+                          <TableCell className="text-xs text-right font-medium">
                             R${' '}
                             {pedido.valor_total.toLocaleString('pt-BR', {
                               minimumFractionDigits: 2,

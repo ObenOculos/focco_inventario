@@ -24,7 +24,7 @@ export function EstoqueTeoricSkeleton() {
         <Skeleton className="h-5 w-80" />
       </div>
       <StatsCardsSkeleton count={4} />
-      <Card className="border-2">
+      <Card className="border border-border/80 rounded-2xl shadow-xs">
         <CardHeader>
           <div className="flex items-center justify-between">
             <Skeleton className="h-6 w-48" />
@@ -47,7 +47,7 @@ export function HistoricoSkeleton() {
         <Skeleton className="h-5 w-72" />
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card className="border-2">
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader className="pb-2">
             <Skeleton className="h-4 w-32" />
           </CardHeader>
@@ -55,7 +55,7 @@ export function HistoricoSkeleton() {
             <Skeleton className="h-9 w-16" />
           </CardContent>
         </Card>
-        <Card className="border-2">
+        <Card className="border border-border/80 rounded-2xl shadow-xs">
           <CardHeader className="pb-2">
             <Skeleton className="h-4 w-32" />
           </CardHeader>
@@ -64,7 +64,7 @@ export function HistoricoSkeleton() {
           </CardContent>
         </Card>
       </div>
-      <Card className="border-2">
+      <Card className="border border-border/80 rounded-2xl shadow-xs">
         <CardHeader>
           <Skeleton className="h-6 w-48" />
         </CardHeader>
