@@ -42,15 +42,3 @@ export function TableSkeleton({ columns = 4, rows = 5 }: TableSkeletonProps) {
   );
 }
 
-export function TableWithFiltersSkeleton({ columns = 4, rows = 5 }: TableSkeletonProps) {
-  return (
-    <div className="space-y-4">
-      <div className="flex flex-col md:flex-row gap-4">
-        <Skeleton className="h-10 w-full md:w-64" />
-        <Skeleton className="h-10 w-full md:w-40" />
-        <Skeleton className="h-10 w-full md:w-40" />
-      </div>
-      <TableSkeleton columns={columns} rows={rows} />
-    </div>
-  );
-}

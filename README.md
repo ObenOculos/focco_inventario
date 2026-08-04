@@ -1,73 +1,132 @@
-# Welcome to your Lovable project
+# Inventário de Vendedores
 
-## Project info
+Aplicação para registrar inventários físicos feitos por vendedores externos, revisá-los e
+aprová-los, comparar contagens entre si e exportar os dados no formato XML do ERP Ciclone.
 
-**URL**: https://lovable.dev/projects/f27573b3-aece-44ec-836e-aa08239f1518
+## O que o sistema faz
 
-## How can I edit this code?
+São **duas funcionalidades independentes**, deliberadamente desacopladas.
 
-There are several ways of editing your application.
+### 1. Fluxo de inventário
 
-**Use Lovable**
+```
+vendedor conta  →  envia para aprovação  →  gerente revisa  →  aprova  →  inventário salvo
+```
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/f27573b3-aece-44ec-836e-aa08239f1518) and start prompting.
+Não há cálculo de divergência nesse caminho. O gerente revisa a lista contada — podendo
+corrigir quantidades e remover itens — e aprova. Um inventário aprovado pode ter a aprovação
+revertida, voltando para `pendente`.
 
-Changes made via Lovable will be committed automatically to this repo.
+Inventários fragmentados (o vendedor salva uma mesma sessão de contagem em vários
+inventários) podem ser unidos: na Conferência, seleção múltipla → **Juntar inventários**. As
+quantidades somam no inventário de destino e os demais são excluídos.
 
-**Use your preferred IDE**
+### 2. Comparação de inventários
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+Tela separada, de consulta. O usuário escolhe dois inventários — A e B — e vê a diferença
+produto a produto, com `diferença = B − A`. Não interfere em aprovação nem grava nada, então
+pode ser usada livremente para análise.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Exportação XML
 
-Follow these steps:
+Gera o XML no formato Ciclone (`pedidovenda`) a partir de um inventário: as quantidades vêm
+da contagem e os valores unitários da tabela de produtos, escolhendo entre tabela de venda e
+de remessa. Gerar o XML **não altera nada** no sistema — pode ser repetido quantas vezes for
+necessário. Há também uma aba que gera o mesmo XML a partir de uma planilha Excel, como saída
+manual.
+
+## Papéis
+
+| Papel      | Acesso                                                                                                |
+| ---------- | ----------------------------------------------------------------------------------------------------- |
+| `vendedor` | Fazer inventário, ver o próprio histórico                                                              |
+| `gerente`  | Dashboard, Conferência, Comparar Inventários, Exportar XML, Painel e Cadastro de Vendedores, Produtos   |
+
+O papel é lido de `profiles.role`. **Atenção:** todo código que derive papel do perfil precisa
+tratar `profile === null` como indefinido, nunca como vendedor — há um guard em
+`ProtectedRoute` justamente para bloquear o estado "logado sem perfil", que antes rebaixava a
+interface do gerente silenciosamente.
+
+## Stack
+
+Vite · React · TypeScript · Tailwind · shadcn/ui · TanStack Query · Supabase (Postgres, Auth,
+Edge Functions)
+
+## Rodando localmente
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+npm install
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Variáveis de ambiente em `.env`:
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```
+VITE_SUPABASE_URL=
+VITE_SUPABASE_PROJECT_ID=
+VITE_SUPABASE_PUBLISHABLE_KEY=
+```
 
-**Use GitHub Codespaces**
+## Scripts
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+| Comando             | O que faz                                                           |
+| ------------------- | ------------------------------------------------------------------- |
+| `npm run dev`       | Servidor de desenvolvimento                                         |
+| `npm run build`     | Build de produção                                                   |
+| `npm run typecheck` | Verificação de tipos                                                |
+| `npm run lint`      | ESLint                                                              |
+| `npm run format`    | Prettier                                                            |
+| `npm run db:*`      | Banco e migrations — ver [`supabase/README.md`](supabase/README.md)  |
 
-## What technologies are used for this project?
+> **Use `npm run typecheck`, não `npx tsc --noEmit`.** O `tsconfig.json` da raiz tem
+> `"files": []` e apenas project references, então `tsc --noEmit` sem `-p` **não verifica
+> arquivo nenhum** e passa em silêncio mesmo com erros reais. O script aponta para
+> `tsconfig.app.json`, que é o que de fato checa o código.
 
-This project is built with:
+## Banco de dados
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+Cinco tabelas: `profiles`, `produtos`, `codigos_correcao`, `inventarios`, `itens_inventario`.
 
-## How can I deploy this project?
+| Função                                           | Papel                                                            |
+| ------------------------------------------------ | ---------------------------------------------------------------- |
+| `salvar_inventario(id, obs, items, status)`       | Salva/atualiza um inventário e seus itens, atômico e idempotente |
+| `comparar_dois_inventarios(a, b, limit, offset)`  | Comparativo entre dois inventários. Só gerente                   |
+| `juntar_inventarios(destino, origens[])`          | Soma origens no destino e **apaga** as origens. Só gerente       |
+| `atualizar_valores_produtos(updates)`             | Atualização em lote de preços. Só gerente                        |
+| `get_user_role` / `get_user_codigo_vendedor`      | Usadas pelas policies RLS — **não remover**                      |
 
-Simply open [Lovable](https://lovable.dev/projects/f27573b3-aece-44ec-836e-aa08239f1518) and click on Share -> Publish.
+Edge functions: `aprovar-e-ajustar-inventario`, `reverter-aprovacao-inventario`,
+`criar-vendedor`.
 
-## Can I connect a custom domain to my Lovable project?
+Migrations são controladas pela CLI. Convenções, portas locais e comandos em
+[`supabase/README.md`](supabase/README.md).
 
-Yes, you can!
+## Restrições que moldam o código
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+**Limite de 1000 linhas em RPCs.** O PostgREST corta o retorno de funções RPC em 1000 linhas,
+independente de `.limit()` no cliente. Por isso as funções que podem devolver muitas linhas
+recebem `p_limit` / `p_offset` e o frontend acumula em lotes — ver
+`useCompararInventariosQuery`. Vale o mesmo para `.select()` em tabelas grandes: os fetches de
+`itens_inventario` são paginados em blocos de 1000.
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+**Códigos de produto normalizados.** `codigo_auxiliar` é sempre comparado e gravado com
+`upper(trim(...))`, e quantidades de códigos repetidos são somadas — tanto em
+`salvar_inventario` quanto em `juntar_inventarios`. A tabela tem unique em
+`(inventario_id, codigo_auxiliar)`.
+
+**Grants não estão nas migrations.** As tabelas de `public` em produção têm
+`GRANT SELECT/INSERT/UPDATE/DELETE` para `anon`, `authenticated` e `service_role` (padrão do
+Supabase), mas nenhuma migration concede isso. Um banco recriado do zero nega toda leitura
+antes mesmo de a RLS ser avaliada. Se for recriar em staging, conceda os grants manualmente
+ou escreva a migration que falta.
+
+**`db:diff` não é garantia completa.** Já se comprovou que ele reporta "No schema changes
+found" com funções presentes no remoto e ausentes das migrations, e não acusa diferença de
+grants. Trate silêncio como indício, não como prova.
+
+## Histórico
+
+A refatoração que reduziu o app a esse escopo — removendo o subsistema de estoque teórico
+derivado de pedidos do ERP, importação de pedidos e notas de retorno — está documentada em
+[`PLANO_SIMPLIFICACAO.md`](PLANO_SIMPLIFICACAO.md), com as medições que sustentaram cada
+decisão.

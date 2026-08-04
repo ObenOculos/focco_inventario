@@ -33,7 +33,7 @@ Precisam do Docker Desktop rodando:
 
 | Comando              | O que faz                                                              |
 | -------------------- | ---------------------------------------------------------------------- |
-| `npm run db:diff`    | **Verificação de drift.** Silêncio = remoto bate com as migrations.     |
+| `npm run db:diff`    | Verificação de drift — **parcial**, ver ressalva abaixo.                 |
 | `npm run db:pull`    | Transforma o drift encontrado numa migration nova.                      |
 | `npm run db:check`   | Rotina completa: status + types + diff.                                 |
 | `npm run db:start`   | Sobe o Supabase local completo (Postgres, Auth, Storage, Studio).       |
@@ -50,6 +50,36 @@ do zero, e compara o schema resultante com o do projeto remoto. O que sobra dess
 de migrations aplicadas, e o segundo só vê estrutura (tabelas, colunas, tipos, enums,
 assinaturas de funções). Políticas RLS, triggers, índices, defaults e o corpo das funções
 só aparecem no `db:diff`.
+
+### Ressalva: silêncio do `db:diff` não é prova
+
+Comprovado em 2026-08-04: o `db:diff` reportou **"No schema changes found"** enquanto três
+funções existiam no remoto sem nenhuma migration que as criasse
+(`comparar_estoque_teorico_vs_real_paginado`, `get_entradas_pedidos_paginado`,
+`get_saidas_pedidos_paginado`). Elas só apareceram pelos NOTICEs de "does not exist, skipping"
+ao aplicar `DROP FUNCTION IF EXISTS` no banco local.
+
+Ele também **não acusa diferença de GRANTs de tabela** de forma consistente. Produção tem
+`GRANT SELECT/INSERT/UPDATE/DELETE` para `anon`, `authenticated` e `service_role` em todas as
+tabelas de `public` — padrão do Supabase — e nenhuma migration concede isso.
+
+Consequência prática: **recriar o banco do zero (staging, ou o próprio local) não produz um
+ambiente funcional.** `authenticated` fica só com `TRUNCATE/REFERENCES/TRIGGER` e toda leitura
+é negada antes de a RLS ser avaliada. Para testar RLS localmente:
+
+```sql
+GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+```
+
+Uma migration com os grants padrão resolveria de vez, mas envolve conceder a `anon` — decisão
+a ser tomada de forma consciente, ainda que seja o padrão do Supabase e a RLS seja quem
+protege os dados.
+
+Para conferir o que existe no remoto sem depender do diff, compare listas explícitas:
+
+```sh
+npx supabase db dump --linked -f schema_remoto.sql   # schema completo, inclui grants
+```
 
 ## Rotinas
 

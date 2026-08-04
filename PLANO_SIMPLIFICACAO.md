@@ -235,7 +235,50 @@ chama `calcular_estoque_vendedor`, `get_entradas_pedidos`, `get_saidas_pedidos`)
 **A decidir nesta etapa:** a métrica de acuracidade (`useDashboardMetricsQuery`) é derivada
 de comparação automática. Com a comparação fora do fluxo, provavelmente sai também.
 
-### ⬜ Etapa 5 — Drops no banco
+### ✅ Etapa 5 — Drops no banco
+
+`20260804170000_remove_subsistema_estoque_por_pedidos.sql`, aplicada em produção.
+
+Removidos: 13 funções do subsistema, as 3 tabelas (`itens_pedido` → `pedidos` →
+`estoque_real`, nessa ordem por causa do FK), o trigger `trigger_estoque_real_updated_at`
+(sai com a tabela) e `handle_updated_at`, que só esse trigger usava. Nenhum `CASCADE`, de
+propósito: dependência não prevista falharia a migration em vez de derrubar algo em silêncio.
+
+Produção agora tem **5 tabelas** (`codigos_correcao`, `inventarios`, `itens_inventario`,
+`produtos`, `profiles`) e **8 funções** (`atualizar_valores_produtos`,
+`comparar_dois_inventarios`, `juntar_inventarios`, `salvar_inventario`, `get_user_role`,
+`get_user_codigo_vendedor`, `handle_new_user`, `update_updated_at`).
+
+Validado antes do push, em banco local com os dados de produção: as 5 tabelas certas, as 8
+funções certas, `comparar_dois_inventarios` devolvendo os mesmos números de antes
+(457 linhas, 449 → 456 unidades), e **RLS intacta** — vendedor 9 vê só seus 3 inventários e
+1.990 itens, gerente vê os 21 de 6 vendedores.
+
+Também retirado `[functions.criar-nota-retorno]` do `config.toml`, que impedia
+`supabase start` de subir depois da exclusão da função.
+
+### ⚠️ Dois problemas de medição descobertos aqui
+
+**1. `db:diff` não detectava drift de funções.** Três funções existiam em produção sem
+nenhuma migration que as criasse — `comparar_estoque_teorico_vs_real_paginado`,
+`get_entradas_pedidos_paginado`, `get_saidas_pedidos_paginado` — e o `db:diff` de 2026-08-03
+reportou "No schema changes found". Foram descobertas pelos NOTICEs de "does not exist,
+skipping" ao aplicar os DROPs no local. O `DROP FUNCTION IF EXISTS` cobriu os dois ambientes.
+**A conclusão anterior de "zero drift" estava errada.**
+
+**2. As migrations não reproduzem os GRANTs de tabela.** Produção tem
+`GRANT SELECT/INSERT/UPDATE/DELETE` para `anon`, `authenticated` e `service_role` em todas as
+tabelas de `public` (padrão do Supabase). Nenhuma migration concede isso. Num banco recriado
+do zero, `authenticated` recebe apenas `TRUNCATE/REFERENCES/TRIGGER` e **toda leitura é
+negada antes mesmo da RLS** — foi o que aconteceu no local, onde tive de conceder à mão para
+poder testar as policies.
+
+Consequência: **recriar o banco do zero em staging NÃO funciona hoje** sem um passo manual de
+grants. Isso é anterior a esta refatoração e continua aberto. A correção é uma migration com
+os grants padrão; vale decidir explicitamente, porque envolve conceder a `anon` (é o padrão do
+Supabase e a RLS é que protege, mas é uma escolha a ser consciente).
+
+### ⬜ Etapa 5 — anotações originais
 
 Ordem: funções → trigger `trigger_estoque_real_updated_at` → tabelas (`itens_pedido` antes
 de `pedidos`, por causa do FK `ON DELETE CASCADE`) → `estoque_real`.
@@ -251,6 +294,54 @@ associação.
 
 `npm run db:types` no fim. As migrations antigas continuam criando as tabelas, então o
 histórico não precisa ser editado e o replay do zero segue funcionando.
+
+### ✅ Varredura de código morto e documentação
+
+**Código de aplicação removido:** `lib/supabaseUtils.ts` (construtor genérico de query, sem
+importadores), `EstoqueTeoricSkeleton`, `HistoricoSkeleton`, `MovimentacaoCardsSkeleton`,
+`TableWithFiltersSkeleton`, e os tipos `MetricConfig`, `MetricDataPoint`, `ItemInventario`,
+`UserRole`. O `DashboardSkeleton` foi alinhado ao Dashboard novo — ainda desenhava cards de
+movimentação e 6 tiles que não existem mais.
+
+**Biblioteca de UI: 48 → 20 componentes.** A primeira contagem indicou 26 mortos; a análise
+transitiva (considerando apenas importadores *vivos*) encontrou **28** — `separator` e `sheet`
+pareciam vivos só porque `sidebar`, também morto, os importava. Mais `use-toast.ts`, órfão com
+`toast`/`toaster`. Sobreviveram: alert, alert-dialog, badge, button, card, checkbox, dialog,
+dropdown-menu, input, label, progress, select, skeleton, sonner, table, tabs, textarea, toggle,
+toggle-group, tooltip. (`toggle` só sobrevive porque `toggle-group` o importa.)
+
+**Dependências: 56 → 31.** Removidas 25: 16 pacotes `@radix-ui/*`, `recharts`,
+`react-hook-form`, `@hookform/resolvers`, `cmdk`, `vaul`, `next-themes`, `react-day-picker`,
+`embla-carousel-react`, `input-otp`, `react-resizable-panels`. `caniuse-lite` foi mantida — é
+pacote de dados do browserslist, usado pelo tooling e não por `import`.
+
+O `vite.config.ts` listava `@radix-ui/react-toast` num `manualChunks`, o que fez o build
+falhar com *"Could not resolve entry module"* depois do uninstall. Removido da lista.
+
+**Sobre o ganho:** o bundle **não muda** — antes e depois, 2.787 módulos transformados. Os
+componentes mortos nunca estavam no grafo alcançável, então o tree-shaking já os excluía. O
+ganho real é em superfície de dependências: menos pacotes para instalar, auditar e atualizar.
+
+**Documentação:** `README.md` reescrito (era o boilerplate do Lovable, não descrevia o app).
+`README_RPC_FIX.md` removido — documentava as 5 funções `_paginado` dropadas e a página
+`EstoqueTeorico` deletada; a parte ainda válida (limite de 1000 linhas do PostgREST) foi para
+o README. `supabase/README.md` corrigido: a afirmação "silêncio do `db:diff` = sem drift" foi
+substituída pela ressalva comprovada.
+
+**Toolchain consolidada em npm + Supabase + Vercel.** Removidos `bun.lock`, `bun.lockb` e
+`deno.lock`, que estavam defasados e ainda listavam as 25 dependências excluídas — quem
+rodasse `bun install` ressuscitaria todas. Sobra só `package-lock.json`.
+
+`.vercel/project.json` foi **desrastreado** (`git rm --cached`): o `.gitignore` já declarava
+`.vercel`, mas a regra não desrastreia o que já foi commitado. O arquivo continua no disco,
+então a CLI da Vercel segue funcionando. Não havia token nele, apenas `projectId`/`orgId`.
+
+Resquícios do Lovable eliminados: o `twitter:image` do `index.html` apontava para
+`lovable.dev/opengraph-image-p98pqg.png` (removido; o `twitter:card` virou `summary`), e o
+`name` do `package.json` saiu de `vite_react_shadcn_ts` para `inventario-vendedores`.
+
+O `vercel.json` já estava correto — tem o rewrite `/(.*) → /`, indispensável para o
+react-router não dar 404 em recarga de rota profunda.
 
 ### ⬜ Etapa 6 — Verificação
 
