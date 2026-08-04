@@ -27,16 +27,20 @@ export default function Historico() {
   );
 
   const getStatusBadge = (status: InventoryStatus) => {
-    const styles = {
+    // Tipado contra o enum de propósito: se um status novo entrar em
+    // inventory_status, o build quebra aqui em vez de renderizar `undefined`.
+    const styles: Record<InventoryStatus, string> = {
       pendente: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
       aprovado: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
       revisao: 'bg-destructive/10 text-destructive border-destructive/30',
+      baixado: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30',
     };
 
-    const labels = {
+    const labels: Record<InventoryStatus, string> = {
       pendente: 'Pendente',
       aprovado: 'Aprovado',
       revisao: 'Não aprovado',
+      baixado: 'Baixado',
     };
 
     return (

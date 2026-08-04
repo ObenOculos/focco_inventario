@@ -43,12 +43,13 @@ WITH CHECK (codigo_vendedor = public.get_user_codigo_vendedor(auth.uid()));
 -- 3) FIX: Realtime — restrict channel subscriptions to authenticated users only
 -- (default-deny + minimal allow; tables not needing realtime stay blocked)
 --
--- realtime.messages pertence a supabase_admin. No banco real temos privilégio
--- e o bloco roda inteiro; no shadow database do `supabase db diff` as migrations
--- são aplicadas como `postgres`, que não é dono da tabela — sem esta guarda a
--- migration aborta com "must be owner of table messages" e o diff nem chega a
--- rodar. O IF checa a posse em vez de engolir qualquer erro de privilégio, para
--- que uma falha de permissão de verdade continue aparecendo.
+-- realtime.messages pertence a supabase_realtime_admin. No banco real o papel
+-- `postgres` é membro desse dono, então o bloco roda inteiro; no shadow database
+-- do `supabase db diff` as migrations também são aplicadas como `postgres`, mas
+-- lá a tabela não existe com esse dono — sem esta guarda a migration aborta com
+-- "must be owner of table messages" e o diff nem chega a rodar. O IF checa a
+-- posse (via pg_has_role, que cobre a herança) em vez de engolir qualquer erro
+-- de privilégio, para que uma falha de permissão de verdade continue aparecendo.
 DO $$
 BEGIN
   IF EXISTS (

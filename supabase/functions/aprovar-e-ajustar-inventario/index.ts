@@ -6,31 +6,21 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface DivergenciaItem {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  estoque_teorico: number;
-  quantidade_fisica: number;
-  divergencia: number;
-  foi_contado: boolean;
-}
-
-interface EstoqueItem {
-  codigo_auxiliar: string;
-  nome_produto: string;
-  estoque_teorico: number;
-}
-
 /**
- * Edge Function: Aprovar e Ajustar Inventário
+ * Edge Function: Aprovar Inventário
  *
  * Fluxo:
- * 1. Valida permissões (apenas gerentes)
- * 2. Verifica status do inventário (pendente ou revisao)
- * 3. Calcula divergências usando comparar_estoque_inventario
- * 4. Cria ajustes automáticos de estoque para divergências
- * 5. Atualiza status para 'aprovado'
- * 6. Atualiza tabela estoque_real com contagem física
+ * 1. Valida autenticação
+ * 2. Valida permissão (apenas gerentes)
+ * 3. Verifica que o inventário está pendente ou em revisão
+ * 4. Atualiza status para 'aprovado'
+ *
+ * A aprovação não calcula divergência nem grava estoque derivado. A comparação entre
+ * inventários é funcionalidade independente (comparar_dois_inventarios), acionada quando o
+ * usuário quiser, e não participa deste fluxo.
+ *
+ * O nome da função mantém o sufixo "-e-ajustar" por compatibilidade com a URL já
+ * implantada e com o cliente que a invoca; não há mais ajuste nenhum aqui.
  */
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -45,13 +35,11 @@ serve(async (req: Request) => {
       throw new Error('ID do inventário é obrigatório.');
     }
 
-    // Cliente admin com service role
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Valida autenticação
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
       return new Response(JSON.stringify({ error: 'Token não fornecido.' }), {
@@ -73,7 +61,6 @@ serve(async (req: Request) => {
       });
     }
 
-    // Valida permissão de gerente
     const { data: profile, error: profileError } = await supabaseAdmin
       .from('profiles')
       .select('role')
@@ -87,10 +74,9 @@ serve(async (req: Request) => {
       });
     }
 
-    // Busca inventário
     const { data: inventario, error: inventarioError } = await supabaseAdmin
       .from('inventarios')
-      .select('status, codigo_vendedor, user_id, data_inventario')
+      .select('status, codigo_vendedor')
       .eq('id', inventario_id)
       .single();
 
@@ -102,111 +88,41 @@ serve(async (req: Request) => {
       throw new Error(`Inventário já processado (status: ${inventario.status}).`);
     }
 
-    console.log(
-      `[INFO] Processando inventário ${inventario_id} do vendedor ${inventario.codigo_vendedor}`
-    );
+    // Um inventário sem itens contados não deveria ser aprovado: a contagem é o conteúdo
+    // do inventário. Antes esta checagem existia de forma indireta, ao falhar na escrita do
+    // estoque derivado; agora é explícita.
+    const { count: totalItens, error: countError } = await supabaseAdmin
+      .from('itens_inventario')
+      .select('id', { count: 'exact', head: true })
+      .eq('inventario_id', inventario_id);
 
-    // Calcula comparativo usando a função SQL paginada em lotes
-    const comparativo: DivergenciaItem[] = [];
-    let offsetComp = 0;
-    const compBatchSize = 500;
-    let compHasMore = true;
-
-    while (compHasMore) {
-      const { data: compData, error: compError } = await supabaseAdmin.rpc(
-        'comparar_estoque_inventario_paginado',
-        {
-          p_inventario_id: inventario_id,
-          p_limit: compBatchSize,
-          p_offset: offsetComp,
-        }
-      );
-
-      if (compError) {
-        console.error(`[ERROR] Erro ao comparar inventário (offset ${offsetComp}):`, compError);
-        throw new Error(`Erro ao calcular divergências: ${compError.message}`);
-      }
-
-      if (compData && compData.length > 0) {
-        comparativo.push(...(compData as DivergenciaItem[]));
-        offsetComp += compBatchSize;
-        compHasMore = compData.length === compBatchSize;
-      } else {
-        compHasMore = false;
-      }
+    if (countError) {
+      console.error('[ERROR] Erro ao contar itens do inventário:', countError);
+      throw new Error('Falha ao verificar os itens do inventário.');
     }
 
-    console.log(`[INFO] Itens comparados (total): ${comparativo.length}`);
+    if (!totalItens || totalItens === 0) {
+      throw new Error('Inventário sem itens contados: nada a aprovar.');
+    }
 
-    const divergencias = (comparativo || []).filter(
-      (item: DivergenciaItem) => item.divergencia !== 0
-    );
-    console.log(`[INFO] Divergências encontradas: ${divergencias.length}`);
-
-    // Atualiza status do inventário
     const { error: updateError } = await supabaseAdmin
       .from('inventarios')
       .update({ status: 'aprovado', updated_at: new Date().toISOString() })
       .eq('id', inventario_id);
 
     if (updateError) {
-      console.error('[ERROR] Erro ao atualizar inventário:', updateError);
+      console.error('[ERROR] Erro ao aprovar inventário:', updateError);
       throw new Error('Falha ao aprovar inventário.');
     }
 
-    // Salva apenas itens efetivamente contados pelo vendedor.
-    // A contagem física é a verdade absoluta: itens não contados não vão pro estoque_real.
-    const estoqueRealData = (comparativo || [])
-      .filter((item: DivergenciaItem) => item.foi_contado)
-      .map((item: DivergenciaItem) => ({
-        codigo_vendedor: inventario.codigo_vendedor,
-        codigo_auxiliar: item.codigo_auxiliar,
-        quantidade_real: item.quantidade_fisica,
-        inventario_id: inventario_id,
-        data_atualizacao: inventario.data_inventario,
-      }));
-
-    if (estoqueRealData.length === 0) {
-      throw new Error('Nenhum item para registrar no estoque real.');
-    }
-
     console.log(
-      `[INFO] Itens para estoque real: ${estoqueRealData.length} (contados + mantidos do teórico)`
+      `[INFO] Inventário ${inventario_id} do vendedor ${inventario.codigo_vendedor} aprovado (${totalItens} itens).`
     );
-
-    // Correção 4: Inserir novos registros SEM deletar os antigos (mantém histórico)
-    // Cada inventário aprovado cria um novo snapshot com data_atualizacao e inventario_id únicos
-    // Inserir em lotes para contornar limites de tamanho de declaração/parametrização
-    const batchSize = 500;
-    let insertedCount = 0;
-
-    for (let i = 0; i < estoqueRealData.length; i += batchSize) {
-      const batch = estoqueRealData.slice(i, i + batchSize);
-      const { error: insertError } = await supabaseAdmin.from('estoque_real').insert(batch);
-
-      if (insertError) {
-        console.error(`[ERROR] Erro ao inserir lote (offset ${i}):`, insertError);
-        throw new Error('Falha ao salvar estoque real.');
-      }
-
-      insertedCount += batch.length;
-      console.log(
-        `[INFO] Inseridos ${insertedCount}/${estoqueRealData.length} itens no estoque_real`
-      );
-    }
-
-    console.log(`[INFO] Estoque real registrado: ${insertedCount} itens (histórico mantido)`);
-
-    const mensagem =
-      divergencias.length > 0
-        ? `Inventário aprovado! ${divergencias.length} divergência(s) registradas.`
-        : 'Inventário aprovado! Sem divergências.';
 
     return new Response(
       JSON.stringify({
-        message: mensagem,
-        divergencias_encontradas: divergencias.length,
-        itens_estoque_real: estoqueRealData.length,
+        message: `Inventário aprovado! ${totalItens} item(ns) registrados.`,
+        total_itens: totalItens,
       }),
       {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -364,7 +364,7 @@ export default function Conferencia() {
           body: { inventario_id: selectedInventario.id },
         });
         if (error) throw error;
-        toast.success(data.message || 'Inventário aprovado e estoque ajustado!');
+        toast.success(data.message || 'Inventário aprovado!');
       } else {
         const { error } = await supabase
           .from('inventarios')

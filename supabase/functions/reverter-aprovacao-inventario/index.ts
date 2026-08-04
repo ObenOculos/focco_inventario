@@ -6,6 +6,20 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+/**
+ * Edge Function: Reverter Aprovação
+ *
+ * Devolve um inventário aprovado para 'pendente', para que possa ser corrigido.
+ *
+ * Não há mais nada a desfazer além do status: a aprovação deixou de gravar estoque
+ * derivado. Duas regras antigas saíram junto com o subsistema de estoque por pedidos:
+ *
+ *   - a exclusão do snapshot em estoque_real criado pela aprovação;
+ *   - o bloqueio quando existia inventário aprovado mais recente do mesmo vendedor.
+ *     Esse bloqueio protegia a cadeia de snapshots, em que o teórico de um inventário
+ *     dependia do anterior. Não existe mais cadeia: cada inventário é um registro
+ *     independente de uma contagem numa data, e a comparação é escolhida pelo usuário.
+ */
 serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -30,7 +44,10 @@ serve(async (req: Request) => {
       });
     }
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+    const {
+      data: { user },
+      error: authError,
+    } = await supabaseAdmin.auth.getUser(token);
     if (authError || !user) {
       return new Response(JSON.stringify({ error: 'Token inválido.' }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -52,7 +69,7 @@ serve(async (req: Request) => {
 
     const { data: inventario, error: invError } = await supabaseAdmin
       .from('inventarios')
-      .select('id, status, codigo_vendedor, data_inventario')
+      .select('id, status')
       .eq('id', inventario_id)
       .single();
     if (invError || !inventario) {
@@ -62,31 +79,6 @@ serve(async (req: Request) => {
       throw new Error(`Inventário não está aprovado (status atual: ${inventario.status}).`);
     }
 
-    // Bloqueia se houver inventário aprovado mais recente do mesmo vendedor
-    const { data: maisRecente, error: recError } = await supabaseAdmin
-      .from('inventarios')
-      .select('id, data_inventario')
-      .eq('codigo_vendedor', inventario.codigo_vendedor)
-      .eq('status', 'aprovado')
-      .gt('data_inventario', inventario.data_inventario)
-      .order('data_inventario', { ascending: false })
-      .limit(1);
-    if (recError) throw recError;
-    if (maisRecente && maisRecente.length > 0) {
-      const dt = new Date(maisRecente[0].data_inventario).toLocaleDateString('pt-BR');
-      throw new Error(
-        `Existe um inventário aprovado mais recente (${dt}) deste vendedor. Reverta-o primeiro.`
-      );
-    }
-
-    // Deleta snapshot do estoque_real criado por esta aprovação
-    const { error: delError, count: deletedCount } = await supabaseAdmin
-      .from('estoque_real')
-      .delete({ count: 'exact' })
-      .eq('inventario_id', inventario_id);
-    if (delError) throw delError;
-
-    // Volta status para pendente
     const { error: updError } = await supabaseAdmin
       .from('inventarios')
       .update({ status: 'pendente', updated_at: new Date().toISOString() })
@@ -94,10 +86,7 @@ serve(async (req: Request) => {
     if (updError) throw updError;
 
     return new Response(
-      JSON.stringify({
-        message: 'Aprovação revertida. Inventário voltou para pendente.',
-        registros_estoque_removidos: deletedCount ?? 0,
-      }),
+      JSON.stringify({ message: 'Aprovação revertida. Inventário voltou para pendente.' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
     );
   } catch (err) {

@@ -20,6 +20,7 @@ const Produtos = lazy(() => import('./pages/Produtos'));
 const Importar = lazy(() => import('./pages/Importar'));
 const Conferencia = lazy(() => import('./pages/Conferencia'));
 const Pedidos = lazy(() => import('./pages/Pedidos'));
+const ExportarXml = lazy(() => import('./pages/ExportarXml'));
 const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
 
 const HistoricoEstoqueReal = lazy(() => import('./pages/HistoricoEstoqueReal'));
@@ -164,6 +165,14 @@ const router = createBrowserRouter(
           element: (
             <ProtectedRoute allowedRoles={['gerente']}>
               <Pedidos />
+            </ProtectedRoute>
+          ),
+        },
+        {
+          path: '/exportar-xml',
+          element: (
+            <ProtectedRoute allowedRoles={['gerente']}>
+              <ExportarXml />
             </ProtectedRoute>
           ),
         },

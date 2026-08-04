@@ -17,6 +17,7 @@ import {
   ClipboardCheck,
   History,
   FileText,
+  FileCode,
   UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -54,6 +55,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/pedidos', icon: FileText, label: 'Pedidos & Notas' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos & Correções' },
     { to: '/importar', icon: Upload, label: 'Importar' },
+    { to: '/exportar-xml', icon: FileCode, label: 'Exportar XML' },
   ];
 
   // Sem perfil carregado não assumimos papel nenhum: cair no menu de vendedor
