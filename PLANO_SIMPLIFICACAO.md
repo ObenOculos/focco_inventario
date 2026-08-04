@@ -343,7 +343,66 @@ Resquícios do Lovable eliminados: o `twitter:image` do `index.html` apontava pa
 O `vercel.json` já estava correto — tem o rewrite `/(.*) → /`, indispensável para o
 react-router não dar 404 em recarga de rota profunda.
 
-### ⬜ Etapa 6 — Verificação
+### ✅ Refinamentos de UX (2026-08-04, após a Etapa 6)
+
+**Valor do produto na comparação.** `comparar_dois_inventarios` passou a devolver
+`valor_unitario`, obtido no mesmo `LEFT JOIN produtos` que já resolvia o nome — sem consulta
+extra (migration `20260804180000`; exigiu `DROP FUNCTION`, já que `CREATE OR REPLACE` não muda
+tipo de retorno). A tela ganhou as colunas `Valor unit.` e `Valor da dif.`, os totais em reais
+no cartão de resumo, quatro colunas novas no Excel, e um aviso quando há produtos contados sem
+valor cadastrado — que entram nas quantidades mas contam zero nos totais.
+
+**Menu lateral fixo.** `sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto` na
+`aside`, com `min-h` no container do flex. Escolhido `sticky` em vez de `fixed` para a sidebar
+permanecer no fluxo e o `<main>` receber a largura restante sozinho, sem `ml-64` de
+compensação. O `self-start` é obrigatório: sem ele o item de flex estica até a altura do
+container (`align-items: stretch`) e não sobra deslocamento para o sticky agir.
+
+**Dashboard reorganizado em três blocos**, cada um respondendo uma pergunta diferente:
+o que preciso fazer (fila de conferência), como está a equipe (situação por vendedor, pior
+primeiro), o que aconteceu (aprovados recentemente).
+
+Redundâncias eliminadas: o alerta "N aguardando ação" era aritmética dos tiles logo abaixo;
+"Ações Rápidas" duplicava o menu lateral inteiro — com a sidebar fixa, existiam três caminhos
+para a Conferência; e a lista só mostrava os `revisao`, enquanto `pendente` era um número sem
+identidade. Também saiu todo o branch `!isGerente`, **inalcançável** porque `/dashboard` é
+`allowedRoles={['gerente']}` e vendedores são redirecionados para `/inventario`.
+
+`useDashboardMetricsQuery.ts` foi removido: a cobertura passou a ser derivada de
+`useVendedoresDesempenhoQuery`, que o Painel de Vendedores já carrega (vem do cache). Isso
+corrigiu uma incoerência — o cartão contava "sem inventário **aprovado** em 60 dias" enquanto
+a lista mostrava o último inventário de **qualquer** status. Agora há uma definição só.
+
+### ✅ Etapa 6 — Verificação
+
+**Automatizado (verificado):** `npm run typecheck` limpo, `vite build` limpo, 41 migrations com
+local idêntico ao remoto. Lint em 19 problemas (12 erros), todos pré-existentes em
+`Inventario.tsx` e `Produtos.tsx`, arquivos não tocados nesta refatoração.
+
+**Navegador (verificado pelo usuário):** app funcionando; **junção de inventários testada e
+correta** — era o único código que nunca havia rodado em produção, e é destrutivo; tela de
+comparação; Dashboard e menu fixo.
+
+**Não confirmado explicitamente** — vale exercitar quando surgir a oportunidade:
+- Aprovar e reverter aprovação **depois** do redeploy das edge functions (v41 / v4). São as
+  funções que deixaram de gravar `estoque_real`, tabela que não existe mais.
+- Fluxo do vendedor de ponta a ponta: contar → enviar → aparecer no histórico.
+- Exportação XML validada no Ciclone. A comparação byte a byte contra o caminho antigo
+  **deixou de ser possível** quando a Etapa 4c removeu `Pedidos.tsx`.
+
+## Pendências que sobrevivem ao projeto
+
+1. **GRANTs fora das migrations** — recriar o banco do zero não produz ambiente funcional.
+   Pré-existente, detalhado na Etapa 5 e em `supabase/README.md`. Exige decisão sobre conceder
+   a `anon`.
+2. **`baixado` órfão no enum `inventory_status`** — sem escritor e sem linhas. Decidido deixar:
+   Postgres não remove valor de enum e recriar o tipo exigiria mexer na coluna de `inventarios`.
+3. **19 problemas de lint pré-existentes** em `Inventario.tsx` e `Produtos.tsx` — `any` em
+   blocos catch e dependências de `useEffect`.
+4. **`valor_remessa` na comparação** — hoje usa `valor_produto` (tabela de venda). A exportação
+   XML permite escolher entre as duas; a comparação não. Alteração pequena, se fizer sentido.
+
+### Etapa 6 — anotações originais
 
 `npm run db:diff` limpo, `tsc --noEmit`, `vite build`, e smoke test dos fluxos
 sobreviventes: vendedor salva inventário → aparece no histórico → gerente revisa e aprova →

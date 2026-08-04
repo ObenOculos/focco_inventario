@@ -12,6 +12,8 @@ export interface InventarioOpcao {
 export interface LinhaComparacao {
   codigo_auxiliar: string;
   nome_produto: string;
+  /** `produtos.valor_produto`; 0 quando o produto contado não está cadastrado. */
+  valor_unitario: number;
   quantidade_a: number;
   quantidade_b: number;
   diferenca: number;
@@ -84,6 +86,7 @@ export function useComparacaoQuery(inventarioA: string | null, inventarioB: stri
           ...data.map((linha) => ({
             codigo_auxiliar: linha.codigo_auxiliar,
             nome_produto: linha.nome_produto,
+            valor_unitario: Number(linha.valor_unitario) || 0,
             quantidade_a: Number(linha.quantidade_a) || 0,
             quantidade_b: Number(linha.quantidade_b) || 0,
             diferenca: Number(linha.diferenca) || 0,

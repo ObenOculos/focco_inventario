@@ -235,6 +235,7 @@ export type Database = {
           presente_em_b: boolean
           quantidade_a: number
           quantidade_b: number
+          valor_unitario: number
         }[]
       }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }

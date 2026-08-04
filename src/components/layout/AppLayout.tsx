@@ -91,9 +91,16 @@ export function AppLayout({ children }: AppLayoutProps) {
         </div>
       </header>
 
-      <div className="flex">
-        {/* Sidebar - Desktop */}
-        <aside className="hidden md:block w-64 border-r border-border min-h-[calc(100vh-4rem)] bg-card/40">
+      {/* min-h no container para a sidebar ocupar a altura toda mesmo em páginas curtas */}
+      <div className="flex min-h-[calc(100vh-4rem)]">
+        {/*
+          Sidebar fixa via `sticky`, não `fixed`: assim ela continua no fluxo do flex e o
+          <main> recebe a largura restante sozinho, sem precisar compensar com margem.
+          `self-start` é essencial — sem ele o item de flex esticaria até a altura do
+          container (align-items: stretch) e não sobraria deslocamento para grudar.
+          `top-16` alinha logo abaixo do header, que tem h-16 e também é sticky.
+        */}
+        <aside className="hidden md:flex md:flex-col w-64 shrink-0 border-r border-border bg-card/40 sticky top-16 self-start h-[calc(100vh-4rem)] overflow-y-auto overscroll-contain">
           <nav className="p-3 space-y-1.5">
             {links.map((link) => {
               const isActive = location.pathname === link.to;
@@ -122,14 +129,15 @@ export function AppLayout({ children }: AppLayoutProps) {
               className="absolute inset-0 bg-background/80 backdrop-blur-xs"
               onClick={() => setMobileMenuOpen(false)}
             />
-            <aside className="absolute left-0 top-0 h-full w-64 bg-card border-r border-border shadow-xl">
-              <div className="p-4 border-b border-border flex items-center justify-between">
+            <aside className="absolute left-0 top-0 h-full w-64 bg-card border-r border-border shadow-xl flex flex-col">
+              <div className="p-4 border-b border-border flex items-center justify-between shrink-0">
                 <span className="font-bold text-sm tracking-wide">Menu</span>
                 <button onClick={() => setMobileMenuOpen(false)} className="p-1 rounded-md hover:bg-accent">
                   <X size={20} />
                 </button>
               </div>
-              <nav className="p-3 space-y-1.5">
+              {/* Rola quando a tela é curta — celular na horizontal, por exemplo */}
+              <nav className="p-3 space-y-1.5 overflow-y-auto overscroll-contain">
                 {links.map((link) => {
                   const isActive = location.pathname === link.to;
                   return (

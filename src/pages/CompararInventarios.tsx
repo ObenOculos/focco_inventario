@@ -92,8 +92,26 @@ export default function CompararInventarios() {
     const iguais = linhas.filter((l) => l.diferenca === 0).length;
     const somaA = linhas.reduce((acc, l) => acc + l.quantidade_a, 0);
     const somaB = linhas.reduce((acc, l) => acc + l.quantidade_b, 0);
-    return { total: linhas.length, emAmbos, soEmA, soEmB, iguais, somaA, somaB };
+    const valorA = linhas.reduce((acc, l) => acc + l.quantidade_a * l.valor_unitario, 0);
+    const valorB = linhas.reduce((acc, l) => acc + l.quantidade_b * l.valor_unitario, 0);
+    const semValor = linhas.filter((l) => l.valor_unitario === 0).length;
+    return {
+      total: linhas.length,
+      emAmbos,
+      soEmA,
+      soEmB,
+      iguais,
+      somaA,
+      somaB,
+      valorA,
+      valorB,
+      valorDiferenca: valorB - valorA,
+      semValor,
+    };
   }, [linhas]);
+
+  const moeda = (v: number) =>
+    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const linhasFiltradas = useMemo(() => {
     switch (filtroLinha) {
@@ -127,9 +145,13 @@ export default function CompararInventarios() {
     const dados = linhasFiltradas.map((l) => ({
       'Código Auxiliar': l.codigo_auxiliar,
       'Nome Produto': l.nome_produto,
+      'Valor Unitário': l.valor_unitario,
       'Quantidade A': l.quantidade_a,
       'Quantidade B': l.quantidade_b,
       'Diferença (B - A)': l.diferenca,
+      'Valor A': l.quantidade_a * l.valor_unitario,
+      'Valor B': l.quantidade_b * l.valor_unitario,
+      'Valor da Diferença': l.diferenca * l.valor_unitario,
       Situação: !l.presente_em_a
         ? 'Só no inventário B'
         : !l.presente_em_b
@@ -310,18 +332,41 @@ export default function CompararInventarios() {
               <Card className="border border-border/80 rounded-2xl shadow-2xs">
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Unidades A → B
+                    Diferença
                   </p>
-                  <p className="text-2xl font-bold">
-                    {resumo.somaA} → {resumo.somaB}
+                  <p
+                    className={`text-2xl font-bold ${
+                      resumo.valorDiferenca > 0
+                        ? 'text-blue-600 dark:text-blue-400'
+                        : resumo.valorDiferenca < 0
+                          ? 'text-orange-600 dark:text-orange-400'
+                          : ''
+                    }`}
+                  >
+                    {resumo.valorDiferenca > 0 ? '+' : ''}
+                    {moeda(resumo.valorDiferenca)}
                   </p>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
+                    {moeda(resumo.valorA)} → {moeda(resumo.valorB)}
+                  </p>
+                  <p className="text-[11px] text-muted-foreground">
+                    {resumo.somaA} → {resumo.somaB} un. (
                     {resumo.somaB - resumo.somaA >= 0 ? '+' : ''}
-                    {resumo.somaB - resumo.somaA} no total
+                    {resumo.somaB - resumo.somaA})
                   </p>
                 </CardContent>
               </Card>
             </div>
+
+            {resumo.semValor > 0 && (
+              <Card className="border border-border/80 rounded-2xl">
+                <CardContent className="py-3 text-xs text-muted-foreground">
+                  <strong className="text-foreground">{resumo.semValor}</strong> produto(s) sem
+                  valor cadastrado em Produtos — entram nas quantidades, mas contam como zero
+                  nos totais em reais.
+                </CardContent>
+              </Card>
+            )}
 
             {resumo.emAmbos === 0 && resumo.total > 0 && (
               <Card className="border border-amber-500/40 bg-amber-500/10 rounded-2xl">
@@ -377,10 +422,12 @@ export default function CompararInventarios() {
                     <Table>
                       <TableHeader>
                         <TableRow>
-                          <TableHead className="w-[40%]">Produto</TableHead>
+                          <TableHead className="w-[28%]">Produto</TableHead>
+                          <TableHead className="text-right">Valor unit.</TableHead>
                           <TableHead className="text-center">Qtd A</TableHead>
                           <TableHead className="text-center">Qtd B</TableHead>
                           <TableHead className="text-center">Diferença</TableHead>
+                          <TableHead className="text-right">Valor da dif.</TableHead>
                           <TableHead className="text-center">Situação</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -405,6 +452,13 @@ export default function CompararInventarios() {
                                   </span>
                                 )}
                               </TableCell>
+                              <TableCell className="text-right text-sm">
+                                {l.valor_unitario === 0 ? (
+                                  <span className="text-muted-foreground">-</span>
+                                ) : (
+                                  moeda(l.valor_unitario)
+                                )}
+                              </TableCell>
                               <TableCell className="text-center font-medium">
                                 {l.quantidade_a}
                               </TableCell>
@@ -423,6 +477,22 @@ export default function CompararInventarios() {
                                 >
                                   {l.diferenca > 0 ? `+${l.diferenca}` : l.diferenca}
                                 </span>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                {l.diferenca === 0 || l.valor_unitario === 0 ? (
+                                  <span className="text-muted-foreground">-</span>
+                                ) : (
+                                  <span
+                                    className={`font-semibold ${
+                                      l.diferenca > 0
+                                        ? 'text-blue-600 dark:text-blue-400'
+                                        : 'text-orange-600 dark:text-orange-400'
+                                    }`}
+                                  >
+                                    {l.diferenca > 0 ? '+' : ''}
+                                    {moeda(l.diferenca * l.valor_unitario)}
+                                  </span>
+                                )}
                               </TableCell>
                               <TableCell className="text-center">
                                 {!l.presente_em_a ? (
@@ -443,7 +513,7 @@ export default function CompararInventarios() {
                           ))
                         ) : (
                           <TableRow>
-                            <TableCell colSpan={5} className="h-24 text-center">
+                            <TableCell colSpan={7} className="h-24 text-center">
                               <div className="flex flex-col items-center gap-2">
                                 <Minus className="h-8 w-8 text-muted-foreground/50" />
                                 <p className="text-sm text-muted-foreground">
