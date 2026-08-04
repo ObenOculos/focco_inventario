@@ -156,10 +156,25 @@ total; diálogo de confirmação para reverter aprovação, que antes não exist
 A tabela de itens passou de `Produto | Teórico | Físico | Diferença | Valor` para
 `Produto | Quantidade | Valor`, mantendo edição inline e exclusão de item.
 
-### ⬜ Etapa 4b — Tela "Comparar Inventários"
+### ✅ Etapa 4b — Tela "Comparar Inventários"
 
-Escolhe A e B, tabela de diferenças, filtros e paginação globais. Consome
-`comparar_dois_inventarios`.
+`src/pages/CompararInventarios.tsx` + `src/hooks/useCompararInventariosQuery.ts`, rota
+`/comparar-inventarios` (gerente), item de menu logo abaixo de Conferência.
+
+- Filtro de vendedor que estreita as duas listas; trocar de vendedor limpa a seleção
+- Selects de **A (base)** e **B (comparado)**, cada um desabilitando o inventário já
+  escolhido no outro lado, mais um botão de trocar os lados
+- Quatro cartões de resumo: produtos comparados (com quantos em ambos e quantos sem
+  diferença), só no A, só no B, e unidades A → B com o saldo
+- Tabela `Produto | Qtd A | Qtd B | Diferença | Situação`, com busca, filtro
+  (com diferença / todos / sem diferença / em ambos / só no A / só no B), paginação global e
+  exportação para Excel
+- **Aviso quando não há nenhum produto em comum**, explicando que isso indica contagens
+  parciais e sugerindo juntar os inventários na Conferência. Foi o padrão medido nos dados
+  reais, então a tela fala disso em vez de exibir 100% de diferença sem contexto
+
+O hook busca a RPC em lotes de 500 e acumula, porque filtro e paginação são no cliente.
+`useInventariosOpcoesQuery` é uma lista leve, sem carregar itens.
 
 ### ⬜ Etapa 4c — Remoção do subsistema ERP
 

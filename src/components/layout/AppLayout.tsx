@@ -18,6 +18,7 @@ import {
   History,
   FileText,
   FileCode,
+  GitCompare,
   UserCog,
 } from 'lucide-react';
 import { useState } from 'react';
@@ -44,6 +45,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     // Ações de inventário
     { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
+    { to: '/comparar-inventarios', icon: GitCompare, label: 'Comparar Inventários' },
     
     // Estoque
     { to: '/estoque-teorico', icon: Package, label: 'Estoque ERP' },

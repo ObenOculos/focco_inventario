@@ -19,6 +19,7 @@ const Vendedores = lazy(() => import('./pages/Vendedores'));
 const Produtos = lazy(() => import('./pages/Produtos'));
 const Importar = lazy(() => import('./pages/Importar'));
 const Conferencia = lazy(() => import('./pages/Conferencia'));
+const CompararInventarios = lazy(() => import('./pages/CompararInventarios'));
 const Pedidos = lazy(() => import('./pages/Pedidos'));
 const ExportarXml = lazy(() => import('./pages/ExportarXml'));
 const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
@@ -157,6 +158,14 @@ const router = createBrowserRouter(
           element: (
             <ProtectedRoute allowedRoles={['gerente']}>
               <Conferencia />
+            </ProtectedRoute>
+          ),
+        },
+        {
+          path: '/comparar-inventarios',
+          element: (
+            <ProtectedRoute allowedRoles={['gerente']}>
+              <CompararInventarios />
             </ProtectedRoute>
           ),
         },
