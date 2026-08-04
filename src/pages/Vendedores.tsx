@@ -13,13 +13,6 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { toast } from 'sonner';
 import { Users, Plus, Pencil, UserCheck, UserX } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
@@ -28,7 +21,6 @@ import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import {
   useVendedoresListQuery,
-  useCodigosDisponiveisQuery,
   useInvalidateVendedores,
 } from '@/hooks/useVendedoresGerenciamentoQuery';
 
@@ -44,7 +36,6 @@ export default function Vendedores() {
   });
 
   const { data: vendedores = [], isLoading: loading, isFetching } = useVendedoresListQuery();
-  const { data: codigosDisponiveis = [] } = useCodigosDisponiveisQuery();
   const invalidateVendedores = useInvalidateVendedores();
 
   const {
@@ -210,43 +201,19 @@ export default function Vendedores() {
                 </div>
                 <div>
                   <Label htmlFor="vendedor-codigo" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Código do Vendedor</Label>
-                  {editingVendedor ? (
-                    <Input
-                      id="vendedor-codigo"
-                      name="codigo_vendedor"
-                      value={formData.codigo_vendedor}
-                      onChange={(e) =>
-                        setFormData({ ...formData, codigo_vendedor: e.target.value })
-                      }
-                      className="h-11 rounded-xl border-input font-mono shadow-2xs"
-                      placeholder="Ex: 11"
-                    />
-                  ) : (
-                    <Select
-                      name="codigo_vendedor"
-                      value={formData.codigo_vendedor}
-                      onValueChange={(value) =>
-                        setFormData({ ...formData, codigo_vendedor: value })
-                      }
-                    >
-                      <SelectTrigger className="h-11 rounded-xl border-input shadow-2xs">
-                        <SelectValue placeholder="Selecione um código" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-popover border border-border/80 rounded-xl z-50">
-                        {codigosDisponiveis.length === 0 ? (
-                          <SelectItem value="_empty" disabled>
-                            Nenhum código disponível
-                          </SelectItem>
-                        ) : (
-                          codigosDisponiveis.map((codigo) => (
-                            <SelectItem key={codigo} value={codigo}>
-                              {codigo}
-                            </SelectItem>
-                          ))
-                        )}
-                      </SelectContent>
-                    </Select>
-                  )}
+                  {/* Campo livre também na criação. Antes era um select alimentado pelos
+                      codigo_vendedor distintos da tabela pedidos; com pedidos vazia, a lista
+                      vinha sempre sem opções e não havia como cadastrar o código. */}
+                  <Input
+                    id="vendedor-codigo"
+                    name="codigo_vendedor"
+                    value={formData.codigo_vendedor}
+                    onChange={(e) =>
+                      setFormData({ ...formData, codigo_vendedor: e.target.value })
+                    }
+                    className="h-11 rounded-xl border-input font-mono shadow-2xs"
+                    placeholder="Ex: 11"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="vendedor-telefone" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block">Telefone</Label>

@@ -176,7 +176,50 @@ A tabela de itens passou de `Produto | Teórico | Físico | Diferença | Valor` 
 O hook busca a RPC em lotes de 500 e acumula, porque filtro e paginação são no cliente.
 `useInventariosOpcoesQuery` é uma lista leve, sem carregar itens.
 
-### ⬜ Etapa 4c — Remoção do subsistema ERP
+### ✅ Etapa 4c — Remoção do subsistema ERP
+
+**17 arquivos deletados.** Fonte do projeto: 59 → 47 arquivos, 13.278 → 9.456 linhas
+(−29%). Lint: 61 → 25 problemas (50 → 15 erros).
+
+Páginas: `EstoqueTeorico`, `HistoricoEstoqueReal`, `Importar`, `Pedidos` (rotas e menu).
+Hooks: `useEstoqueTeoricoQuery`, `useHistoricoEstoqueRealQuery`, `usePedidosQuery`,
+`useNotaRetornoQuery`, `useEstoqueTeoricoPorVendedor`. Componentes: `ImportContext`,
+`ImportBlocker`, `ImportProgress`, `VendedorEstoqueCard`, `NavLink`, `DivergenciaStats`.
+`lib/estoque.ts`. Tipos `DivergenciaItem`, `EstoqueItem`, `ExcelRow`, `Pedido`, `ItemPedido`.
+
+Cirurgias:
+- **Dashboard** reescrito. Saíram "Resumo de Movimentações" (remessas/vendas) e as 5 tiles
+  de "Métricas Principais" (todas derivadas do estoque teórico). Ficaram os contadores de
+  status, os inventários devolvidos para revisão, o alerta de vendedores sem inventário e
+  as ações rápidas — agora apontando para Conferência, Comparar e Exportar XML
+- **`useDashboardQuery`** reduzido a `useInventariosEmRevisaoQuery`. `useEstoqueQuery`,
+  `useMovimentacaoResumoQuery` e `useEstoqueRealStatsQuery` saíram, e
+  `useStatusInventariosQuery` também, por já não ter consumidor
+- **`useAcuracidadeMetricsQuery` → `useVendedoresSemInventarioQuery`.** A acuracidade foi
+  removida por ser estruturalmente ~100% (consequência da auto-comparação) e por calcular
+  valor de divergência com R$ 50 fixos por peça, um número fabricado
+- **Painel de Vendedores**: saíram as colunas Estoque / Remessas / Vendas / Acuracidade, o
+  card "Baixa acuracidade" (virou "Nunca inventariaram"), e o seletor de período, que já
+  não recortava nada. Entrou a coluna "Itens Contados". `useVendedoresDesempenhoQuery`
+  passou de 3–4 RPCs por vendedor para 2 queries no total
+- **Cadastro de Vendedores**: `useCodigosDisponiveisQuery` derivava os códigos disponíveis
+  dos `codigo_vendedor` distintos de `pedidos`. Com `pedidos` vazia a lista vinha sempre sem
+  opções, e **era impossível cadastrar o código de um vendedor novo** — o select virou campo
+  livre, o que conserta o bug
+
+**Edge functions implantadas** (o portão da Etapa 3 abriu aqui): `aprovar-e-ajustar-inventario`
+v41 e `reverter-aprovacao-inventario` v4. `criar-nota-retorno` foi **excluída do projeto
+Supabase** — era um endpoint vivo que ainda gravava em `pedidos` e marcava `status='baixado'`,
+o que corromperia dados depois dos drops da Etapa 5. O código segue recuperável no histórico
+do git.
+
+> **⚠️ O comando de typecheck estava errado durante toda a refatoração.** O `tsconfig.json`
+> raiz tem `"files": []` e apenas project references, então `npx tsc --noEmit` **não verifica
+> arquivo nenhum** — comprovado com uma sonda de import inexistente, que passou em silêncio.
+> Quem estava validando de fato era o `vite build`, e foi ele que pegou um import órfão de
+> `useCodigosDisponiveisQuery`. O comando correto é `tsc --noEmit -p tsconfig.app.json`,
+> agora disponível como **`npm run typecheck`**. O código está limpo verificado com o comando
+> certo.
 
 Páginas: `EstoqueTeorico.tsx`, `HistoricoEstoqueReal.tsx`, `Importar.tsx`, `Pedidos.tsx`
 (rotas e itens de menu). Hooks: `useEstoqueTeoricoQuery`, `useHistoricoEstoqueRealQuery`,

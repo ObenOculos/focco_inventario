@@ -2,31 +2,20 @@ import { Toaster as Sonner } from '@/components/ui/sonner';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
-import { ImportProvider } from '@/contexts/ImportContext';
-
-import { ImportProgress } from '@/components/ImportProgress';
-import { ImportBlocker } from '@/components/ImportBlocker';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { lazy, Suspense } from 'react';
 
 // Lazy load all page components
 const Auth = lazy(() => import('./pages/Auth'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
-const EstoqueTeorico = lazy(() => import('./pages/EstoqueTeorico'));
 const Inventario = lazy(() => import('./pages/Inventario'));
 const Historico = lazy(() => import('./pages/Historico'));
 const Vendedores = lazy(() => import('./pages/Vendedores'));
 const Produtos = lazy(() => import('./pages/Produtos'));
-const Importar = lazy(() => import('./pages/Importar'));
 const Conferencia = lazy(() => import('./pages/Conferencia'));
 const CompararInventarios = lazy(() => import('./pages/CompararInventarios'));
-const Pedidos = lazy(() => import('./pages/Pedidos'));
 const ExportarXml = lazy(() => import('./pages/ExportarXml'));
 const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
-
-const HistoricoEstoqueReal = lazy(() => import('./pages/HistoricoEstoqueReal'));
-
-
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const HomeRedirect = () => {
@@ -53,7 +42,6 @@ const HomeRedirect = () => {
 const RootLayout = () => {
   return (
     <>
-      <ImportBlocker />
       <Suspense
         fallback={
           <div className="flex items-center justify-center min-h-screen">Carregando...</div>
@@ -80,23 +68,6 @@ const router = createBrowserRouter(
             </ProtectedRoute>
           ),
         },
-        {
-          path: '/estoque-teorico',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <EstoqueTeorico />
-            </ProtectedRoute>
-          ),
-        },
-        {
-          path: '/historico-estoque-real',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <HistoricoEstoqueReal />
-            </ProtectedRoute>
-          ),
-        },
-        
         {
           path: '/inventario',
           element: (
@@ -146,14 +117,6 @@ const router = createBrowserRouter(
           ),
         },
         {
-          path: '/importar',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <Importar />
-            </ProtectedRoute>
-          ),
-        },
-        {
           path: '/conferencia',
           element: (
             <ProtectedRoute allowedRoles={['gerente']}>
@@ -166,14 +129,6 @@ const router = createBrowserRouter(
           element: (
             <ProtectedRoute allowedRoles={['gerente']}>
               <CompararInventarios />
-            </ProtectedRoute>
-          ),
-        },
-        {
-          path: '/pedidos',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <Pedidos />
             </ProtectedRoute>
           ),
         },
@@ -202,13 +157,10 @@ const router = createBrowserRouter(
 
 const App = () => (
   <AuthProvider>
-    <ImportProvider>
-      <TooltipProvider>
-        <Sonner />
-        <ImportProgress />
-        <RouterProvider router={router} />
-      </TooltipProvider>
-    </ImportProvider>
+    <TooltipProvider>
+      <Sonner />
+      <RouterProvider router={router} />
+    </TooltipProvider>
   </AuthProvider>
 );
 export default App;

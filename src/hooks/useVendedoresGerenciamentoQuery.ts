@@ -22,53 +22,14 @@ export const useVendedoresListQuery = () => {
   });
 };
 
-export const useCodigosDisponiveisQuery = () => {
-  return useQuery<string[], Error>({
-    queryKey: ['codigosDisponiveis'],
-    queryFn: async () => {
-      // Buscar todos os códigos de vendedor únicos dos pedidos
-      const { data: pedidosData, error: pedidosError } = await supabase
-        .from('pedidos')
-        .select('codigo_vendedor')
-        .not('codigo_vendedor', 'is', null);
-
-      if (pedidosError) {
-        console.error('Erro ao buscar códigos:', pedidosError);
-        return [];
-      }
-
-      // Buscar códigos já associados a vendedores
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('codigo_vendedor')
-        .eq('role', 'vendedor')
-        .not('codigo_vendedor', 'is', null);
-
-      if (profilesError) {
-        console.error('Erro ao buscar perfis:', profilesError);
-        return [];
-      }
-
-      // Extrair códigos únicos dos pedidos
-      const codigosPedidos = [
-        ...new Set(pedidosData.map((p) => p.codigo_vendedor).filter(Boolean)),
-      ] as string[];
-
-      // Extrair códigos já associados
-      const codigosAssociados = new Set(profilesData.map((p) => p.codigo_vendedor).filter(Boolean));
-
-      // Filtrar apenas os códigos não associados
-      const disponiveis = codigosPedidos.filter((codigo) => !codigosAssociados.has(codigo));
-
-      return disponiveis.sort();
-    },
-  });
-};
+// `useCodigosDisponiveisQuery` foi removida: ela sugeria códigos de vendedor a partir dos
+// codigo_vendedor distintos da tabela `pedidos`, alimentada pela importação do ERP. Com
+// `pedidos` vazia a lista vinha sempre sem opções, o que impedia cadastrar o código de um
+// vendedor novo. O código agora é digitado direto no formulário.
 
 export const useInvalidateVendedores = () => {
   const queryClient = useQueryClient();
   return () => {
     queryClient.invalidateQueries({ queryKey: ['vendedoresList'] });
-    queryClient.invalidateQueries({ queryKey: ['codigosDisponiveis'] });
   };
 };

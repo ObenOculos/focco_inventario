@@ -4,19 +4,14 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import {
   LayoutDashboard,
-  Package,
   ClipboardList,
-  Users,
-  FileSpreadsheet,
   LogOut,
   Menu,
   X,
   QrCode,
   ShoppingCart,
-  Upload,
   ClipboardCheck,
   History,
-  FileText,
   FileCode,
   GitCompare,
   UserCog,
@@ -46,18 +41,12 @@ export function AppLayout({ children }: AppLayoutProps) {
     // Ações de inventário
     { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
     { to: '/comparar-inventarios', icon: GitCompare, label: 'Comparar Inventários' },
-    
-    // Estoque
-    { to: '/estoque-teorico', icon: Package, label: 'Estoque ERP' },
-    { to: '/historico-estoque-real', icon: History, label: 'Hist. de Inventários' },
+    { to: '/exportar-xml', icon: FileCode, label: 'Exportar XML' },
     // Vendedores
     { to: '/controle-vendedores', icon: ClipboardList, label: 'Painel de Vendedores' },
     { to: '/vendedores', icon: UserCog, label: 'Cadastro de Vendedores' },
     // Dados
-    { to: '/pedidos', icon: FileText, label: 'Pedidos & Notas' },
     { to: '/produtos', icon: ShoppingCart, label: 'Produtos & Correções' },
-    { to: '/importar', icon: Upload, label: 'Importar' },
-    { to: '/exportar-xml', icon: FileCode, label: 'Exportar XML' },
   ];
 
   // Sem perfil carregado não assumimos papel nenhum: cair no menu de vendedor

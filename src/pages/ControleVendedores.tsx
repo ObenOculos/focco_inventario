@@ -6,10 +6,9 @@ import {
   AlertTriangle,
   Users,
   Package,
-  TrendingUp,
-  TrendingDown,
   Clock,
   CheckCircle,
+  CalendarX,
   FileDown,
   ArrowUpDown,
 } from 'lucide-react';
@@ -34,40 +33,24 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import {
-  useVendedoresDesempenhoQuery,
-  VendedorDesempenho,
-} from '@/hooks/useVendedoresDesempenhoQuery';
+import { useVendedoresDesempenhoQuery } from '@/hooks/useVendedoresDesempenhoQuery';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import { StatsCardsSkeleton } from '@/components/skeletons/CardSkeleton';
 import * as XLSX from 'xlsx';
-import { subDays, startOfDay, endOfDay } from 'date-fns';
 
-type SortField = 'nome' | 'estoque_total' | 'total_vendas' | 'acuracidade' | 'dias_sem_inventario';
+type SortField = 'nome' | 'itens_contados' | 'dias_sem_inventario';
 type SortDirection = 'asc' | 'desc';
 
 export default function ControleVendedores() {
   const isMobile = useIsMobile();
   const { profile } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
-  const [periodo, setPeriodo] = useState('30');
   const [sortField, setSortField] = useState<SortField>('nome');
   const [sortDirection, setSortDirection] = useState<SortDirection>('asc');
 
-  // Calcular datas do período com timestamps estáveis para cache do React Query
-  const periodoOptions = useMemo(() => {
-    if (periodo === 'todos') return {};
-
-    const hoje = new Date();
-    const dias = parseInt(periodo);
-
-    return {
-      periodoInicio: startOfDay(subDays(hoje, dias)),
-      periodoFim: endOfDay(hoje),
-    };
-  }, [periodo]);
-
-  const { data: vendedores, isLoading, isFetching } = useVendedoresDesempenhoQuery(periodoOptions);
+  // O seletor de período saiu junto com as métricas de remessas e vendas: nada mais nesta
+  // tela é recortado por intervalo de datas.
+  const { data: vendedores, isLoading, isFetching } = useVendedoresDesempenhoQuery();
 
   // Filtrar e ordenar vendedores
   const vendedoresFiltrados = useMemo(() => {
@@ -87,16 +70,10 @@ export default function ControleVendedores() {
         case 'nome':
           comparison = a.nome.localeCompare(b.nome);
           break;
-        case 'estoque_total':
-          comparison = a.estoque_total - b.estoque_total;
-          break;
-        case 'total_vendas':
-          comparison = a.total_vendas - b.total_vendas;
-          break;
-        case 'acuracidade':
-          const acuA = a.ultimo_inventario?.acuracidade ?? -1;
-          const acuB = b.ultimo_inventario?.acuracidade ?? -1;
-          comparison = acuA - acuB;
+        case 'itens_contados':
+          comparison =
+            (a.ultimo_inventario?.itens_contados ?? -1) -
+            (b.ultimo_inventario?.itens_contados ?? -1);
           break;
         case 'dias_sem_inventario':
           const diasA = a.dias_sem_inventario ?? 999;
@@ -122,18 +99,14 @@ export default function ControleVendedores() {
     const semInventario = vendedores.filter(
       (v) => v.dias_sem_inventario === null || v.dias_sem_inventario > 30
     );
-    const baixaAcuracidade = vendedores.filter(
-      (v) => v.ultimo_inventario?.acuracidade !== undefined && v.ultimo_inventario.acuracidade < 80
-    );
+    const nuncaInventariaram = vendedores.filter((v) => v.ultimo_inventario === null);
 
     return {
       totalVendedores: vendedores.length,
       vendedoresAtivos: ativos.length,
       comInventarioRecente: comInventarioRecente.length,
       semInventario: semInventario.length,
-      baixaAcuracidade: baixaAcuracidade.length,
-      estoqueTotal: vendedores.reduce((sum, v) => sum + v.estoque_total, 0),
-      vendasTotal: vendedores.reduce((sum, v) => sum + v.total_vendas, 0),
+      nuncaInventariaram: nuncaInventariaram.length,
     };
   }, [vendedores]);
 
@@ -153,21 +126,18 @@ export default function ControleVendedores() {
       Vendedor: v.nome,
       Código: v.codigo_vendedor,
       Status: v.ativo ? 'Ativo' : 'Inativo',
-      'Estoque Total': v.estoque_total,
-      'Remessas (período)': v.total_remessas,
-      'Vendas (período)': v.total_vendas,
       'Último Inventário': v.ultimo_inventario
         ? new Date(v.ultimo_inventario.data).toLocaleDateString('pt-BR')
         : 'Nunca',
       'Status Inventário': v.ultimo_inventario?.status || '-',
-      'Acuracidade (%)': v.ultimo_inventario?.acuracidade ?? '-',
+      'Itens Contados': v.ultimo_inventario?.itens_contados ?? '-',
       'Dias sem Inventário': v.dias_sem_inventario ?? 'N/A',
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Desempenho');
-    XLSX.writeFile(workbook, `painel_vendedores_${periodo}dias.xlsx`);
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Vendedores');
+    XLSX.writeFile(workbook, 'painel_vendedores.xlsx');
   };
 
   const getStatusBadge = (status: string | undefined) => {
@@ -191,28 +161,6 @@ export default function ControleVendedores() {
     }
   };
 
-  const getAcuracidadeBadge = (acuracidade: number | undefined) => {
-    if (acuracidade === undefined) return <span className="text-muted-foreground">-</span>;
-
-    if (acuracidade >= 95) {
-      return (
-        <Badge className="bg-green-500/20 text-green-700 border-green-500/30">{acuracidade}%</Badge>
-      );
-    } else if (acuracidade >= 80) {
-      return (
-        <Badge className="bg-yellow-500/20 text-yellow-700 border-yellow-500/30">
-          {acuracidade}%
-        </Badge>
-      );
-    } else {
-      return (
-        <Badge className="bg-destructive/20 text-destructive border-destructive/30">
-          {acuracidade}%
-        </Badge>
-      );
-    }
-  };
-
   if (profile?.role !== 'gerente') {
     return (
       <AppLayout>
@@ -231,7 +179,7 @@ export default function ControleVendedores() {
           <div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Painel de Vendedores</h1>
             <p className="text-sm text-muted-foreground mt-1 font-medium">
-              Visão geral do desempenho, inventário e acuracidade dos representantes.
+              Situação de inventário de cada representante.
             </p>
           </div>
           <RefetchIndicator isFetching={isFetching && !isLoading} />
@@ -289,11 +237,13 @@ export default function ControleVendedores() {
                 <CardContent className="pt-6">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-xl bg-destructive/10 text-destructive flex items-center justify-center shrink-0">
-                      <AlertTriangle className="h-5 w-5" />
+                      <CalendarX className="h-5 w-5" />
                     </div>
                     <div>
-                      <p className="text-2xl font-bold tracking-tight">{metricas.baixaAcuracidade}</p>
-                      <p className="text-xs text-muted-foreground font-medium">Baixa acuracidade</p>
+                      <p className="text-2xl font-bold tracking-tight">
+                        {metricas.nuncaInventariaram}
+                      </p>
+                      <p className="text-xs text-muted-foreground font-medium">Nunca inventariaram</p>
                     </div>
                   </div>
                 </CardContent>
@@ -337,17 +287,6 @@ export default function ControleVendedores() {
                     placeholder="Buscar vendedor..."
                   />
                 </div>
-                <Select value={periodo} onValueChange={setPeriodo}>
-                  <SelectTrigger className="w-full sm:w-36 h-11 rounded-xl border-input shadow-2xs">
-                    <SelectValue placeholder="Período" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border border-border/80">
-                    <SelectItem value="7">Últimos 7 dias</SelectItem>
-                    <SelectItem value="30">Últimos 30 dias</SelectItem>
-                    <SelectItem value="90">Últimos 90 dias</SelectItem>
-                    <SelectItem value="todos">Todo período</SelectItem>
-                  </SelectContent>
-                </Select>
                 <Button
                   onClick={handleExport}
                   variant="outline"
@@ -363,7 +302,7 @@ export default function ControleVendedores() {
           </CardHeader>
           <CardContent>
             {isLoading ? (
-              <TableSkeleton columns={7} rows={6} />
+              <TableSkeleton columns={4} rows={6} />
             ) : vendedoresFiltrados.length === 0 ? (
               <div className="text-center py-12 text-muted-foreground">
                 <Package size={48} className="mx-auto mb-4 text-muted-foreground/60" />
@@ -389,31 +328,6 @@ export default function ControleVendedores() {
                       </TableHead>
                       <TableHead
                         className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
-                        onClick={() => handleSort('estoque_total')}
-                      >
-                        <span className="flex items-center justify-center gap-1">
-                          Estoque
-                          <ArrowUpDown size={14} className="text-muted-foreground" />
-                        </span>
-                      </TableHead>
-                      <TableHead className="text-center font-semibold">
-                        <span className="flex items-center justify-center gap-1">
-                          <TrendingUp size={14} className="text-blue-500" />
-                          Remessas
-                        </span>
-                      </TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
-                        onClick={() => handleSort('total_vendas')}
-                      >
-                        <span className="flex items-center justify-center gap-1">
-                          <TrendingDown size={14} className="text-emerald-500" />
-                          Vendas
-                          <ArrowUpDown size={14} className="text-muted-foreground" />
-                        </span>
-                      </TableHead>
-                      <TableHead
-                        className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
                         onClick={() => handleSort('dias_sem_inventario')}
                       >
                         <span className="flex items-center justify-center gap-1">
@@ -424,10 +338,10 @@ export default function ControleVendedores() {
                       <TableHead className="text-center font-semibold">Status</TableHead>
                       <TableHead
                         className="cursor-pointer hover:bg-muted/60 text-center font-semibold"
-                        onClick={() => handleSort('acuracidade')}
+                        onClick={() => handleSort('itens_contados')}
                       >
                         <span className="flex items-center justify-center gap-1">
-                          Acuracidade
+                          Itens Contados
                           <ArrowUpDown size={14} className="text-muted-foreground" />
                         </span>
                       </TableHead>
@@ -446,15 +360,6 @@ export default function ControleVendedores() {
                               Cód: {vendedor.codigo_vendedor}
                             </p>
                           </div>
-                        </TableCell>
-                        <TableCell className="text-center font-bold text-sm">
-                          {vendedor.estoque_total}
-                        </TableCell>
-                        <TableCell className="text-center text-blue-600 dark:text-blue-400 font-semibold text-sm">
-                          +{vendedor.total_remessas}
-                        </TableCell>
-                        <TableCell className="text-center text-emerald-600 dark:text-emerald-400 font-semibold text-sm">
-                          -{vendedor.total_vendas}
                         </TableCell>
                         <TableCell className="text-center">
                           {vendedor.ultimo_inventario ? (
@@ -478,8 +383,12 @@ export default function ControleVendedores() {
                         <TableCell className="text-center">
                           {getStatusBadge(vendedor.ultimo_inventario?.status)}
                         </TableCell>
-                        <TableCell className="text-center">
-                          {getAcuracidadeBadge(vendedor.ultimo_inventario?.acuracidade)}
+                        <TableCell className="text-center font-bold text-sm">
+                          {vendedor.ultimo_inventario ? (
+                            vendedor.ultimo_inventario.itens_contados
+                          ) : (
+                            <span className="text-muted-foreground font-normal">-</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
