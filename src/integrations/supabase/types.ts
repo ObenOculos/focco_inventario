@@ -390,6 +390,23 @@ export type Database = {
           quantidade_venda: number
         }[]
       }
+      comparar_dois_inventarios: {
+        Args: {
+          p_inventario_a: string
+          p_inventario_b: string
+          p_limit?: number
+          p_offset?: number
+        }
+        Returns: {
+          codigo_auxiliar: string
+          diferenca: number
+          nome_produto: string
+          presente_em_a: boolean
+          presente_em_b: boolean
+          quantidade_a: number
+          quantidade_b: number
+        }[]
+      }
       comparar_estoque_inventario: {
         Args: { p_inventario_id: string }
         Returns: {
@@ -501,6 +518,15 @@ export type Database = {
       get_user_role: {
         Args: { user_id: string }
         Returns: Database["public"]["Enums"]["user_role"]
+      }
+      juntar_inventarios: {
+        Args: { p_inventario_destino: string; p_inventarios_origem: string[] }
+        Returns: {
+          absorvidos: number
+          destino_id: string
+          total_produtos: number
+          total_unidades: number
+        }[]
       }
       salvar_inventario: {
         Args: {

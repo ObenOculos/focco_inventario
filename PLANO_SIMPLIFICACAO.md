@@ -129,20 +129,32 @@ Ambas as respostas preservam `data.message`, que é o único campo que o front l
 quebra. Corrigido também o texto de fallback `'Inventário aprovado e estoque ajustado!'`,
 que afirmava algo que deixou de acontecer.
 
-> **⚠️ NÃO fazer o deploy antes da Etapa 4a.** A Conferência atual ainda usa a comparação
-> antiga, que depende do snapshot em `estoque_real` gravado na aprovação. Se estas funções
-> subirem primeiro, todo inventário aprovado no intervalo fica sem snapshot e aparece na
-> tela com a base vazia — tudo como sobra. As duas etapas sobem juntas.
+> **⚠️ Deploy só depois da Etapa 4c.** A dependência é a escrita em `estoque_real` durante
+> a aprovação: quem lê esse snapshot é a comparação antiga
+> (`comparar_estoque_inventario_paginado`). Depois da 4a a Conferência não a usa mais, mas
+> **`useDashboardMetricsQuery` e `useVendedoresDesempenhoQuery` ainda usam**. Se as funções
+> subirem antes da 4c, inventários aprovados no intervalo ficam sem snapshot e a acuracidade
+> do Dashboard cai de ~100% para ~0%. Deploy das edge functions junto com a 4c.
 
-### ⬜ Etapa 4a — Conferência despida
+### ✅ Etapa 4a — Conferência despida
 
-Lista → abre um inventário → tabela dos itens contados → editar/excluir item → Aprovar ou
-Enviar para revisão. Entra seleção múltipla com "Juntar inventários".
+`Conferencia.tsx` reescrita: 1393 → 1136 linhas, lint limpo (o resto do projeto tem 50
+erros de baseline).
 
-Sai: `DivergenciaStats`, `usaSomaParaNegativo` + `calcularDiferenca`
-(`Conferencia.tsx:90`), filtros sobras/faltas/corretos, `itensNaoContados`, `custosMap`, a
-chamada a `comparar_estoque_inventario_paginado`, e o guard de "movimentos posteriores" que
-consulta `pedidos` (`Conferencia.tsx:435-444`).
+Saíram: `DivergenciaStats`, `usaSomaParaNegativo` + `calcularDiferenca`, os filtros
+sobras/faltas/corretos/não-contados, `itensNaoContados`, `custosMap` para valoração de
+divergência, o resumo financeiro (Total Faltas / Total Sobras / Saldo Devedor), o diálogo de
+nota de retorno, o guard de "movimentos posteriores" que consultava `pedidos`, e a chamada a
+`comparar_estoque_inventario_paginado` — **a tela não faz mais nenhum RPC de comparação**,
+os itens vêm do próprio `useConferenciaQuery`.
+
+Entraram: busca por vendedor + paginação global na lista de inventários; seleção múltipla
+com **"Juntar inventários"** (escolha do destino, aviso de quantos serão excluídos, bloqueio
+quando os selecionados são de vendedores diferentes); resumo de produtos / unidades / valor
+total; diálogo de confirmação para reverter aprovação, que antes não existia.
+
+A tabela de itens passou de `Produto | Teórico | Físico | Diferença | Valor` para
+`Produto | Quantidade | Valor`, mantendo edição inline e exclusão de item.
 
 ### ⬜ Etapa 4b — Tela "Comparar Inventários"
 
