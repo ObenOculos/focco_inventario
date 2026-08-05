@@ -32,9 +32,31 @@ export default {
           DEFAULT: 'hsl(var(--secondary))',
           foreground: 'hsl(var(--secondary-foreground))',
         },
+        // Estados semânticos. Cada um expõe o mesmo contrato de 4 tons — ver
+        // DESIGN_SYSTEM.md. `subtle` é fundo, `strong` é o texto sobre esse fundo.
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
+          subtle: 'hsl(var(--destructive-subtle))',
+          strong: 'hsl(var(--destructive-strong))',
+        },
+        success: {
+          DEFAULT: 'hsl(var(--success))',
+          foreground: 'hsl(var(--success-foreground))',
+          subtle: 'hsl(var(--success-subtle))',
+          strong: 'hsl(var(--success-strong))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--warning))',
+          foreground: 'hsl(var(--warning-foreground))',
+          subtle: 'hsl(var(--warning-subtle))',
+          strong: 'hsl(var(--warning-strong))',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--info))',
+          foreground: 'hsl(var(--info-foreground))',
+          subtle: 'hsl(var(--info-subtle))',
+          strong: 'hsl(var(--info-strong))',
         },
         muted: {
           DEFAULT: 'hsl(var(--muted))',
@@ -52,21 +74,23 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        sidebar: {
-          DEFAULT: 'hsl(var(--sidebar-background))',
-          foreground: 'hsl(var(--sidebar-foreground))',
-          primary: 'hsl(var(--sidebar-primary))',
-          'primary-foreground': 'hsl(var(--sidebar-primary-foreground))',
-          accent: 'hsl(var(--sidebar-accent))',
-          'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
-          border: 'hsl(var(--sidebar-border))',
-          ring: 'hsl(var(--sidebar-ring))',
-        },
+        // Removidos daqui e do index.css: o grupo `sidebar-*` (8 tokens) e `chart-*`
+        // (5 tokens). O componente `ui/sidebar` e o `recharts` saíram na limpeza, e
+        // nenhuma classe do projeto referenciava esses tokens — eram 13 variáveis que
+        // pareciam parte do sistema sem governar nada. A sidebar real usa `card` e
+        // `border`, como qualquer outra superfície.
       },
+      // Escala inteira derivada de `--radius` (0.625rem = 10px). Antes só sm/md/lg
+      // eram derivados: `rounded-xl` e `rounded-2xl` — juntos, 125 usos, a maioria do
+      // sistema — ficavam nos valores estáticos do Tailwind e não acompanhavam o token.
+      // Os números finais são idênticos aos de antes; o que muda é passarem a ser
+      // governados por uma variável só.
       borderRadius: {
-        lg: 'var(--radius)',
-        md: 'calc(var(--radius) - 2px)',
-        sm: 'calc(var(--radius) - 4px)',
+        sm: 'calc(var(--radius) - 4px)', // 6px  — chips, marcadores
+        md: 'calc(var(--radius) - 2px)', // 8px  — itens de menu, elementos internos
+        lg: 'var(--radius)', // 10px — badges
+        xl: 'calc(var(--radius) + 2px)', // 12px — controles: botão, input, select
+        '2xl': 'calc(var(--radius) + 6px)', // 16px — superfícies: card, modal, alerta
       },
       keyframes: {
         'accordion-down': {
@@ -89,6 +113,12 @@ export default {
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
+      },
+      // Degrau abaixo de `text-xs`, para badge e marcador — o padrão de badge do sistema
+      // (herdado da tela Exportar XML) pede 10px, que não existe na escala do Tailwind.
+      // Registrado como token para não virar `text-[10px]` espalhado pelas telas.
+      fontSize: {
+        '2xs': ['0.625rem', { lineHeight: '1rem' }],
       },
       fontFamily: {
         sans: [

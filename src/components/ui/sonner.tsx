@@ -2,6 +2,18 @@ import { Toaster as Sonner, toast } from 'sonner';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
+/**
+ * Toasts do sistema.
+ *
+ * A configuração anterior era de outro projeto visual: `borderRadius: '0'` (canto vivo num
+ * app inteiramente arredondado), bordas de 2px, e sombras duras deslocadas
+ * (`shadow-[4px_4px_0_0_...]`) de estilo neobrutalista. As cores de estado eram `hsl()`
+ * cravados no arquivo — um quinto verde e um terceiro âmbar, fora de qualquer token.
+ *
+ * Agora segue o mesmo contrato das demais superfícies: raio 16px, borda de 1px, elevação de
+ * camada flutuante (`shadow-lg`) e os tokens `*-subtle`/`*-strong` dos estados. Ver
+ * DESIGN_SYSTEM.md, seções 2 e 6.
+ */
 const Toaster = ({ ...props }: ToasterProps) => {
   return (
     <Sonner
@@ -13,32 +25,23 @@ const Toaster = ({ ...props }: ToasterProps) => {
       gap={8}
       visibleToasts={3}
       className="toaster group"
-      style={{
-        fontFamily: 'var(--font-sans)',
-      }}
+      style={{ fontFamily: 'var(--font-sans)' }}
       toastOptions={{
-        style: {
-          background: 'hsl(var(--background))',
-          color: 'hsl(var(--foreground))',
-          border: '2px solid hsl(var(--border))',
-          borderRadius: '0',
-          boxShadow: 'var(--shadow-sm)',
-          fontFamily: 'var(--font-sans)',
-        },
         classNames: {
-          toast: 'group toast',
-          title: 'font-bold',
-          description: 'text-muted-foreground',
-          actionButton: 'bg-primary text-primary-foreground border-2 border-border',
-          cancelButton: 'bg-muted text-muted-foreground border-2 border-border',
-          closeButton: 'border-2 border-border bg-background hover:bg-muted',
+          toast:
+            'group toast !rounded-2xl !border !border-border/80 !bg-card !text-card-foreground !shadow-lg !font-sans',
+          title: '!font-semibold !text-sm',
+          description: '!text-muted-foreground !text-xs',
+          actionButton: '!rounded-xl !bg-primary !text-primary-foreground !font-semibold',
+          cancelButton: '!rounded-xl !bg-muted !text-muted-foreground !font-semibold',
+          closeButton: '!rounded-lg !border-border/80 !bg-card hover:!bg-accent',
           success:
-            '!bg-background !text-[hsl(143,70%,35%)] !border-2 !border-[hsl(143,70%,35%)] [&>svg]:!text-[hsl(143,70%,35%)] !shadow-[4px_4px_0_0_hsl(143,50%,12%)]',
+            '!bg-success-subtle !text-success-strong !border-success/30 [&>svg]:!text-success-strong',
           error:
-            '!bg-background !text-destructive !border-2 !border-destructive [&>svg]:!text-destructive !shadow-[4px_4px_0_0_hsl(0,60%,15%)]',
+            '!bg-destructive-subtle !text-destructive-strong !border-destructive/30 [&>svg]:!text-destructive-strong',
           warning:
-            '!bg-background !text-[hsl(38,92%,40%)] !border-2 !border-[hsl(38,92%,40%)] [&>svg]:!text-[hsl(38,92%,40%)] !shadow-[4px_4px_0_0_hsl(38,70%,12%)]',
-          info: '!bg-background !text-[hsl(217,91%,50%)] !border-2 !border-[hsl(217,91%,50%)] [&>svg]:!text-[hsl(217,91%,50%)] !shadow-[4px_4px_0_0_hsl(217,70%,15%)]',
+            '!bg-warning-subtle !text-warning-strong !border-warning/30 [&>svg]:!text-warning-strong',
+          info: '!bg-info-subtle !text-info-strong !border-info/30 [&>svg]:!text-info-strong',
         },
       }}
       {...props}

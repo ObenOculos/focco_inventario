@@ -3,14 +3,22 @@ import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '@/lib/utils';
 
+// Raio de superfície e a mesma paleta de estados dos badges — um aviso de "atrasado"
+// tem que ser o mesmo âmbar em qualquer tela. As variantes `warning`/`success`/`info`
+// existem porque as telas as construíam à mão, cada uma com sua mistura.
+//
+// O ícone herda a cor do texto (`[&>svg]:text-current`); antes era fixo em
+// `text-foreground` e destoava do conteúdo colorido do alerta.
 const alertVariants = cva(
-  'relative w-full rounded-lg border p-4 [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground',
+  'relative w-full rounded-2xl border p-4 text-sm [&>svg~*]:pl-7 [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:size-4 [&>svg]:text-current',
   {
     variants: {
       variant: {
-        default: 'bg-background text-foreground',
-        destructive:
-          'border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive',
+        default: 'border-border bg-card text-foreground',
+        info: 'border-info/25 bg-info-subtle text-info-strong',
+        success: 'border-success/25 bg-success-subtle text-success-strong',
+        warning: 'border-warning/30 bg-warning-subtle text-warning-strong',
+        destructive: 'border-destructive/25 bg-destructive-subtle text-destructive-strong',
       },
     },
     defaultVariants: {

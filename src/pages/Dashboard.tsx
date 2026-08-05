@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import {
   useInventariosAguardandoQuery,
   useInventariosRecentesQuery,
 } from '@/hooks/useDashboardQuery';
-import { useVendedoresDesempenhoQuery } from '@/hooks/useVendedoresDesempenhoQuery';
+import { useVendedoresQuery } from '@/hooks/useVendedoresQuery';
 import { useInventariosCountQuery } from '@/hooks/useInventariosQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StatusInventarioBadge } from '@/components/StatusInventarioBadge';
 import { ArrowRight, CheckCircle2, GitCompare, RefreshCw, Users } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -37,7 +39,7 @@ export default function Dashboard() {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
   const { data: fila = [], isLoading: loadingFila } = useInventariosAguardandoQuery(true);
-  const { data: vendedores = [], isLoading: loadingVendedores } = useVendedoresDesempenhoQuery();
+  const { data: vendedores = [], isLoading: loadingVendedores } = useVendedoresQuery();
   const { data: recentes = [] } = useInventariosRecentesQuery(true);
   const { data: aprovados = 0 } = useInventariosCountQuery(null, 'aprovado');
 
@@ -75,31 +77,25 @@ export default function Dashboard() {
 
   return (
     <AppLayout>
-      <div className="space-y-5 antialiased">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="space-y-1">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-              Olá, {profile?.nome?.split(' ')[0] || 'gerente'}
-            </h1>
-            <p className="text-sm text-muted-foreground">
+      <div className="space-y-6">
+        <PageHeader
+          title={`Olá, ${profile?.nome?.split(' ')[0] || 'gerente'}`}
+          description={
+            <>
               {fila.length === 0
                 ? 'Nada aguardando conferência agora.'
                 : `${fila.length} inventário${fila.length > 1 ? 's' : ''} aguardando sua conferência.`}
               {equipe.atrasados > 0 &&
                 ` ${equipe.atrasados} de ${equipe.total} vendedores sem inventariar há mais de ${LIMITE_DIAS_ATRASO} dias.`}
-            </p>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="gap-2 rounded-xl shadow-xs self-start sm:self-auto"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Atualizando' : 'Atualizar'}
-          </Button>
-        </div>
+            </>
+          }
+          action={
+            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isRefreshing}>
+              <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {isRefreshing ? 'Atualizando' : 'Atualizar'}
+            </Button>
+          }
+        />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
           {/* 1. O que preciso fazer */}
@@ -121,7 +117,7 @@ export default function Dashboard() {
             <CardContent className="flex-1">
               {fila.length === 0 ? (
                 <div className="flex flex-col items-center text-center py-8">
-                  <CheckCircle2 className="h-9 w-9 text-emerald-500 mb-2.5" />
+                  <CheckCircle2 className="h-9 w-9 text-success mb-2.5" />
                   <p className="font-medium text-sm">Fila vazia</p>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Todo inventário enviado já foi conferido.
@@ -138,16 +134,7 @@ export default function Dashboard() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-semibold truncate">{inv.nome_vendedor}</p>
-                          <Badge
-                            variant="outline"
-                            className={`text-[10px] rounded-md shrink-0 ${
-                              inv.status === 'revisao'
-                                ? 'border-destructive/40 text-destructive'
-                                : 'border-amber-500/40 text-amber-700 dark:text-amber-400'
-                            }`}
-                          >
-                            {inv.status === 'revisao' ? 'Em revisão' : 'Pendente'}
-                          </Badge>
+                          <StatusInventarioBadge status={inv.status} className="shrink-0" />
                         </div>
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {format(new Date(inv.data_inventario), 'dd/MM/yyyy')} ·{' '}
@@ -203,7 +190,7 @@ export default function Dashboard() {
                         >
                           <span
                             className={`h-2 w-2 rounded-full shrink-0 ${
-                              atrasado ? 'bg-destructive' : 'bg-emerald-500'
+                              atrasado ? 'bg-destructive' : 'bg-success'
                             }`}
                             aria-hidden
                           />
@@ -228,9 +215,9 @@ export default function Dashboard() {
                       );
                     })}
                   </div>
-                  <Link to="/controle-vendedores" className="mt-3">
+                  <Link to="/vendedores" className="mt-3">
                     <Button variant="ghost" size="sm" className="w-full rounded-xl">
-                      Abrir painel de vendedores
+                      Abrir vendedores
                       <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
                     </Button>
                   </Link>

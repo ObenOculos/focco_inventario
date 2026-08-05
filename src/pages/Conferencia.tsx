@@ -1,11 +1,13 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeader } from '@/components/PageHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { StatusInventarioBadge } from '@/components/StatusInventarioBadge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -67,7 +69,6 @@ import {
 } from '@/components/ui/table';
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
 import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
-import { RefetchIndicator } from '@/components/RefetchIndicator';
 
 /**
  * Conferência de Inventários — revisão e aprovação.
@@ -514,19 +515,15 @@ export default function Conferencia() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Conferência de Inventários</h1>
-            <p className="text-muted-foreground">
-              Revise a contagem enviada pelo vendedor e aprove o inventário
-            </p>
-          </div>
-          <RefetchIndicator isFetching={isFetching && !loading} />
-        </div>
+        <PageHeader
+          title="Conferência de Inventários"
+          description="Revise a contagem enviada pelo vendedor e aprove o inventário"
+          isFetching={isFetching && !loading}
+        />
 
         {!selectedInventario ? (
           <div className="space-y-4">
-            <Card className="border border-border/80 rounded-2xl shadow-xs">
+            <Card>
               <CardContent className="pt-6 space-y-3">
                 <div className="flex flex-col lg:flex-row gap-3">
                   <SearchFilter
@@ -605,9 +602,9 @@ export default function Conferencia() {
             </h2>
 
             {paginacaoLista.totalItems === 0 ? (
-              <Card className="border border-border/80 rounded-2xl shadow-xs">
+              <Card>
                 <CardContent className="py-12 text-center">
-                  <CheckCircle size={48} className="mx-auto mb-4 text-emerald-500" />
+                  <CheckCircle size={48} className="mx-auto mb-4 text-success" />
                   <h2 className="text-xl font-bold mb-2">Nenhum inventário encontrado</h2>
                   <p className="text-muted-foreground">
                     Ajuste os filtros ou aguarde novos inventários.
@@ -618,8 +615,6 @@ export default function Conferencia() {
               <>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
                   {inventariosPaginados.map((inv) => {
-                    const isRevisao = inv.status === 'revisao';
-                    const isAprovado = inv.status === 'aprovado';
                     const marcado = selecionados.includes(inv.id);
                     return (
                       <Card
@@ -651,12 +646,7 @@ export default function Conferencia() {
                                 <span className="truncate">{inv.nome_vendedor}</span>
                               </CardTitle>
                             </div>
-                            <Badge
-                              variant={isRevisao ? 'destructive' : isAprovado ? 'default' : 'outline'}
-                              className="rounded-md shrink-0"
-                            >
-                              <span className="capitalize">{inv.status}</span>
-                            </Badge>
+                            <StatusInventarioBadge status={inv.status} className="shrink-0" />
                           </div>
                           <p className="font-mono text-xs text-muted-foreground pt-1">
                             {inv.codigo_vendedor}
@@ -720,18 +710,7 @@ export default function Conferencia() {
                   <Calendar size={14} />{' '}
                   {format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
                 </span>
-                <Badge
-                  variant={
-                    selectedInventario.status === 'revisao'
-                      ? 'destructive'
-                      : selectedInventario.status === 'aprovado'
-                        ? 'default'
-                        : 'outline'
-                  }
-                  className="rounded-md"
-                >
-                  <span className="capitalize">{selectedInventario.status}</span>
-                </Badge>
+                <StatusInventarioBadge status={selectedInventario.status} />
               </div>
             </div>
 
@@ -749,7 +728,7 @@ export default function Conferencia() {
             )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Card className="border border-border/80 rounded-2xl shadow-2xs">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Produtos
@@ -757,7 +736,7 @@ export default function Conferencia() {
                   <p className="text-2xl font-bold">{resumo.produtos}</p>
                 </CardContent>
               </Card>
-              <Card className="border border-border/80 rounded-2xl shadow-2xs">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Unidades contadas
@@ -765,7 +744,7 @@ export default function Conferencia() {
                   <p className="text-2xl font-bold">{resumo.unidades}</p>
                 </CardContent>
               </Card>
-              <Card className="border border-border/80 rounded-2xl shadow-2xs">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Valor total
@@ -789,7 +768,7 @@ export default function Conferencia() {
               </div>
             )}
 
-            <Card className="border border-border/80 rounded-2xl shadow-xs">
+            <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base">Itens contados</CardTitle>
@@ -964,7 +943,7 @@ export default function Conferencia() {
                         }}
                         disabled={saving}
                         size="sm"
-                        className="bg-green-600 hover:bg-green-700"
+                        variant="success"
                       >
                         <CheckCircle size={16} className="mr-2" />
                         {saving ? 'Processando...' : 'Aprovar'}

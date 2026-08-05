@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeader } from '@/components/PageHeader';
 import { supabase } from '@/integrations/supabase/client';
 import { Produto } from '@/types/app';
 import type { Json } from '@/integrations/supabase/types';
@@ -65,6 +66,7 @@ import * as XLSX from 'xlsx';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
+import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import { useProdutosQuery, useInvalidateProdutos } from '@/hooks/useProdutosQuery';
 import { usePagination } from '@/hooks/usePagination';
 import {
@@ -472,7 +474,7 @@ function ProdutosTab() {
         <div className="flex items-center gap-2 sm:ml-auto">
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="border-2">
+              <Button variant="outline">
                 Ações
                 <ChevronDown className="ml-1" size={16} />
               </Button>
@@ -506,32 +508,32 @@ function ProdutosTab() {
 
       {/* New Product Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="border-2">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Cadastrar Produto</DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <Label htmlFor="produto-codigo">Código do Produto</Label>
-              <Input id="produto-codigo" name="codigo_produto" value={formData.codigo_produto} onChange={(e) => setFormData({ ...formData, codigo_produto: e.target.value })} className="border-2 font-mono" placeholder="Ex: OB1215" required />
+              <Input id="produto-codigo" name="codigo_produto" value={formData.codigo_produto} onChange={(e) => setFormData({ ...formData, codigo_produto: e.target.value })} className="font-mono" placeholder="Ex: OB1215" required />
             </div>
             <div>
               <Label htmlFor="produto-codigo-auxiliar">Código Auxiliar (QR Code)</Label>
-              <Input id="produto-codigo-auxiliar" name="codigo_auxiliar" value={formData.codigo_auxiliar} onChange={(e) => setFormData({ ...formData, codigo_auxiliar: e.target.value.toUpperCase() })} className="border-2 font-mono" placeholder="Ex: OB1215 Q01" required />
+              <Input id="produto-codigo-auxiliar" name="codigo_auxiliar" value={formData.codigo_auxiliar} onChange={(e) => setFormData({ ...formData, codigo_auxiliar: e.target.value.toUpperCase() })} className="font-mono" placeholder="Ex: OB1215 Q01" required />
               <p className="text-xs text-muted-foreground mt-1">Formato: MODELO COR (separados por espaço)</p>
             </div>
             <div>
               <Label htmlFor="produto-nome">Nome do Produto</Label>
-              <Input id="produto-nome" name="nome_produto" value={formData.nome_produto} onChange={(e) => setFormData({ ...formData, nome_produto: e.target.value })} className="border-2" placeholder="Ex: ORX OB1215 O51-P19-H144" required />
+              <Input id="produto-nome" name="nome_produto" value={formData.nome_produto} onChange={(e) => setFormData({ ...formData, nome_produto: e.target.value })}  placeholder="Ex: ORX OB1215 O51-P19-H144" required />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <Label htmlFor="produto-valor">Preço Venda (R$)</Label>
-                <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })} className="border-2" placeholder="0.00" />
+                <Input id="produto-valor" name="valor_produto" type="number" step="0.01" value={formData.valor_produto} onChange={(e) => setFormData({ ...formData, valor_produto: e.target.value })}  placeholder="0.00" />
               </div>
               <div>
                 <Label htmlFor="produto-valor-remessa">Preço Remessa (R$)</Label>
-                <Input id="produto-valor-remessa" name="valor_remessa" type="number" step="0.01" value={formData.valor_remessa} onChange={(e) => setFormData({ ...formData, valor_remessa: e.target.value })} className="border-2" placeholder="0.00" />
+                <Input id="produto-valor-remessa" name="valor_remessa" type="number" step="0.01" value={formData.valor_remessa} onChange={(e) => setFormData({ ...formData, valor_remessa: e.target.value })}  placeholder="0.00" />
               </div>
             </div>
             <Button type="submit" className="w-full">Cadastrar Produto</Button>
@@ -541,12 +543,12 @@ function ProdutosTab() {
 
       {/* Import Dialog */}
       <Dialog open={importDialogOpen} onOpenChange={(open) => { setImportDialogOpen(open); if (!open) resetImport(); }}>
-        <DialogContent className="border-2 max-w-3xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Upload size={20} />Importar Novos Produtos</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center">
               <input ref={importFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleImportFileSelect} className="hidden" id="import-file-input" />
               {!importFile ? (
                 <label htmlFor="import-file-input" className="cursor-pointer">
@@ -566,7 +568,7 @@ function ProdutosTab() {
             {importPreview.length > 0 && (
               <div>
                 <h4 className="font-medium mb-2">Preview (primeiras 5 linhas)</h4>
-                <div className="border-2 rounded-lg overflow-x-auto">
+                <div className="border border-border/80 rounded-xl overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -596,8 +598,8 @@ function ProdutosTab() {
             {importValidation && (
               <div className="space-y-3">
                 {importValidation.errors.length > 0 && (
-                  <div className="bg-destructive/10 border-2 border-destructive/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-destructive font-medium mb-2"><XCircle size={18} />{importValidation.errors.length} erros encontrados</div>
+                  <div className="bg-destructive-subtle border border-destructive/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-destructive-strong font-medium mb-2"><XCircle size={18} />{importValidation.errors.length} erros encontrados</div>
                     <ul className="text-sm space-y-1 max-h-32 overflow-y-auto">
                       {importValidation.errors.slice(0, 10).map((err, i) => (<li key={i}>Linha {err.linha}: {err.campo} - {err.mensagem}</li>))}
                       {importValidation.errors.length > 10 && (<li className="text-muted-foreground">... e mais {importValidation.errors.length - 10} erros</li>)}
@@ -605,32 +607,32 @@ function ProdutosTab() {
                   </div>
                 )}
                 {importValidation.newProducts > 0 && (
-                  <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4">
+                  <div className="bg-primary/10 border border-primary/30 rounded-xl p-4">
                     <div className="flex items-center gap-2 text-primary font-medium"><CheckCircle2 size={18} />{importValidation.newProducts} novos produtos serão criados</div>
                   </div>
                 )}
                 {importValidation.skippedProducts > 0 && (
-                  <div className="bg-muted border-2 border-muted-foreground/20 rounded-lg p-4">
+                  <div className="bg-muted border border-border rounded-xl p-4">
                     <div className="flex items-center gap-2 text-muted-foreground font-medium"><AlertTriangle size={18} />{importValidation.skippedProducts} produtos já existem (serão ignorados)</div>
                   </div>
                 )}
                 {importValidation.newProducts === 0 && importValidation.skippedProducts > 0 && (
-                  <div className="bg-yellow-500/10 border-2 border-yellow-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-yellow-600 font-medium"><AlertTriangle size={18} />Todos os produtos já existem. Use "Atualizar Valores" para alterar preços.</div>
+                  <div className="bg-warning-subtle border border-warning/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-warning-strong font-medium"><AlertTriangle size={18} />Todos os produtos já existem. Use "Atualizar Valores" para alterar preços.</div>
                   </div>
                 )}
               </div>
             )}
 
             {importStatus === 'completed' && (
-              <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4 text-center">
+              <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 text-center">
                 <CheckCircle2 className="mx-auto mb-2 text-primary" size={32} />
                 <p className="font-medium text-primary">Importação concluída com sucesso!</p>
               </div>
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="border-2" onClick={downloadTemplate}><Download className="mr-2" size={16} />Baixar Modelo</Button>
+              <Button variant="outline"  onClick={downloadTemplate}><Download className="mr-2" size={16} />Baixar Modelo</Button>
               {importFile && importStatus === 'idle' && (<Button onClick={handleValidateImport}>Validar Arquivo</Button>)}
               {importStatus === 'validating' && (<Button disabled><Loader2 className="mr-2 animate-spin" size={16} />Validando...</Button>)}
               {importStatus === 'validated' && importValidation?.isValid && (<Button onClick={handleImportProducts}><Upload className="mr-2" size={16} />Importar {importValidation.newProducts} Produtos</Button>)}
@@ -647,7 +649,7 @@ function ProdutosTab() {
               </div>
             )}
 
-            {(importStatus === 'error' || importStatus === 'completed') && (<Button variant="outline" className="border-2" onClick={resetImport}>Nova Importação</Button>)}
+            {(importStatus === 'error' || importStatus === 'completed') && (<Button variant="outline"  onClick={resetImport}>Nova Importação</Button>)}
 
             <div className="bg-muted/50 rounded-lg p-4 text-sm">
               <h4 className="font-medium mb-2">Formato Esperado</h4>
@@ -666,12 +668,12 @@ function ProdutosTab() {
 
       {/* Update Values Dialog */}
       <Dialog open={updateDialogOpen} onOpenChange={(open) => { setUpdateDialogOpen(open); if (!open) resetUpdate(); }}>
-        <DialogContent className="border-2 max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><RefreshCw size={20} />Atualizar Valores de Produtos</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="border-2 border-dashed rounded-lg p-6 text-center">
+            <div className="border-2 border-dashed border-border rounded-xl p-6 text-center">
               <input ref={updateFileInputRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleUpdateFileSelect} className="hidden" id="update-file-input" />
               {!updateFile ? (
                 <label htmlFor="update-file-input" className="cursor-pointer">
@@ -691,7 +693,7 @@ function ProdutosTab() {
             {updatePreview.length > 0 && (
               <div>
                 <h4 className="font-medium mb-2">Preview (primeiras 5 linhas)</h4>
-                <div className="border-2 rounded-lg overflow-x-auto">
+                <div className="border border-border/80 rounded-xl overflow-x-auto">
                   <Table>
                     <TableHeader><TableRow><TableHead>codigo_auxiliar</TableHead><TableHead>valor_produto</TableHead><TableHead>valor_remessa</TableHead></TableRow></TableHeader>
                     <TableBody>
@@ -711,8 +713,8 @@ function ProdutosTab() {
             {updateValidation && (
               <div className="space-y-3">
                 {updateValidation.errors.length > 0 && (
-                  <div className="bg-destructive/10 border-2 border-destructive/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-destructive font-medium mb-2"><XCircle size={18} />{updateValidation.errors.length} erros encontrados</div>
+                  <div className="bg-destructive-subtle border border-destructive/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-destructive-strong font-medium mb-2"><XCircle size={18} />{updateValidation.errors.length} erros encontrados</div>
                     <ul className="text-sm space-y-1 max-h-32 overflow-y-auto">
                       {updateValidation.errors.slice(0, 10).map((err, i) => (<li key={i}>Linha {err.linha}: {err.codigo || '(sem código)'} - {err.mensagem}</li>))}
                       {updateValidation.errors.length > 10 && (<li className="text-muted-foreground">... e mais {updateValidation.errors.length - 10} erros</li>)}
@@ -720,13 +722,13 @@ function ProdutosTab() {
                   </div>
                 )}
                 {updateValidation.matchedProducts > 0 && (
-                  <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4">
+                  <div className="bg-primary/10 border border-primary/30 rounded-xl p-4">
                     <div className="flex items-center gap-2 text-primary font-medium"><CheckCircle2 size={18} />{updateValidation.matchedProducts} produtos serão atualizados</div>
                   </div>
                 )}
                 {updateValidation.notFoundProducts.length > 0 && (
-                  <div className="bg-yellow-500/10 border-2 border-yellow-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-yellow-600 font-medium mb-2"><AlertTriangle size={18} />{updateValidation.notFoundProducts.length} códigos não encontrados</div>
+                  <div className="bg-warning-subtle border border-warning/30 rounded-xl p-4">
+                    <div className="flex items-center gap-2 text-warning-strong font-medium mb-2"><AlertTriangle size={18} />{updateValidation.notFoundProducts.length} códigos não encontrados</div>
                     <p className="text-sm text-muted-foreground">Estes serão ignorados: {updateValidation.notFoundProducts.slice(0, 5).join(', ')}{updateValidation.notFoundProducts.length > 5 && '...'}</p>
                   </div>
                 )}
@@ -734,14 +736,14 @@ function ProdutosTab() {
             )}
 
             {updateStatus === 'completed' && (
-              <div className="bg-primary/10 border-2 border-primary/30 rounded-lg p-4 text-center">
+              <div className="bg-primary/10 border border-primary/30 rounded-xl p-4 text-center">
                 <CheckCircle2 className="mx-auto mb-2 text-primary" size={32} />
                 <p className="font-medium text-primary">Valores atualizados com sucesso!</p>
               </div>
             )}
 
             <div className="flex flex-wrap gap-2">
-              <Button variant="outline" className="border-2" onClick={downloadUpdateTemplate}><Download className="mr-2" size={16} />Baixar Modelo</Button>
+              <Button variant="outline"  onClick={downloadUpdateTemplate}><Download className="mr-2" size={16} />Baixar Modelo</Button>
               {updateFile && updateStatus === 'idle' && (<Button onClick={handleValidateUpdate}>Validar Arquivo</Button>)}
               {updateStatus === 'validating' && (<Button disabled><Loader2 className="mr-2 animate-spin" size={16} />Validando...</Button>)}
               {updateStatus === 'validated' && updateValidation?.isValid && (<Button onClick={handleUpdateValues}><RefreshCw className="mr-2" size={16} />Atualizar {updateValidation.matchedProducts} Valores</Button>)}
@@ -758,7 +760,7 @@ function ProdutosTab() {
               </div>
             )}
 
-            {(updateStatus === 'error' || updateStatus === 'completed') && (<Button variant="outline" className="border-2" onClick={resetUpdate}>Nova Atualização</Button>)}
+            {(updateStatus === 'error' || updateStatus === 'completed') && (<Button variant="outline"  onClick={resetUpdate}>Nova Atualização</Button>)}
 
             <div className="bg-muted/50 rounded-lg p-4 text-sm">
               <h4 className="font-medium mb-2">Formato Esperado</h4>
@@ -768,7 +770,7 @@ function ProdutosTab() {
                 <li><strong>valor_remessa</strong> (opcional): Novo preço de remessa. Ex: 30.00</li>
                 <li className="text-xs italic">Pelo menos um dos dois é obrigatório.</li>
               </ul>
-              <p className="mt-2 text-yellow-600 font-medium">Apenas produtos que já existem no banco terão seus valores atualizados.</p>
+              <p className="mt-2 text-warning-strong font-medium">Apenas produtos que já existem no banco terão seus valores atualizados.</p>
             </div>
           </div>
         </DialogContent>
@@ -776,11 +778,11 @@ function ProdutosTab() {
 
       {/* QR Code Dialog */}
       <Dialog open={qrDialogOpen} onOpenChange={setQrDialogOpen}>
-        <DialogContent className="border-2 max-w-sm">
+        <DialogContent className="max-w-sm">
           <DialogHeader><DialogTitle>QR Code</DialogTitle></DialogHeader>
           {selectedProduto && (
             <div className="text-center">
-              <img src={qrCodeUrl} alt="QR Code" className="mx-auto border-2 border-foreground" />
+              <img src={qrCodeUrl} alt="QR Code" className="mx-auto rounded-xl border border-border" />
               <p className="font-mono font-bold mt-4">{selectedProduto.codigo_auxiliar}</p>
               <p className="text-sm text-muted-foreground">{selectedProduto.nome_produto}</p>
               <Button onClick={downloadQRCode} className="mt-4 w-full"><Download className="mr-2" size={16} />Baixar QR Code</Button>
@@ -790,9 +792,9 @@ function ProdutosTab() {
       </Dialog>
 
       {loading ? (
-        <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+        <TableSkeleton columns={5} rows={6} />
       ) : totalItems === 0 ? (
-        <Card className="border-2">
+        <Card>
           <CardContent className="py-12 text-center">
             <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-bold mb-2">{searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</h2>
@@ -803,14 +805,14 @@ function ProdutosTab() {
         <>
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
             {produtos.map((produto) => (
-              <Card key={produto.id} className="border border-border/80 rounded-2xl shadow-xs transition-shadow hover:shadow-md">
+              <Card key={produto.id} className="transition-shadow hover:shadow-md">
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0 flex-1">
                       <p className="font-mono font-bold text-sm text-foreground">{produto.codigo_auxiliar}</p>
                       <p className="text-xs text-muted-foreground truncate font-medium mt-0.5">{produto.nome_produto}</p>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-xs">
-                        <span className="font-medium text-foreground">Venda: <strong className="font-bold text-emerald-600 dark:text-emerald-400">R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
+                        <span className="font-medium text-foreground">Venda: <strong className="font-bold text-success-strong">R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
                         <span className="text-muted-foreground font-medium">Remessa: <strong className="font-semibold text-foreground">R$ {Number(produto.valor_remessa ?? 0).toFixed(2)}</strong></span>
                       </div>
                     </div>
@@ -946,7 +948,7 @@ function CodigosCorrecaoTab() {
           <input ref={fileInputRef} type="file" accept=".xlsx,.xls" onChange={handleFileUpload} className="hidden" />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="border-2">
+              <Button variant="outline">
                 Ações <ChevronDown className="ml-2" size={16} />
               </Button>
             </DropdownMenuTrigger>
@@ -964,16 +966,16 @@ function CodigosCorrecaoTab() {
             <Button onClick={() => setDialogOpen(true)}>
               <Plus className="mr-2" size={16} />Novo Mapeamento
             </Button>
-            <DialogContent className="border-2">
+            <DialogContent>
               <DialogHeader><DialogTitle>{editingItem ? 'Editar Mapeamento' : 'Novo Mapeamento'}</DialogTitle></DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <Label htmlFor="cod_errado">Código Errado (da etiqueta)</Label>
-                  <Input id="cod_errado" value={formData.cod_errado} onChange={(e) => setFormData({ ...formData, cod_errado: e.target.value })} className="border-2 uppercase" placeholder="Ex: OB1105 PRETO F" required />
+                  <Input id="cod_errado" value={formData.cod_errado} onChange={(e) => setFormData({ ...formData, cod_errado: e.target.value })} className="uppercase" placeholder="Ex: OB1105 PRETO F" required />
                 </div>
                 <div>
                   <Label htmlFor="cod_auxiliar_correto">Código Correto</Label>
-                  <Input id="cod_auxiliar_correto" value={formData.cod_auxiliar_correto} onChange={(e) => setFormData({ ...formData, cod_auxiliar_correto: e.target.value })} className="border-2 uppercase" placeholder="Ex: OB1105 C1" required />
+                  <Input id="cod_auxiliar_correto" value={formData.cod_auxiliar_correto} onChange={(e) => setFormData({ ...formData, cod_auxiliar_correto: e.target.value })} className="uppercase" placeholder="Ex: OB1105 C1" required />
                 </div>
                 <Button type="submit" className="w-full">{editingItem ? 'Salvar Alterações' : 'Cadastrar'}</Button>
               </form>
@@ -984,9 +986,9 @@ function CodigosCorrecaoTab() {
 
 
       {loading ? (
-        <div className="text-center py-8 text-muted-foreground">Carregando...</div>
+        <TableSkeleton columns={5} rows={6} />
       ) : totalItems === 0 ? (
-        <Card className="border-2">
+        <Card>
           <CardContent className="py-12 text-center">
             <Tags size={48} className="mx-auto mb-4 text-muted-foreground" />
             <h2 className="text-xl font-bold mb-2">{searchTerm ? 'Nenhum código encontrado' : 'Nenhum mapeamento cadastrado'}</h2>
@@ -997,7 +999,7 @@ function CodigosCorrecaoTab() {
         <>
           <div className="grid gap-4">
             {paginatedCodigos.map((item) => (
-              <Card key={item.id} className="border-2">
+              <Card key={item.id} >
                 <CardContent className="py-4">
                   <div className="flex items-center justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -1008,8 +1010,8 @@ function CodigosCorrecaoTab() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <Button variant="outline" size="icon" className="border-2" onClick={() => openEdit(item)}><Pencil size={16} /></Button>
-                      <Button variant="outline" size="icon" className="border-2 text-destructive" onClick={() => openDelete(item)}><Trash2 size={16} /></Button>
+                      <Button variant="outline" size="icon"  onClick={() => openEdit(item)}><Pencil size={16} /></Button>
+                      <Button variant="outline" size="icon" className="text-destructive" onClick={() => openDelete(item)}><Trash2 size={16} /></Button>
                     </div>
                   </div>
                 </CardContent>
@@ -1021,7 +1023,7 @@ function CodigosCorrecaoTab() {
       )}
 
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-        <AlertDialogContent className="border-2">
+        <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
             <AlertDialogDescription>
@@ -1030,7 +1032,7 @@ function CodigosCorrecaoTab() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel className="border-2">Cancelar</AlertDialogCancel>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">Excluir</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1044,11 +1046,11 @@ function CodigosCorrecaoTab() {
 export default function Produtos() {
   return (
     <AppLayout>
-      <div className="space-y-6 antialiased">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Produtos & Correções</h1>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">Gerencie o catálogo de produtos, QR Codes e mapeamentos de correção de etiquetas</p>
-        </div>
+      <div className="space-y-6">
+        <PageHeader
+          title="Produtos & Correções"
+          description="Gerencie o catálogo de produtos, QR Codes e mapeamentos de correção de etiquetas"
+        />
 
         <Tabs defaultValue="produtos" className="w-full">
           <TabsList className="grid w-full sm:w-auto sm:inline-grid grid-cols-2 rounded-xl bg-muted/60 p-1 mb-4">

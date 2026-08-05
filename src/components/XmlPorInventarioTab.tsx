@@ -5,6 +5,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
+  StatusInventarioBadge,
+  rotuloStatusInventario,
+} from '@/components/StatusInventarioBadge';
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -32,32 +36,6 @@ const LOJAS = [
   { codigo: 2, nome: 'Loja 02' },
 ];
 
-const STATUS_STYLES: Record<string, string> = {
-  pendente: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
-  aprovado: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
-  revisao: 'bg-destructive/10 text-destructive border-destructive/30',
-  baixado: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30',
-};
-
-const STATUS_LABELS: Record<string, string> = {
-  pendente: 'Pendente',
-  aprovado: 'Aprovado',
-  revisao: 'Não aprovado',
-  baixado: 'Baixado',
-};
-
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <Badge
-      variant="outline"
-      className={`px-2.5 py-0.5 text-[10px] font-semibold rounded-lg border ${
-        STATUS_STYLES[status] ?? 'bg-muted text-muted-foreground border-border'
-      }`}
-    >
-      {STATUS_LABELS[status] ?? status}
-    </Badge>
-  );
-}
 
 interface InventarioXml {
   id: string;
@@ -361,7 +339,7 @@ export function XmlPorInventarioTab() {
                 <SelectItem value="todos">Todos os status ({inventarios.length})</SelectItem>
                 {statusDisponiveis.map(([status, count]) => (
                   <SelectItem key={status} value={status}>
-                    {STATUS_LABELS[status] ?? status} ({count})
+                    {rotuloStatusInventario(status)} ({count})
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -427,7 +405,7 @@ export function XmlPorInventarioTab() {
               return (
                 <Card
                   key={inv.id}
-                  className="border border-border/80 rounded-2xl shadow-xs hover:shadow-md transition-shadow"
+                  className="hover:shadow-md transition-shadow"
                 >
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
@@ -437,7 +415,7 @@ export function XmlPorInventarioTab() {
                           {inv.codigo_vendedor}
                         </p>
                       </div>
-                      <StatusBadge status={inv.status} />
+                      <StatusInventarioBadge status={inv.status} />
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3 text-sm">
@@ -501,11 +479,11 @@ export function XmlPorInventarioTab() {
           </DialogHeader>
 
           {xmlInv && xmlInv.status !== 'aprovado' && (
-            <div className="flex gap-2 rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 text-xs">
-              <AlertTriangle className="h-4 w-4 shrink-0 text-amber-600 dark:text-amber-400" />
-              <p className="text-amber-800 dark:text-amber-300">
+            <div className="flex gap-2 rounded-xl border border-warning/30 bg-warning-subtle p-3 text-xs">
+              <AlertTriangle className="h-4 w-4 shrink-0 text-warning-strong" />
+              <p className="text-warning-strong">
                 Este inventário está como{' '}
-                <strong>{STATUS_LABELS[xmlInv.status] ?? xmlInv.status}</strong>, não aprovado. As
+                <strong>{rotuloStatusInventario(xmlInv.status)}</strong>, não aprovado. As
                 quantidades podem ainda mudar na conferência.
               </p>
             </div>

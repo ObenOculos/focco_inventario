@@ -1,4 +1,5 @@
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeader } from '@/components/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ClipboardCheck, FileSpreadsheet } from 'lucide-react';
 import { XmlPorInventarioTab } from '@/components/XmlPorInventarioTab';
@@ -8,12 +9,10 @@ export default function ExportarXml() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Exportar XML</h1>
-          <p className="text-muted-foreground">
-            Gere o XML no formato Ciclone a partir de um inventário
-          </p>
-        </div>
+        <PageHeader
+          title="Exportar XML"
+          description="Gere o XML no formato Ciclone a partir de um inventário"
+        />
 
         <Tabs defaultValue="inventario" className="w-full">
           <TabsList>

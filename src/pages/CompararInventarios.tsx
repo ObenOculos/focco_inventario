@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -21,7 +23,6 @@ import {
 import { SearchFilter } from '@/components/SearchFilter';
 import { Pagination } from '@/components/Pagination';
 import { usePagination } from '@/hooks/usePagination';
-import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { ArrowLeftRight, Download, GitCompare, Loader2, Minus } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
@@ -176,17 +177,13 @@ export default function CompararInventarios() {
   return (
     <AppLayout>
       <div className="space-y-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Comparar Inventários</h1>
-            <p className="text-muted-foreground">
-              Escolha dois inventários e veja a diferença entre as contagens
-            </p>
-          </div>
-          <RefetchIndicator isFetching={isFetching && !carregandoComparacao} />
-        </div>
+        <PageHeader
+          title="Comparar Inventários"
+          description="Escolha dois inventários e veja a diferença entre as contagens"
+          isFetching={isFetching && !carregandoComparacao}
+        />
 
-        <Card className="border border-border/80 rounded-2xl shadow-xs">
+        <Card>
           <CardHeader className="pb-3">
             <CardTitle className="text-base flex items-center gap-2">
               <GitCompare className="h-5 w-5" />
@@ -272,7 +269,7 @@ export default function CompararInventarios() {
         </Card>
 
         {!prontoParaComparar ? (
-          <Card className="border border-border/80 rounded-2xl shadow-xs">
+          <Card>
             <CardContent className="py-16 text-center">
               <GitCompare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
               <p className="font-medium mb-1">Escolha os dois inventários</p>
@@ -296,7 +293,7 @@ export default function CompararInventarios() {
         ) : (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <Card className="border border-border/80 rounded-2xl shadow-2xs">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Produtos comparados
@@ -307,7 +304,7 @@ export default function CompararInventarios() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="border border-border/80 rounded-2xl shadow-2xs">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Só no A
@@ -318,7 +315,7 @@ export default function CompararInventarios() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="border border-border/80 rounded-2xl shadow-2xs">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Só no B
@@ -329,7 +326,7 @@ export default function CompararInventarios() {
                   </p>
                 </CardContent>
               </Card>
-              <Card className="border border-border/80 rounded-2xl shadow-2xs">
+              <Card>
                 <CardContent className="pt-4 pb-4">
                   <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
                     Diferença
@@ -337,9 +334,9 @@ export default function CompararInventarios() {
                   <p
                     className={`text-2xl font-bold ${
                       resumo.valorDiferenca > 0
-                        ? 'text-blue-600 dark:text-blue-400'
+                        ? 'text-info-strong'
                         : resumo.valorDiferenca < 0
-                          ? 'text-orange-600 dark:text-orange-400'
+                          ? 'text-warning-strong'
                           : ''
                     }`}
                   >
@@ -369,17 +366,17 @@ export default function CompararInventarios() {
             )}
 
             {resumo.emAmbos === 0 && resumo.total > 0 && (
-              <Card className="border border-amber-500/40 bg-amber-500/10 rounded-2xl">
-                <CardContent className="py-3.5 text-sm">
+              <Alert variant="warning">
+                <AlertDescription>
                   <strong>Nenhum produto em comum</strong> entre os dois inventários. Isso
                   costuma indicar que são contagens parciais de faixas diferentes de produto, e
                   não recontagens do mesmo estoque — nesse caso o comparativo não é
                   significativo, e o que você quer pode ser juntar os dois na Conferência.
-                </CardContent>
-              </Card>
+                </AlertDescription>
+              </Alert>
             )}
 
-            <Card className="border border-border/80 rounded-2xl shadow-xs">
+            <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-2">
                   <CardTitle className="text-base">Diferenças por produto</CardTitle>
@@ -438,9 +435,9 @@ export default function CompararInventarios() {
                               key={l.codigo_auxiliar}
                               className={
                                 l.diferenca > 0
-                                  ? 'bg-blue-500/5'
+                                  ? 'bg-info-subtle'
                                   : l.diferenca < 0
-                                    ? 'bg-orange-500/5'
+                                    ? 'bg-warning-subtle'
                                     : ''
                               }
                             >
@@ -469,9 +466,9 @@ export default function CompararInventarios() {
                                 <span
                                   className={`font-bold ${
                                     l.diferenca > 0
-                                      ? 'text-blue-600 dark:text-blue-400'
+                                      ? 'text-info-strong'
                                       : l.diferenca < 0
-                                        ? 'text-orange-600 dark:text-orange-400'
+                                        ? 'text-warning-strong'
                                         : 'text-muted-foreground'
                                   }`}
                                 >
@@ -485,8 +482,8 @@ export default function CompararInventarios() {
                                   <span
                                     className={`font-semibold ${
                                       l.diferenca > 0
-                                        ? 'text-blue-600 dark:text-blue-400'
-                                        : 'text-orange-600 dark:text-orange-400'
+                                        ? 'text-info-strong'
+                                        : 'text-warning-strong'
                                     }`}
                                   >
                                     {l.diferenca > 0 ? '+' : ''}

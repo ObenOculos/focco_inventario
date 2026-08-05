@@ -15,7 +15,6 @@ const Produtos = lazy(() => import('./pages/Produtos'));
 const Conferencia = lazy(() => import('./pages/Conferencia'));
 const CompararInventarios = lazy(() => import('./pages/CompararInventarios'));
 const ExportarXml = lazy(() => import('./pages/ExportarXml'));
-const ControleVendedores = lazy(() => import('./pages/ControleVendedores'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
 const HomeRedirect = () => {
@@ -101,12 +100,10 @@ const router = createBrowserRouter(
           ),
         },
         {
+          // O Painel de Vendedores foi absorvido pelo cadastro: as duas telas liam a mesma
+          // linha de `profiles`. O redirect mantém favoritos e links antigos funcionando.
           path: '/controle-vendedores',
-          element: (
-            <ProtectedRoute allowedRoles={['gerente']}>
-              <ControleVendedores />
-            </ProtectedRoute>
-          ),
+          element: <Navigate to="/vendedores" replace />,
         },
         {
           path: '/produtos',

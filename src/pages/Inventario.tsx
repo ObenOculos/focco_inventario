@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, useNavigate, useBlocker } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -654,7 +655,7 @@ export default function Inventario() {
     return (
       <AppLayout>
         <div className="flex items-center justify-center min-h-[50vh]">
-          <Card className="border border-border/80 rounded-2xl shadow-xs max-w-md">
+          <Card className="max-w-md">
             <CardContent className="pt-6 text-center">
               <QrCode size={48} className="mx-auto mb-4 text-muted-foreground/60" />
               <h2 className="text-xl font-bold mb-2">Código de Vendedor Necessário</h2>
@@ -671,19 +672,19 @@ export default function Inventario() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 max-w-4xl mx-auto antialiased">
+      <div className="space-y-6 max-w-4xl mx-auto">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
-            {editingInventarioId ? 'Editar Inventário' : 'Novo Inventário'}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">
-            {editingInventarioId
-              ? 'Edite os itens do seu inventário e reenvie para conferência.'
-              : 'Use o scanner ou a adição manual para começar a montar seu inventário.'}
-          </p>
+          <PageHeader
+            title={editingInventarioId ? 'Editar Inventário' : 'Novo Inventário'}
+            description={
+              editingInventarioId
+                ? 'Edite os itens do seu inventário e reenvie para conferência.'
+                : 'Use o scanner ou a adição manual para começar a montar seu inventário.'
+            }
+          />
           {inventarioInfo && (
-            <div className="mt-4 p-4 bg-blue-500/10 border border-blue-500/30 rounded-2xl">
-              <h3 className="font-semibold text-blue-700 dark:text-blue-300 text-sm">
+            <div className="mt-4 p-4 bg-info-subtle border border-info/30 rounded-2xl">
+              <h3 className="font-semibold text-info-strong text-sm">
                 Editando Inventário de{' '}
                 {format(new Date(inventarioInfo.data_inventario), "dd/MM/yyyy 'às' HH:mm", {
                   locale: ptBR,
@@ -698,7 +699,7 @@ export default function Inventario() {
         </div>
 
         {/* Scanner */}
-        <Card className="border border-border/80 rounded-2xl shadow-xs overflow-hidden">
+        <Card className="overflow-hidden">
           <CardContent className="p-5 sm:p-6">
             {isMobile ? (
               <Tabs defaultValue="scanner" className="w-full">
@@ -786,7 +787,7 @@ export default function Inventario() {
                   {/* Manual Add Section */}
                   <div className="flex flex-col items-center text-center h-full md:border-l border-border/80 md:pl-6">
                     <div className="flex-1">
-                      <div className="w-12 h-12 rounded-2xl bg-blue-500/10 text-blue-600 flex items-center justify-center mb-3 mx-auto">
+                      <div className="w-12 h-12 rounded-2xl bg-info-subtle text-info-strong flex items-center justify-center mb-3 mx-auto">
                         <Plus size={24} />
                       </div>
                       <h3 className="font-semibold text-lg mb-1 tracking-tight">Adição Manual</h3>
@@ -822,7 +823,7 @@ export default function Inventario() {
         </Card>
 
         {/* Items */}
-        <Card className="border border-border/80 rounded-2xl shadow-xs">
+        <Card>
           <CardHeader className="space-y-4">
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
@@ -984,9 +985,9 @@ export default function Inventario() {
 
             <div className="mt-6 pt-6 border-t border-border/80">
               {observacoesGerente && (
-                <div className="mb-4 p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl">
-                  <Label className="font-semibold text-amber-700 dark:text-amber-400 text-xs uppercase tracking-wider">Observações do Gerente</Label>
-                  <p className="text-amber-800 dark:text-amber-300 text-sm mt-1 font-medium">{observacoesGerente}</p>
+                <div className="mb-4 p-3.5 bg-warning-subtle border border-warning/30 rounded-xl">
+                  <Label className="font-semibold text-warning-strong text-xs uppercase tracking-wider">Observações do Gerente</Label>
+                  <p className="text-warning-strong text-sm mt-1 font-medium">{observacoesGerente}</p>
                 </div>
               )}
               <Label htmlFor="inventario-observacoes" className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block mb-1.5">

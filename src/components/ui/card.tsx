@@ -6,7 +6,13 @@ const Card = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElemen
   ({ className, ...props }, ref) => (
     <div
       ref={ref}
-      className={cn('rounded-lg border bg-card text-card-foreground shadow-sm', className)}
+      // Raio de superfície (16px), borda suavizada e a elevação de repouso do sistema.
+      // É exatamente o que as telas vinham repetindo como
+      // `border border-border/80 rounded-2xl shadow-xs` — 43 vezes.
+      className={cn(
+        'rounded-2xl border border-border/80 bg-card text-card-foreground shadow-xs',
+        className
+      )}
       {...props}
     />
   )
@@ -24,7 +30,10 @@ const CardTitle = React.forwardRef<HTMLParagraphElement, React.HTMLAttributes<HT
   ({ className, ...props }, ref) => (
     <h3
       ref={ref}
-      className={cn('text-2xl font-semibold leading-none tracking-tight', className)}
+      // `text-2xl` (o padrão do shadcn) competia com o <h1> da página: título de cartão
+      // é rótulo de seção, não cabeçalho de tela. Todas as telas já corrigiam para
+      // `text-base font-semibold tracking-tight` — agora é o padrão.
+      className={cn('text-base font-semibold leading-none tracking-tight', className)}
       {...props}
     />
   )

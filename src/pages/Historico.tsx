@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeader } from '@/components/PageHeader';
 import { useAuth } from '@/contexts/AuthContext';
 import { useInventariosQuery } from '@/hooks/useInventariosQuery';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,8 +10,9 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ClipboardList, ChevronDown, ChevronUp, FileDown } from 'lucide-react';
 import { Database } from '@/integrations/supabase/types';
-import { InventoryStatus } from '@/types/app';
-import { Badge } from '@/components/ui/badge';
+import { StatusInventarioBadge } from '@/components/StatusInventarioBadge';
+import { ListaCardsSkeleton } from '@/components/skeletons/CardSkeleton';
+
 import * as XLSX from 'xlsx';
 
 type InventarioComItens = Database['public']['Tables']['inventarios']['Row'] & {
@@ -26,29 +28,9 @@ export default function Historico() {
     profile?.codigo_vendedor
   );
 
-  const getStatusBadge = (status: InventoryStatus) => {
-    // Tipado contra o enum de propósito: se um status novo entrar em
-    // inventory_status, o build quebra aqui em vez de renderizar `undefined`.
-    const styles: Record<InventoryStatus, string> = {
-      pendente: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30',
-      aprovado: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/30',
-      revisao: 'bg-destructive/10 text-destructive border-destructive/30',
-      baixado: 'bg-sky-500/10 text-sky-700 dark:text-sky-400 border-sky-500/30',
-    };
-
-    const labels: Record<InventoryStatus, string> = {
-      pendente: 'Pendente',
-      aprovado: 'Aprovado',
-      revisao: 'Não aprovado',
-      baixado: 'Baixado',
-    };
-
-    return (
-      <Badge variant="outline" className={`px-3 py-1 text-xs font-semibold rounded-lg border ${styles[status]}`}>
-        {labels[status]}
-      </Badge>
-    );
-  };
+  // Cor e rótulo do status agora vêm de `StatusInventarioBadge`, usado também em
+  // Vendedores. O `Record<InventoryStatus, …>` que garantia cobertura do enum foi
+  // preservado lá dentro.
 
   const handleExportExcel = (inventario: InventarioComItens) => {
     const dataExport = inventario.itens_inventario.map((item) => ({
@@ -67,18 +49,16 @@ export default function Historico() {
 
   return (
     <AppLayout>
-      <div className="space-y-6 antialiased">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">Histórico de Inventários</h1>
-          <p className="text-sm text-muted-foreground mt-1 font-medium">
-            Acompanhe seus inventários anteriores e seus status de conferência
-          </p>
-        </div>
+      <div className="space-y-6">
+        <PageHeader
+          title="Histórico de Inventários"
+          description="Acompanhe seus inventários anteriores e seus status de conferência"
+        />
 
         {loading ? (
-          <div className="text-center py-12 text-muted-foreground font-medium">Carregando histórico...</div>
+          <ListaCardsSkeleton />
         ) : inventarios.length === 0 ? (
-          <Card className="border border-border/80 rounded-2xl shadow-xs">
+          <Card>
             <CardContent className="py-12 text-center">
               <ClipboardList size={48} className="mx-auto mb-4 text-muted-foreground/60" />
               <h2 className="text-xl font-bold mb-2">Nenhum inventário encontrado</h2>
@@ -88,7 +68,7 @@ export default function Historico() {
         ) : (
           <div className="space-y-4">
             {inventarios.map((inventario) => (
-              <Card key={inventario.id} className="border border-border/80 rounded-2xl shadow-xs transition-shadow hover:shadow-md">
+              <Card key={inventario.id} className="transition-shadow hover:shadow-md">
                 <CardHeader
                   className="cursor-pointer py-4 sm:py-5"
                   onClick={() => setExpandedId(expandedId === inventario.id ? null : inventario.id)}
@@ -109,7 +89,7 @@ export default function Historico() {
                       </p>
                     </div>
                     <div className="flex items-center gap-2.5 self-start sm:self-auto">
-                      {getStatusBadge(inventario.status)}
+                      <StatusInventarioBadge status={inventario.status} />
                       <Button
                         size="sm"
                         variant="outline"
@@ -155,11 +135,11 @@ export default function Historico() {
                     )}
 
                     {inventario.observacoes_gerente && (
-                      <div className="p-3.5 bg-amber-500/10 border border-amber-500/30 rounded-xl">
-                        <p className="text-xs font-semibold text-amber-700 dark:text-amber-400 uppercase tracking-wider mb-1">
+                      <div className="p-3.5 bg-warning-subtle border border-warning/30 rounded-xl">
+                        <p className="text-xs font-semibold text-warning-strong uppercase tracking-wider mb-1">
                           Observações do gerente:
                         </p>
-                        <p className="text-sm text-amber-800 dark:text-amber-300 font-medium">{inventario.observacoes_gerente}</p>
+                        <p className="text-sm text-warning-strong font-medium">{inventario.observacoes_gerente}</p>
                       </div>
                     )}
 
