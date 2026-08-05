@@ -24,9 +24,10 @@ Resumo operacional — o documento tem o detalhe:
 - **Página:** `AppLayout` > `div.space-y-6` > `PageHeader`.
 - **Status de inventário:** sempre `<StatusInventarioBadge />`.
 - **Números em coluna:** `tabular-nums`.
+- **Carregando:** `<PageLoader />` para rota/sessão, skeleton para conteúdo, spinner só dentro de botão.
 - **Botão só-ícone:** `aria-label` obrigatório.
 
-Ao criar uma tela, percorra o checklist da seção 11 do `DESIGN_SYSTEM.md`.
+Ao criar uma tela, percorra o checklist da seção 12 do `DESIGN_SYSTEM.md`.
 
 ## Comandos
 

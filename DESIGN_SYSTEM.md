@@ -234,9 +234,17 @@ imprimia o valor cru do enum com `capitalize`, exibindo **"Revisao"** sem acento
 
 ## 8. Estados
 
-**Carregando.** Usar skeleton (`TableSkeleton`, `StatsCardsSkeleton`, `DashboardSkeleton`), que
-preserva o layout. Texto "Carregando..." só quando não há forma conhecida. Spinner só dentro de
-botão em ação.
+**Carregando.** Três casos, três respostas — e nenhuma outra:
+
+| Situação | O quê |
+|---|---|
+| Nada se sabe ainda: sessão, perfil, chunk de rota | **`<PageLoader />`** — um ponto que respira, sem texto |
+| A forma do conteúdo é conhecida | **Skeleton** (`TableSkeleton`, `StatsCardsSkeleton`, `ListaCardsSkeleton`, `DashboardSkeleton`) — preserva o layout e evita o salto quando o dado chega |
+| Ação disparada pelo usuário | **Spinner dentro do botão**, com o botão `disabled` |
+
+Nada de texto "Carregando…" solto e nada de anel girando fora de botão. Havia quatro telas de
+carregamento em três linguagens diferentes, e as três com anel giravam um **quadrado** —
+`rounded-full` nunca esteve lá.
 
 **Vazio.** Ícone (44px, `text-muted-foreground/50`) + frase do que aconteceu + ação de saída.
 Se houver filtro ativo, dizer isso e oferecer "Limpar filtros".
@@ -264,12 +272,41 @@ cabeçalho, **44px** em estado vazio. Traço padrão, sem preenchimento.
 
 ---
 
-## 10. Responsividade
+## 10. Navegação
+
+**Uma superfície só.** O menu lateral é dono da marca (topo), dos módulos (meio) e da
+identidade do usuário com o logout (rodapé). **Não há cabeçalho fixo no desktop** — ele
+consumia 64px permanentes para repetir informação que já cabe no menu, e obrigava o usuário a
+olhar dois cantos da tela para navegar.
+
+- Painel flutuante: o `aside` reserva a calha com `p-3` e a superfície mora num filho
+  `rounded-2xl border border-sidebar-border bg-sidebar shadow-lg`.
+- **Acompanha o tema da página** — claro no tema claro, grafite no escuro. Não é uma
+  superfície escura permanente. Os sete tokens `--sidebar-*` existem para o menu poder mudar
+  de identidade sem arrastar o resto do sistema junto.
+- Largura do `aside`: **`w-24`** recolhido · **`w-[17rem]`** expandido. O `p-3` desconta 24px,
+  então o painel fica com 72px (régua de ícones) e 248px. Mudar uma sem a outra estreita o
+  painel.
+- Calha até o conteúdo: **36px** (12px do `p-3` + `md:pl-6` no `<main>`). Assimétrica de
+  propósito — separar navegação de conteúdo vale mais que a margem da borda da página.
+- **Recolhido é o padrão.** A preferência fica em `localStorage`, e o teste é contra
+  `'false'`: sem valor guardado vale o padrão, e só a decisão explícita de expandir sobrepõe.
+- Expansão por **clique**. **Nunca por hover** — dispara sozinho ao cruzar a tela, não existe
+  em toque e sobrepõe conteúdo sem intenção.
+- Item ativo: `bg-sidebar-active` (= `--primary`, a mesma cor de ação do resto do sistema) +
+  `shadow-xs` + `aria-current="page"`.
+- Recolhido, todo item leva tooltip à direita **e** `aria-label` — tooltip é dica visual, não
+  nome acessível.
+- O fundo do menu **não** usa a cor da marca: sidebar azul faria o item ativo competir com o
+  próprio fundo e esvaziaria o significado do azul nas demais telas.
+
+**Mobile** (`< md`): o cabeçalho permanece — é onde vive o gatilho da gaveta — mais a gaveta
+com a mesma estrutura do menu e a barra inferior com os módulos mais usados.
+
+## 11. Responsividade
 
 Breakpoints do Tailwind. `sm` 640 · `md` 768 (limite mobile/desktop do layout) · `lg` 1024 ·
 `xl` 1280.
-
-- Menu lateral aparece em `md+`; abaixo disso, gaveta + barra inferior.
 - Alvo de toque mínimo 44px — a razão de `h-11` ser o padrão.
 - Tabela larga vira cartões no mobile, não rolagem horizontal.
 - Grade de métricas: `grid-cols-2 xl:grid-cols-4`.
@@ -277,7 +314,7 @@ Breakpoints do Tailwind. `sm` 640 · `md` 768 (limite mobile/desktop do layout) 
 
 ---
 
-## 11. Checklist para tela nova
+## 12. Checklist para tela nova
 
 - [ ] `AppLayout` > `div.space-y-6` > `PageHeader`
 - [ ] Nenhuma cor crua do Tailwind — só tokens semânticos
@@ -293,7 +330,7 @@ Breakpoints do Tailwind. `sm` 640 · `md` 768 (limite mobile/desktop do layout) 
 
 ---
 
-## 12. Estado da conformidade
+## 13. Estado da conformidade
 
 Varredura de 2026-08-05, após a migração — todos os pendentes da primeira rodada foram
 fechados:

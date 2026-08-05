@@ -1,4 +1,5 @@
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import {
   Select,
   SelectContent,
@@ -19,6 +20,9 @@ interface PaginationProps {
   onItemsPerPageChange: (value: string) => void;
 }
 
+/** Opções oferecidas por padrão. O valor em uso entra na lista mesmo fora daqui. */
+const OPCOES_PADRAO = [10, 20, 50, 100];
+
 export function Pagination({
   currentPage,
   totalPages,
@@ -30,6 +34,17 @@ export function Pagination({
   onItemsPerPageChange,
 }: PaginationProps) {
   const displayedEnd = Math.min(endIndex, totalItems);
+
+  /**
+   * As opções incluem o `itemsPerPage` em vigor, ainda que ele não seja um dos padrões.
+   *
+   * Sem isso o campo aparecia **vazio** — não transparente — nas telas que pedem 12 por
+   * página (Conferência e Exportar XML): o Radix Select cai no placeholder quando o `value`
+   * não casa com nenhum `SelectItem`, e aqui não há placeholder. O conserto fica no
+   * componente porque a paginação é compartilhada; limitar as telas aos quatro valores
+   * padrão só esconderia o problema até a próxima tela precisar de outro número.
+   */
+  const opcoes = Array.from(new Set([...OPCOES_PADRAO, itemsPerPage])).sort((a, b) => a - b);
 
   // Gerar números de páginas visíveis
   const getVisiblePages = () => {
@@ -62,34 +77,39 @@ export function Pagination({
   const visiblePages = getVisiblePages();
 
   return (
-    <div className="flex flex-wrap items-center justify-center gap-4 border border-border/80 rounded-2xl p-4 bg-card shadow-xs sm:justify-between antialiased">
+    // `Card` já entrega borda, raio, fundo e a elevação de repouso — era exatamente o que
+    // estava escrito à mão aqui. O `antialiased` também saiu: já está no `body`.
+    <Card className="flex flex-wrap items-center justify-center gap-4 p-4 sm:justify-between">
       <div className="flex items-center gap-2">
         <span className="text-xs font-medium text-muted-foreground">Itens por página:</span>
         <Select value={String(itemsPerPage)} onValueChange={onItemsPerPageChange}>
-          <SelectTrigger className="w-20 h-9 rounded-xl border-input shadow-2xs text-xs font-semibold">
+          {/* `h-9` é override intencional: esta é uma barra densa, e o campo acompanha a
+              altura dos botões de página, não os 44px do controle padrão. */}
+          <SelectTrigger className="h-9 w-20 text-xs">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-popover border border-border/80 rounded-xl z-50">
-            <SelectItem value="10">10</SelectItem>
-            <SelectItem value="20">20</SelectItem>
-            <SelectItem value="50">50</SelectItem>
-            <SelectItem value="100">100</SelectItem>
+          <SelectContent>
+            {opcoes.map((n) => (
+              <SelectItem key={n} value={String(n)}>
+                {n}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
       </div>
 
-      <div className="text-xs font-medium text-muted-foreground">
+      <div className="text-xs font-medium tabular-nums text-muted-foreground">
         Mostrando {startIndex + 1} até {displayedEnd} de {totalItems} itens
       </div>
 
       {/* Desktop: Botões de página */}
-      <div className="hidden sm:flex items-center gap-2">
+      <div className="hidden items-center gap-2 sm:flex">
         <Button
           variant="outline"
-          size="icon"
+          size="iconSm"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="rounded-xl h-9 w-9 border-input shadow-2xs"
+          aria-label="Página anterior"
         >
           <ChevronLeft size={16} />
         </Button>
@@ -98,7 +118,10 @@ export function Pagination({
           {visiblePages.map((page, index) => {
             if (page === '...') {
               return (
-                <span key={`dots-${index}`} className="px-2 py-1 text-xs text-muted-foreground font-medium">
+                <span
+                  key={`dots-${index}`}
+                  className="px-2 py-1 text-xs font-medium text-muted-foreground"
+                >
                   ...
                 </span>
               );
@@ -108,9 +131,11 @@ export function Pagination({
               <Button
                 key={page}
                 variant={currentPage === page ? 'default' : 'outline'}
-                size="icon"
+                size="iconSm"
                 onClick={() => onPageChange(page as number)}
-                className="rounded-xl h-9 w-9 text-xs font-semibold shadow-2xs"
+                aria-label={`Página ${page}`}
+                aria-current={currentPage === page ? 'page' : undefined}
+                className="text-xs"
               >
                 {page}
               </Button>
@@ -120,41 +145,41 @@ export function Pagination({
 
         <Button
           variant="outline"
-          size="icon"
+          size="iconSm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="rounded-xl h-9 w-9 border-input shadow-2xs"
+          aria-label="Próxima página"
         >
           <ChevronRight size={16} />
         </Button>
       </div>
 
       {/* Mobile: Navegação simplificada */}
-      <div className="flex sm:hidden items-center gap-3">
+      <div className="flex items-center gap-3 sm:hidden">
         <Button
           variant="outline"
-          size="sm"
+          size="iconSm"
           onClick={() => onPageChange(currentPage - 1)}
           disabled={currentPage === 1}
-          className="rounded-xl h-9 border-input shadow-2xs"
+          aria-label="Página anterior"
         >
           <ChevronLeft size={16} />
         </Button>
 
-        <span className="text-xs font-bold min-w-[80px] text-center text-foreground">
+        <span className="min-w-[80px] text-center text-xs font-bold tabular-nums">
           {currentPage} / {totalPages}
         </span>
 
         <Button
           variant="outline"
-          size="sm"
+          size="iconSm"
           onClick={() => onPageChange(currentPage + 1)}
           disabled={currentPage === totalPages}
-          className="rounded-xl h-9 border-input shadow-2xs"
+          aria-label="Próxima página"
         >
           <ChevronRight size={16} />
         </Button>
       </div>
-    </div>
+    </Card>
   );
 }

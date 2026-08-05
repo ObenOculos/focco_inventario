@@ -3,6 +3,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { createBrowserRouter, RouterProvider, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { PageLoader } from '@/components/PageLoader';
 import { lazy, Suspense } from 'react';
 
 // Lazy load all page components
@@ -23,11 +24,7 @@ const HomeRedirect = () => {
   // Aguarda auth + perfil carregarem antes de decidir o destino, evitando
   // redirecionar para a área do papel errado enquanto o role ainda é nulo.
   if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="w-12 h-12 border-4 border-foreground border-t-transparent animate-spin" />
-      </div>
-    );
+    return <PageLoader />;
   }
 
   if (!user) {
@@ -41,11 +38,7 @@ const HomeRedirect = () => {
 const RootLayout = () => {
   return (
     <>
-      <Suspense
-        fallback={
-          <div className="flex items-center justify-center min-h-screen">Carregando...</div>
-        }
-      >
+      <Suspense fallback={<PageLoader />}>
         <Outlet />
       </Suspense>
     </>

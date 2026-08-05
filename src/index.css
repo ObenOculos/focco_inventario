@@ -75,6 +75,25 @@
     --destructive-subtle: 0 86% 97%;
     --destructive-strong: 0 70% 36%;
 
+    /* ---- Menu lateral ------------------------------------------------------------
+       O menu ACOMPANHA o tema da página: claro no tema claro, grafite no escuro. Ele é
+       um painel flutuante sobre o fundo, separado por borda e sombra — não por cor.
+
+       Os tokens existem mesmo espelhando os da página porque o menu é a única superfície
+       que precisa mudar de identidade sem arrastar o resto junto: trocar estes sete
+       valores reforma o menu inteiro sem tocar em nenhum componente.
+
+       Item ativo usa `--primary`, a mesma cor de ação do resto do sistema. Foi o motivo
+       de não pintar o fundo do menu de azul: sidebar azul faria o item ativo competir
+       com o próprio fundo e esvaziaria o significado do azul nas demais telas.         */
+    --sidebar: 0 0% 100%;
+    --sidebar-foreground: 224 71% 4%;
+    --sidebar-muted: 220 9% 46%;
+    --sidebar-accent: 220 14% 92%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-active: 221 83% 53%;
+    --sidebar-active-foreground: 210 40% 98%;
+
     /* ---- Forma ------------------------------------------------------------------
        Raio base. Toda a escala (`rounded-sm` a `rounded-2xl`) é derivada dele em
        tailwind.config.ts, então mudar este número reforma o sistema inteiro.        */
@@ -135,6 +154,16 @@
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;
     --ring: 217 91% 60%;
+
+    /* Menu lateral: aqui, sim, o grafite. É o mesmo painel do tema claro, seguindo o
+       tema — e não uma superfície escura permanente. */
+    --sidebar: 222 47% 11%;
+    --sidebar-foreground: 210 40% 96%;
+    --sidebar-muted: 215 20% 62%;
+    --sidebar-accent: 217 33% 17%;
+    --sidebar-border: 217 33% 20%;
+    --sidebar-active: 217 91% 60%;
+    --sidebar-active-foreground: 222 47% 11%;
 
     --success: 158 64% 40%;
     --success-foreground: 0 0% 100%;

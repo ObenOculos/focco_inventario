@@ -74,11 +74,18 @@ export default {
           DEFAULT: 'hsl(var(--card))',
           foreground: 'hsl(var(--card-foreground))',
         },
-        // Removidos daqui e do index.css: o grupo `sidebar-*` (8 tokens) e `chart-*`
-        // (5 tokens). O componente `ui/sidebar` e o `recharts` saíram na limpeza, e
-        // nenhuma classe do projeto referenciava esses tokens — eram 13 variáveis que
-        // pareciam parte do sistema sem governar nada. A sidebar real usa `card` e
-        // `border`, como qualquer outra superfície.
+        // Superfície própria do menu lateral, fora do tema da página — ver index.css.
+        // (O grupo `chart-*` continua removido: o `recharts` saiu na limpeza e nenhuma
+        // classe do projeto o referenciava.)
+        sidebar: {
+          DEFAULT: 'hsl(var(--sidebar))',
+          foreground: 'hsl(var(--sidebar-foreground))',
+          muted: 'hsl(var(--sidebar-muted))',
+          accent: 'hsl(var(--sidebar-accent))',
+          border: 'hsl(var(--sidebar-border))',
+          active: 'hsl(var(--sidebar-active))',
+          'active-foreground': 'hsl(var(--sidebar-active-foreground))',
+        },
       },
       // Escala inteira derivada de `--radius` (0.625rem = 10px). Antes só sm/md/lg
       // eram derivados: `rounded-xl` e `rounded-2xl` — juntos, 125 usos, a maioria do
@@ -93,6 +100,20 @@ export default {
         '2xl': 'calc(var(--radius) + 6px)', // 16px — superfícies: card, modal, alerta
       },
       keyframes: {
+        // Indicador de carregamento do sistema: pontos que "respiram" em onda.
+        //
+        // O repouso é o estado PEQUENO, e o pico é o crescimento — é o crescer que
+        // viaja da esquerda para a direita. O pico acontece a 30% do ciclo e a volta ao
+        // repouso se completa em 60%, deixando uma cauda de descanso; com três pontos
+        // defasados em 1/3 do ciclo, os picos caem em 30%, 63% e 96%, perfeitamente
+        // espaçados e sem instante algum sem movimento.
+        //
+        // `scale` a partir do centro não altera a caixa ocupada, então a onda nunca
+        // empurra o que está ao redor.
+        respirar: {
+          '0%, 60%, 100%': { transform: 'scale(0.7)', opacity: '0.4' },
+          '30%': { transform: 'scale(1)', opacity: '1' },
+        },
         'accordion-down': {
           from: {
             height: '0',
@@ -111,6 +132,10 @@ export default {
         },
       },
       animation: {
+        // 1.5s divide exatamente por 3, o que permite o defasamento de 0,5s por ponto —
+        // ver `PageLoader`. Mudar a duração exige mudar os atrasos junto, ou a onda
+        // deixa de ser uniforme.
+        respirar: 'respirar 1.5s ease-in-out infinite',
         'accordion-down': 'accordion-down 0.2s ease-out',
         'accordion-up': 'accordion-up 0.2s ease-out',
       },

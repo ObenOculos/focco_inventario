@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { PageLoader } from '@/components/PageLoader';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import {
   Select,
   SelectContent,
@@ -23,7 +25,8 @@ import {
 import { SearchFilter } from '@/components/SearchFilter';
 import { Pagination } from '@/components/Pagination';
 import { usePagination } from '@/hooks/usePagination';
-import { ArrowLeftRight, Download, GitCompare, Loader2, Minus } from 'lucide-react';
+import { useFiltroAno } from '@/hooks/useFiltroAno';
+import { ArrowLeftRight, Download, GitCompare, Minus, TriangleAlert } from 'lucide-react';
 import { format } from 'date-fns';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
@@ -38,6 +41,17 @@ import {
  *
  * Não participa do fluxo de aprovação nem grava nada: o usuário escolhe dois inventários e
  * vê a diferença entre as contagens. Diferença = B − A.
+ *
+ * Layout em dois blocos: **seleção** (uma linha só no desktop) e **resultado** (um cartão,
+ * com o resumo em faixa e a tabela). A versão anterior empilhava até seis blocos na vertical
+ * — filtro de vendedor sozinho numa linha `max-w-md`, A e B numa segunda, quatro cartões de
+ * KPI soltos, um cartão só para a nota de "sem valor", o aviso de contagens disjuntas e a
+ * tabela — desperdiçando a largura e empurrando o dado para fora da primeira dobra.
+ *
+ * Os dois parágrafos explicativos permanentes saíram: "a diferença é B − A" foi para o
+ * cabeçalho da coluna, onde é lida no momento em que importa, e o alerta sobre comparar
+ * vendedores diferentes virou aviso **condicional** — silencioso quando A e B são do mesmo
+ * vendedor, que é o caso normal.
  */
 export default function CompararInventarios() {
   const [vendedorFiltro, setVendedorFiltro] = useState<string>('todos');
@@ -54,24 +68,34 @@ export default function CompararInventarios() {
     error,
   } = useComparacaoQuery(idA || null, idB || null);
 
+  // O ano é o primeiro recorte: vendedor e as listas de A/B trabalham dentro dele.
+  // A regra (padrão no ano corrente, com recuo para o mais recente com dados) mora em
+  // `useFiltroAno`, compartilhada com a tela de Exportar XML.
+  const {
+    anos,
+    ano: anoEfetivo,
+    setAno,
+    itensDoAno: opcoesDoAno,
+  } = useFiltroAno(opcoes);
+
   const vendedores = useMemo(() => {
     const map = new Map<string, string>();
-    opcoes.forEach((o) => {
+    opcoesDoAno.forEach((o) => {
       if (!map.has(o.codigo_vendedor)) map.set(o.codigo_vendedor, o.nome_vendedor);
     });
     return Array.from(map.entries()).sort((a, b) => a[1].localeCompare(b[1]));
-  }, [opcoes]);
+  }, [opcoesDoAno]);
 
   const opcoesFiltradas = useMemo(() => {
-    if (vendedorFiltro === 'todos') return opcoes;
-    return opcoes.filter((o) => o.codigo_vendedor === vendedorFiltro);
-  }, [opcoes, vendedorFiltro]);
+    if (vendedorFiltro === 'todos') return opcoesDoAno;
+    return opcoesDoAno.filter((o) => o.codigo_vendedor === vendedorFiltro);
+  }, [opcoesDoAno, vendedorFiltro]);
 
   const invA = opcoes.find((o) => o.id === idA) || null;
   const invB = opcoes.find((o) => o.id === idB) || null;
 
   const rotulo = (inv: InventarioOpcao) =>
-    `${format(new Date(inv.data_inventario), 'dd/MM/yyyy HH:mm')} · ${inv.nome_vendedor} · ${inv.status}`;
+    `${format(new Date(inv.data_inventario), 'dd/MM/yyyy HH:mm')} · ${inv.nome_vendedor}`;
 
   const trocarLados = () => {
     setIdA(idB);
@@ -82,6 +106,19 @@ export default function CompararInventarios() {
   // na lista filtrada.
   const trocarVendedor = (codigo: string) => {
     setVendedorFiltro(codigo);
+    setIdA('');
+    setIdB('');
+  };
+
+  /**
+   * Trocar de ano zera vendedor e seleção — pelo mesmo motivo, um nível acima: o vendedor
+   * escolhido pode não ter inventário no ano novo, e A/B com certeza não estão mais na
+   * lista. Comparar através da fronteira do ano continua possível: basta escolher
+   * "Todos os anos".
+   */
+  const trocarAno = (ano: string) => {
+    setAno(ano);
+    setVendedorFiltro('todos');
     setIdA('');
     setIdB('');
   };
@@ -111,8 +148,7 @@ export default function CompararInventarios() {
     };
   }, [linhas]);
 
-  const moeda = (v: number) =>
-    v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
   const linhasFiltradas = useMemo(() => {
     switch (filtroLinha) {
@@ -173,6 +209,28 @@ export default function CompararInventarios() {
 
   const mesmoInventario = !!idA && idA === idB;
   const prontoParaComparar = !!idA && !!idB && !mesmoInventario;
+  const vendedoresDiferentes =
+    !!invA && !!invB && invA.codigo_vendedor !== invB.codigo_vendedor;
+
+  /** Cor da divergência: positiva informativa, negativa em atenção. Escala divergente. */
+  const corDif = (v: number) =>
+    v > 0 ? 'text-info-strong' : v < 0 ? 'text-warning-strong' : 'text-muted-foreground';
+
+  const tiles = [
+    {
+      rotulo: 'Produtos',
+      valor: String(resumo.total),
+      nota: `${resumo.emAmbos} em ambos · ${resumo.iguais} sem diferença`,
+    },
+    { rotulo: 'Só no A', valor: String(resumo.soEmA), nota: 'ausentes no B' },
+    { rotulo: 'Só no B', valor: String(resumo.soEmB), nota: 'ausentes no A' },
+    {
+      rotulo: 'Diferença',
+      valor: `${resumo.valorDiferenca > 0 ? '+' : ''}${moeda(resumo.valorDiferenca)}`,
+      nota: `${resumo.somaA} → ${resumo.somaB} un. (${resumo.somaB - resumo.somaA >= 0 ? '+' : ''}${resumo.somaB - resumo.somaA})`,
+      cor: corDif(resumo.valorDiferenca),
+    },
+  ];
 
   return (
     <AppLayout>
@@ -183,43 +241,58 @@ export default function CompararInventarios() {
           isFetching={isFetching && !carregandoComparacao}
         />
 
+        {/* ── Bloco 1 · Seleção ─────────────────────────────────────────────────────
+            Uma linha só a partir de `lg`. O botão de inverter fica entre A e B, onde a
+            relação que ele altera está visível. */}
         <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base flex items-center gap-2">
-              <GitCompare className="h-5 w-5" />
-              Seleção
-            </CardTitle>
-            <CardDescription>
-              Esta tela é apenas consulta: comparar não altera nem grava nada. A diferença é
-              calculada como <strong>B − A</strong>.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="max-w-md">
-              <Select value={vendedorFiltro} onValueChange={trocarVendedor}>
-                <SelectTrigger className="h-11 rounded-xl">
-                  <SelectValue placeholder="Filtrar por vendedor" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="todos">Todos os vendedores</SelectItem>
-                  {vendedores.map(([codigo, nome]) => (
-                    <SelectItem key={codigo} value={codigo}>
-                      {nome} ({codigo})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground pt-1.5">
-                Comparar inventários de vendedores diferentes é permitido, mas raramente faz
-                sentido. Filtre por vendedor para reduzir as listas.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-[1fr_auto_1fr] gap-3 items-end">
+          <CardContent className="p-4 sm:p-5">
+            {/* Funil da esquerda para a direita: Ano → Vendedor → A → B. O ano é o recorte
+                mais amplo, e por isso vem primeiro — que é o "acima" de um layout em linha. */}
+            <div className="grid items-end gap-3 lg:grid-cols-[auto_minmax(0,0.85fr)_minmax(0,1.15fr)_auto_minmax(0,1.15fr)]">
               <div className="space-y-1.5">
-                <p className="text-sm font-medium">Inventário A (base)</p>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Ano
+                </Label>
+                <Select value={anoEfetivo} onValueChange={trocarAno} disabled={carregandoOpcoes}>
+                  <SelectTrigger className="w-full lg:w-32">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {anos.map((ano) => (
+                      <SelectItem key={ano} value={ano}>
+                        {ano}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="todos">Todos</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Vendedor
+                </Label>
+                <Select value={vendedorFiltro} onValueChange={trocarVendedor}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="todos">Todos os vendedores</SelectItem>
+                    {vendedores.map(([codigo, nome]) => (
+                      <SelectItem key={codigo} value={codigo}>
+                        {nome} ({codigo})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Inventário A · base
+                </Label>
                 <Select value={idA} onValueChange={setIdA} disabled={carregandoOpcoes}>
-                  <SelectTrigger className="h-11 rounded-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder="Escolha o inventário A" />
                   </SelectTrigger>
                   <SelectContent>
@@ -237,16 +310,18 @@ export default function CompararInventarios() {
                 size="icon"
                 onClick={trocarLados}
                 disabled={!idA && !idB}
-                title="Trocar A e B"
-                className="h-11 w-11 rounded-xl shrink-0"
+                aria-label="Inverter A e B"
+                className="w-full lg:w-11"
               >
                 <ArrowLeftRight className="h-4 w-4" />
               </Button>
 
               <div className="space-y-1.5">
-                <p className="text-sm font-medium">Inventário B (comparado)</p>
+                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Inventário B · comparado
+                </Label>
                 <Select value={idB} onValueChange={setIdB} disabled={carregandoOpcoes}>
-                  <SelectTrigger className="h-11 rounded-xl">
+                  <SelectTrigger>
                     <SelectValue placeholder="Escolha o inventário B" />
                   </SelectTrigger>
                   <SelectContent>
@@ -260,278 +335,235 @@ export default function CompararInventarios() {
               </div>
             </div>
 
+            {/* Avisos condicionais: nada ocupa espaço enquanto está tudo certo. */}
+            {!carregandoOpcoes && opcoesFiltradas.length === 0 && (
+              <p className="pt-2.5 text-xs text-muted-foreground">
+                Nenhum inventário em <strong className="text-foreground">{anoEfetivo}</strong>
+                {vendedorFiltro !== 'todos' && ' para este vendedor'}. Escolha outro ano ou
+                selecione <strong className="text-foreground">Todos</strong>.
+              </p>
+            )}
             {mesmoInventario && (
-              <p className="text-xs text-destructive">
+              <p className="pt-2.5 text-xs font-medium text-destructive-strong">
                 Escolha dois inventários diferentes.
+              </p>
+            )}
+            {vendedoresDiferentes && (
+              <p className="flex items-center gap-1.5 pt-2.5 text-xs font-medium text-warning-strong">
+                <TriangleAlert className="size-3.5 shrink-0" />
+                A e B são de vendedores diferentes — o comparativo raramente faz sentido.
               </p>
             )}
           </CardContent>
         </Card>
 
+        {/* ── Bloco 2 · Resultado ──────────────────────────────────────────────────── */}
         {!prontoParaComparar ? (
           <Card>
-            <CardContent className="py-16 text-center">
-              <GitCompare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
-              <p className="font-medium mb-1">Escolha os dois inventários</p>
-              <p className="text-sm text-muted-foreground">
-                O comparativo aparece aqui depois da seleção.
+            <CardContent className="flex flex-col items-center px-6 py-20 text-center">
+              <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                <GitCompare className="size-7" />
+              </div>
+              <p className="text-base font-semibold">Nenhum comparativo ainda</p>
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                Escolha o inventário A e o B acima. O resultado aparece aqui, com o resumo e a
+                diferença produto a produto.
               </p>
             </CardContent>
           </Card>
         ) : carregandoComparacao ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" />
-            Carregando comparativo...
-          </div>
-        ) : error ? (
-          <Card className="border border-destructive/40 bg-destructive/5 rounded-2xl">
-            <CardContent className="py-10 text-center">
-              <p className="font-medium mb-1 text-destructive">Não foi possível comparar</p>
-              <p className="text-sm text-muted-foreground">{error.message}</p>
-            </CardContent>
+          <Card>
+            <PageLoader inline label="Carregando comparativo" />
           </Card>
+        ) : error ? (
+          <Alert variant="destructive">
+            <TriangleAlert />
+            <AlertDescription>
+              <strong>Não foi possível comparar.</strong> {error.message}
+            </AlertDescription>
+          </Alert>
         ) : (
-          <>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Produtos comparados
-                  </p>
-                  <p className="text-2xl font-bold">{resumo.total}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {resumo.emAmbos} em ambos · {resumo.iguais} sem diferença
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Só no A
-                  </p>
-                  <p className="text-2xl font-bold">{resumo.soEmA}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    produtos ausentes no B
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Só no B
-                  </p>
-                  <p className="text-2xl font-bold">{resumo.soEmB}</p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    produtos ausentes no A
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Diferença
-                  </p>
-                  <p
-                    className={`text-2xl font-bold ${
-                      resumo.valorDiferenca > 0
-                        ? 'text-info-strong'
-                        : resumo.valorDiferenca < 0
-                          ? 'text-warning-strong'
-                          : ''
-                    }`}
-                  >
-                    {resumo.valorDiferenca > 0 ? '+' : ''}
-                    {moeda(resumo.valorDiferenca)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">
-                    {moeda(resumo.valorA)} → {moeda(resumo.valorB)}
-                  </p>
-                  <p className="text-[11px] text-muted-foreground">
-                    {resumo.somaA} → {resumo.somaB} un. (
-                    {resumo.somaB - resumo.somaA >= 0 ? '+' : ''}
-                    {resumo.somaB - resumo.somaA})
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {resumo.semValor > 0 && (
-              <Card className="border border-border/80 rounded-2xl">
-                <CardContent className="py-3 text-xs text-muted-foreground">
-                  <strong className="text-foreground">{resumo.semValor}</strong> produto(s) sem
-                  valor cadastrado em Produtos — entram nas quantidades, mas contam como zero
-                  nos totais em reais.
-                </CardContent>
-              </Card>
-            )}
-
-            {resumo.emAmbos === 0 && resumo.total > 0 && (
-              <Alert variant="warning">
-                <AlertDescription>
-                  <strong>Nenhum produto em comum</strong> entre os dois inventários. Isso
-                  costuma indicar que são contagens parciais de faixas diferentes de produto, e
-                  não recontagens do mesmo estoque — nesse caso o comparativo não é
-                  significativo, e o que você quer pode ser juntar os dois na Conferência.
-                </AlertDescription>
-              </Alert>
-            )}
-
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-base">Diferenças por produto</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={exportarExcel}
-                    disabled={linhasFiltradas.length === 0}
-                    className="shrink-0 h-9 w-9 rounded-xl shadow-2xs"
-                    title="Exportar para Excel"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
+          <Card>
+            <CardHeader className="gap-3 pb-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div className="min-w-0">
+                  <CardTitle>Resultado</CardTitle>
+                  {invA && invB && (
+                    <p className="mt-1 truncate text-xs text-muted-foreground">
+                      {rotulo(invA)} <span className="px-1 text-foreground">→</span> {rotulo(invB)}
+                    </p>
+                  )}
                 </div>
-                <div className="flex flex-col sm:flex-row gap-2 pt-2">
+
+                <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
                   <SearchFilter
                     value={busca}
                     onChange={setBusca}
                     placeholder="Buscar produto..."
-                    className="max-w-none sm:max-w-sm"
+                    className="max-w-none sm:w-56"
                   />
-                  <Select value={filtroLinha} onValueChange={setFiltroLinha}>
-                    <SelectTrigger className="w-full sm:w-56 h-11 rounded-xl">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="com_diferenca">Com diferença</SelectItem>
-                      <SelectItem value="todos">Todos os produtos</SelectItem>
-                      <SelectItem value="iguais">Sem diferença</SelectItem>
-                      <SelectItem value="em_ambos">Presentes em ambos</SelectItem>
-                      <SelectItem value="so_em_a">Só no inventário A</SelectItem>
-                      <SelectItem value="so_em_b">Só no inventário B</SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="flex gap-2">
+                    <Select value={filtroLinha} onValueChange={setFiltroLinha}>
+                      <SelectTrigger className="w-full font-normal sm:w-48">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="com_diferenca">Com diferença</SelectItem>
+                        <SelectItem value="todos">Todos os produtos</SelectItem>
+                        <SelectItem value="iguais">Sem diferença</SelectItem>
+                        <SelectItem value="em_ambos">Presentes em ambos</SelectItem>
+                        <SelectItem value="so_em_a">Só no inventário A</SelectItem>
+                        <SelectItem value="so_em_b">Só no inventário B</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={exportarExcel}
+                      disabled={linhasFiltradas.length === 0}
+                      aria-label="Exportar para Excel"
+                      className="shrink-0"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="border border-border/80 rounded-xl overflow-hidden shadow-2xs">
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead className="w-[28%]">Produto</TableHead>
-                          <TableHead className="text-right">Valor unit.</TableHead>
-                          <TableHead className="text-center">Qtd A</TableHead>
-                          <TableHead className="text-center">Qtd B</TableHead>
-                          <TableHead className="text-center">Diferença</TableHead>
-                          <TableHead className="text-right">Valor da dif.</TableHead>
-                          <TableHead className="text-center">Situação</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {paginatedData.length > 0 ? (
-                          paginatedData.map((l) => (
-                            <TableRow
-                              key={l.codigo_auxiliar}
-                              className={
-                                l.diferenca > 0
-                                  ? 'bg-info-subtle'
-                                  : l.diferenca < 0
-                                    ? 'bg-warning-subtle'
-                                    : ''
-                              }
-                            >
-                              <TableCell className="font-medium">
-                                <span className="font-mono text-sm">{l.codigo_auxiliar}</span>
-                                {l.nome_produto !== l.codigo_auxiliar && (
-                                  <span className="block text-xs text-muted-foreground truncate">
-                                    {l.nome_produto}
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-right text-sm">
-                                {l.valor_unitario === 0 ? (
-                                  <span className="text-muted-foreground">-</span>
-                                ) : (
-                                  moeda(l.valor_unitario)
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center font-medium">
-                                {l.quantidade_a}
-                              </TableCell>
-                              <TableCell className="text-center font-medium">
-                                {l.quantidade_b}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                <span
-                                  className={`font-bold ${
-                                    l.diferenca > 0
-                                      ? 'text-info-strong'
-                                      : l.diferenca < 0
-                                        ? 'text-warning-strong'
-                                        : 'text-muted-foreground'
-                                  }`}
-                                >
-                                  {l.diferenca > 0 ? `+${l.diferenca}` : l.diferenca}
+              </div>
+            </CardHeader>
+
+            <CardContent className="space-y-4">
+              {/* Resumo em faixa: quatro ladrilhos dentro do cartão, no lugar de quatro
+                  cartões soltos. Some borda, sombra e o espaço entre eles. */}
+              <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
+                {tiles.map((t) => (
+                  <div key={t.rotulo} className="rounded-xl bg-muted/50 px-4 py-3">
+                    <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      {t.rotulo}
+                    </p>
+                    <p className={`mt-0.5 text-xl font-bold tabular-nums ${t.cor ?? ''}`}>
+                      {t.valor}
+                    </p>
+                    <p className="mt-0.5 truncate text-2xs text-muted-foreground">{t.nota}</p>
+                  </div>
+                ))}
+              </div>
+
+              {resumo.emAmbos === 0 && resumo.total > 0 && (
+                <Alert variant="warning">
+                  <TriangleAlert />
+                  <AlertDescription>
+                    <strong>Nenhum produto em comum</strong> entre os dois inventários — costuma
+                    indicar contagens parciais de faixas diferentes, não recontagens do mesmo
+                    estoque. Nesse caso o que você quer pode ser juntar os dois na Conferência.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="overflow-hidden rounded-xl border border-border/80">
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground hover:bg-muted/40">
+                        <TableHead className="font-semibold">Produto</TableHead>
+                        <TableHead className="text-right font-semibold">Valor unit.</TableHead>
+                        <TableHead className="text-right font-semibold">Qtd A</TableHead>
+                        <TableHead className="text-right font-semibold">Qtd B</TableHead>
+                        {/* A fórmula mora aqui, onde é lida no momento em que importa —
+                            e não num parágrafo permanente no topo da tela. */}
+                        <TableHead className="text-right font-semibold">Dif. (B − A)</TableHead>
+                        <TableHead className="text-right font-semibold">Valor da dif.</TableHead>
+                        <TableHead className="text-center font-semibold">Situação</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {paginatedData.length > 0 ? (
+                        paginatedData.map((l) => (
+                          // Sem tinta de fundo na linha: com o filtro padrão "com diferença",
+                          // todas as linhas visíveis seriam tintas — o que não distingue nada.
+                          // O número colorido já carrega o sinal.
+                          <TableRow key={l.codigo_auxiliar}>
+                            <TableCell className="py-3">
+                              <span className="font-mono text-sm font-medium">
+                                {l.codigo_auxiliar}
+                              </span>
+                              {l.nome_produto !== l.codigo_auxiliar && (
+                                <span className="block truncate text-xs text-muted-foreground">
+                                  {l.nome_produto}
                                 </span>
-                              </TableCell>
-                              <TableCell className="text-right">
-                                {l.diferenca === 0 || l.valor_unitario === 0 ? (
-                                  <span className="text-muted-foreground">-</span>
-                                ) : (
-                                  <span
-                                    className={`font-semibold ${
-                                      l.diferenca > 0
-                                        ? 'text-info-strong'
-                                        : 'text-warning-strong'
-                                    }`}
-                                  >
-                                    {l.diferenca > 0 ? '+' : ''}
-                                    {moeda(l.diferenca * l.valor_unitario)}
-                                  </span>
-                                )}
-                              </TableCell>
-                              <TableCell className="text-center">
-                                {!l.presente_em_a ? (
-                                  <Badge variant="outline" className="text-[10px] rounded-md">
-                                    Só no B
-                                  </Badge>
-                                ) : !l.presente_em_b ? (
-                                  <Badge variant="outline" className="text-[10px] rounded-md">
-                                    Só no A
-                                  </Badge>
-                                ) : (
-                                  <span className="text-xs text-muted-foreground">
-                                    Em ambos
-                                  </span>
-                                )}
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={7} className="h-24 text-center">
-                              <div className="flex flex-col items-center gap-2">
-                                <Minus className="h-8 w-8 text-muted-foreground/50" />
-                                <p className="text-sm text-muted-foreground">
-                                  Nenhum produto encontrado com os filtros aplicados
-                                </p>
-                              </div>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right text-sm tabular-nums">
+                              {l.valor_unitario === 0 ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                moeda(l.valor_unitario)
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">
+                              {l.quantidade_a}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">
+                              {l.quantidade_b}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <span className={`font-bold tabular-nums ${corDif(l.diferenca)}`}>
+                                {l.diferenca > 0 ? `+${l.diferenca}` : l.diferenca}
+                              </span>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {l.diferenca === 0 || l.valor_unitario === 0 ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                <span
+                                  className={`font-semibold tabular-nums ${corDif(l.diferenca)}`}
+                                >
+                                  {l.diferenca > 0 ? '+' : ''}
+                                  {moeda(l.diferenca * l.valor_unitario)}
+                                </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {!l.presente_em_a ? (
+                                <Badge variant="neutral" className="px-2.5 py-0.5 text-2xs">
+                                  Só no B
+                                </Badge>
+                              ) : !l.presente_em_b ? (
+                                <Badge variant="neutral" className="px-2.5 py-0.5 text-2xs">
+                                  Só no A
+                                </Badge>
+                              ) : (
+                                <span className="text-xs text-muted-foreground">Em ambos</span>
+                              )}
                             </TableCell>
                           </TableRow>
-                        )}
-                      </TableBody>
-                    </Table>
-                  </div>
+                        ))
+                      ) : (
+                        <TableRow>
+                          <TableCell colSpan={7} className="h-28 text-center">
+                            <Minus className="mx-auto mb-2 size-7 text-muted-foreground/50" />
+                            <p className="text-sm text-muted-foreground">
+                              Nenhum produto encontrado com os filtros aplicados
+                            </p>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </TableBody>
+                  </Table>
                 </div>
-                {paginacao.totalPages > 1 && (
-                  <div className="pt-4">
-                    <Pagination {...paginacao} />
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </>
+              </div>
+
+              {/* Nota de rodapé, não cartão próprio: é ressalva sobre os totais acima. */}
+              {resumo.semValor > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  <strong className="text-foreground">{resumo.semValor}</strong> produto(s) sem
+                  valor cadastrado em Produtos — entram nas quantidades, mas contam como zero nos
+                  totais em reais.
+                </p>
+              )}
+
+              {paginacao.totalPages > 1 && <Pagination {...paginacao} />}
+            </CardContent>
+          </Card>
         )}
       </div>
     </AppLayout>

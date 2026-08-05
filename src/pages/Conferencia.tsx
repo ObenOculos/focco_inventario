@@ -759,37 +759,37 @@ export default function Conferencia() {
               </Card>
             </div>
 
-            {isGerente && (
-              <div className="flex justify-end">
-                <Button onClick={() => setShowManagerActions(true)} variant="outline">
-                  <Settings className="mr-2 h-4 w-4" />
-                  Ações do Gerente
-                </Button>
-              </div>
-            )}
-
             <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-2">
-                  <CardTitle className="text-base">Itens contados</CardTitle>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={handleExportExcel}
-                    disabled={itensRevisao.length === 0}
-                    className="shrink-0 h-9 w-9 rounded-xl shadow-2xs"
-                    title="Exportar para Excel"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </div>
-                <div className="pt-2">
+              {/* Busca à esquerda, ações à direita. O título "Itens contados" saiu: a tabela
+                  logo abaixo, com colunas Produto/Quantidade/Valor, já diz o que é.
+                  "Ações do Gerente" deixou de ter uma faixa só para si e passou a conviver
+                  com o export — ambas em altura padrão, alinhadas entre si e com a busca. */}
+              <CardHeader className="pb-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   <SearchFilter
                     value={buscaItem}
                     onChange={setBuscaItem}
                     placeholder="Buscar produto..."
-                    className="max-w-none sm:max-w-sm"
+                    className="max-w-none sm:w-64"
                   />
+                  <div className="flex gap-2 sm:justify-end">
+                    {isGerente && (
+                      <Button onClick={() => setShowManagerActions(true)} variant="outline">
+                        <Settings className="h-4 w-4" />
+                        Ações do Gerente
+                      </Button>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={handleExportExcel}
+                      disabled={itensRevisao.length === 0}
+                      aria-label="Exportar para Excel"
+                      className="shrink-0"
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>
