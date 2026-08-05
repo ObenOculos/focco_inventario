@@ -35,3 +35,6 @@ supabase/.temp/
 
 # Vite temp config files
 vite.config.ts.timestamp-*.mjs
+
+#Pasta Código Local Ciclone
+Apenas_Para_Consulta/

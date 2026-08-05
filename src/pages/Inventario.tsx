@@ -29,6 +29,7 @@ import { usePagination } from '@/hooks/usePagination';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Pagination } from '@/components/Pagination';
 import { useCodigosCorrecaoQuery } from '@/hooks/useCodigosCorrecaoQuery';
+import { resolverCodigosImportados } from '@/lib/codigoAuxiliar';
 import type { Json } from '@/integrations/supabase/types';
 
 const PENDING_SYNC_KEY = 'inventario_pending_sync';
@@ -433,11 +434,18 @@ export default function Inventario() {
 
   // Exportação agora é feita via ExportInventarioModal (JSON ou Excel)
 
-  const handleImportItems = (importedItems: ImportedInventarioItem[], obs?: string) => {
+  const handleImportItems = async (importedItems: ImportedInventarioItem[], obs?: string) => {
+    // Antes de entrar na lista, os códigos do arquivo passam pelas mesmas regras
+    // do scanner: tabela de correção e confronto com o cadastro. Sem isso, uma
+    // cor grafada 'C02' aqui e 'C2' no scanner virava dois produtos, e a tela de
+    // comparação — que agrupa por codigo_auxiliar exato — acusava divergência
+    // dos dois lados para um produto que nunca se moveu.
+    const resolucao = await resolverCodigosImportados(importedItems, codigosCorrecao);
+
     setItems((prev) => {
       const map = new Map<string, InventarioItem>();
       prev.forEach((it) => map.set(it.codigo_auxiliar, { ...it }));
-      importedItems.forEach((it) => {
+      resolucao.items.forEach((it) => {
         const existing = map.get(it.codigo_auxiliar);
         if (existing) {
           existing.quantidade_fisica += it.quantidade_fisica;
@@ -448,6 +456,25 @@ export default function Inventario() {
       return Array.from(map.values());
     });
     if (obs && !observacoes) setObservacoes(obs);
+
+    toast.success(`${resolucao.items.length} item(ns) importado(s).`);
+
+    const ajustes = [
+      resolucao.corrigidos && `${resolucao.corrigidos} código(s) corrigido(s)`,
+      resolucao.normalizados && `${resolucao.normalizados} ajustado(s) à grafia do cadastro`,
+      resolucao.fundidos && `${resolucao.fundidos} linha(s) unificada(s)`,
+    ].filter(Boolean);
+    if (ajustes.length > 0) toast.info(ajustes.join(' · '));
+
+    if (resolucao.desconhecidos.length > 0) {
+      const amostra = resolucao.desconhecidos.slice(0, 3).join(', ');
+      const resto = resolucao.desconhecidos.length - 3;
+      toast.warning(
+        `${resolucao.desconhecidos.length} código(s) sem produto cadastrado: ${amostra}` +
+          (resto > 0 ? ` e mais ${resto}` : '') +
+          '. Foram importados como vieram.'
+      );
+    }
   };
 
   const resetAfterSave = () => {

@@ -22,7 +22,8 @@ export interface ImportedInventarioItem {
 interface ImportInventarioModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onImport: (items: ImportedInventarioItem[], observacoes?: string) => void;
+  /** Pode ser assíncrono: o consumidor resolve os códigos contra o cadastro antes de aceitar. */
+  onImport: (items: ImportedInventarioItem[], observacoes?: string) => void | Promise<void>;
 }
 
 type Format = 'json' | 'excel' | null;
@@ -147,8 +148,10 @@ export function ImportInventarioModal({
         toast.error('Arquivo não contém itens válidos.');
         return;
       }
-      onImport(result.items, (result as any).observacoes);
-      toast.success(`${result.items.length} item(ns) importado(s).`);
+      // Aguardar importa: quem recebe consulta o cadastro para resolver os
+      // códigos, e é ele que informa o total — que pode ser menor que
+      // `result.items.length` quando duas grafias do mesmo produto se fundem.
+      await onImport(result.items, (result as any).observacoes);
       handleClose(false);
     } catch (err) {
       console.error('Erro ao importar arquivo:', err);
