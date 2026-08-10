@@ -1,0 +1,8 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+
+# Exigidos pelos módulos do Ciclone (db.py / regras.py / movimentos.py).
+# openpyxl NÃO entra: o gateway não lê nem escreve Excel.
+pandas
+psycopg2-binary

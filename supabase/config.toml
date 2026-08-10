@@ -61,3 +61,9 @@ verify_jwt = false
 
 [functions.reverter-aprovacao-inventario]
 verify_jwt = false
+
+# verify_jwt = false como as demais: a função valida o token ela mesma, porque
+# precisa do `user.id` para conferir `profiles.role` — a checagem do gateway
+# não é "tem token?", é "é gerente?".
+[functions.erp-consulta]
+verify_jwt = false

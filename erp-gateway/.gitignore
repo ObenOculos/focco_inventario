@@ -1,0 +1,12 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Módulos do Ciclone copiados para cá na migração ao servidor: são cópia de
+# `Apenas_Para_Consulta/`, que é local por decisão de projeto.
+ciclone/
+
+# Log do lançador da tarefa agendada.
+servico/gateway.log

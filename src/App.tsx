@@ -15,6 +15,7 @@ const Vendedores = lazy(() => import('./pages/Vendedores'));
 const Produtos = lazy(() => import('./pages/Produtos'));
 const Conferencia = lazy(() => import('./pages/Conferencia'));
 const CompararInventarios = lazy(() => import('./pages/CompararInventarios'));
+const ConsultaErp = lazy(() => import('./pages/ConsultaErp'));
 const ExportarXml = lazy(() => import('./pages/ExportarXml'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
@@ -127,6 +128,17 @@ const router = createBrowserRouter(
           element: (
             <ProtectedRoute allowedRoles={['gerente']}>
               <ExportarXml />
+            </ProtectedRoute>
+          ),
+        },
+        {
+          // Só gerente: a consulta expõe vendas, clientes e valores de TODOS os
+          // vendedores. A Edge Function repete essa checagem no servidor — esta
+          // aqui só evita a viagem inútil.
+          path: '/consulta-erp',
+          element: (
+            <ProtectedRoute allowedRoles={['gerente']}>
+              <ConsultaErp />
             </ProtectedRoute>
           ),
         },
