@@ -30,8 +30,10 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { CloudOff, Search, TriangleAlert } from 'lucide-react';
 import { format, parseISO, subDays } from 'date-fns';
 import {
+  empresasDaEscolha,
   useErpPedidosQuery,
   useErpVendedoresQuery,
+  type EscolhaEmpresa,
   type ParametrosPedidos,
   type PedidoErp,
 } from '@/hooks/useConsultaErpQuery';
@@ -79,6 +81,7 @@ export default function ConsultaErp() {
   const [de, setDe] = useState(format(subDays(HOJE, 30), FORMATO_ISO));
   const [ate, setAte] = useState(format(HOJE, FORMATO_ISO));
   const [baseData, setBaseData] = useState<'movimento' | 'emissao'>('movimento');
+  const [empresa, setEmpresa] = useState<EscolhaEmpresa>('ambas');
 
   // Consulta submetida: o que de fato foi ao ERP. Mantê-la separada dos campos é o
   // que impede a tela de consultar a cada tecla.
@@ -110,6 +113,7 @@ export default function ConsultaErp() {
       de,
       ate,
       vendedores: vendedor === 'todos' ? undefined : [Number(vendedor)],
+      empresas: empresasDaEscolha(empresa),
       base_data: baseData,
     });
   };
@@ -171,7 +175,7 @@ export default function ConsultaErp() {
             <CardTitle>Parâmetros</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
               <div className="space-y-2">
                 <Label htmlFor="vendedor">Vendedor</Label>
                 <Select value={vendedor} onValueChange={setVendedor}>
@@ -205,6 +209,20 @@ export default function ConsultaErp() {
                   value={ate}
                   onChange={(e) => setAte(e.target.value)}
                 />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="empresa">Empresa</Label>
+                <Select value={empresa} onValueChange={(v) => setEmpresa(v as EscolhaEmpresa)}>
+                  <SelectTrigger id="empresa">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ambas">Ambas (1 e 2)</SelectItem>
+                    <SelectItem value="1">Empresa 1</SelectItem>
+                    <SelectItem value="2">Empresa 2</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">

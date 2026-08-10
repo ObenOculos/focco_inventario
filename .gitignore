@@ -38,3 +38,6 @@ vite.config.ts.timestamp-*.mjs
 
 #Pasta Código Local Ciclone
 Apenas_Para_Consulta/
+
+# Gerado pelo `deno check` nas Edge Functions; não é dependência do app.
+deno.lock

@@ -59,9 +59,37 @@ const OPERACOES: Record<string, { caminho: string; montar: (p: Params) => URLSea
       q.set('de', exigirData(p.de, 'de'));
       q.set('ate', exigirData(p.ate, 'ate'));
       for (const e of listaInteiros(p.empresas, 'empresas')) q.append('empresas', e);
+      // Regras de conciliação. Omitidas, o gateway usa os padrões de
+      // `movimentos.py` — os mesmos da ferramenta local.
+      //
+      // NENHUM_TIPO existe porque lista vazia não trafega em query string: sem ele,
+      // "desmarquei todos os tipos" chegaria como "não informei nada" e o gateway
+      // devolveria os padrões, mostrando números que o usuário não pediu.
+      const NENHUM_TIPO = '-1';
+      for (const [campo, valor] of [
+        ['tipos_venda', p.tipos_venda],
+        ['tipos_remessa', p.tipos_remessa],
+      ] as const) {
+        if (valor === undefined) continue;
+        const lista = listaInteiros(valor, campo);
+        if (lista.length === 0) q.append(campo, NENHUM_TIPO);
+        else for (const t of lista) q.append(campo, t);
+      }
+      // Operações seguem outra regra no gateway: omitido = TODAS contam. Lista
+      // vazia aqui significaria "nenhuma operação", que zera tudo — e é uma escolha
+      // legítima do usuário, então passa como está.
+      if (p.operacoes !== undefined) {
+        const ops = listaInteiros(p.operacoes, 'operacoes');
+        if (ops.length === 0) q.append('operacoes', NENHUM_TIPO);
+        else for (const o of ops) q.append('operacoes', o);
+      }
       q.set('base_data', baseData(p.base_data));
       return q;
     },
+  },
+  regras: {
+    caminho: '/regras',
+    montar: () => new URLSearchParams(),
   },
 };
 

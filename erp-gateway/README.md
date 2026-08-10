@@ -150,6 +150,26 @@ os produtos, mais o `apply` linha a linha do `enriquecer`. Aceitável para uma
 consulta que o usuário dispara de propósito, mas a tela precisa de estado de
 carregamento — não é instantâneo.
 
+## Melhorias planejadas
+
+**Sincronizar `produtos` direto do Ciclone** (registrado em 2026-08-10, sem data).
+
+Hoje a tabela `produtos` do Supabase é atualizada por **upload manual**. Com o
+gateway no ar, dá para buscar da fonte. A forma preferida é começar por um botão
+*"Atualizar banco de dados dos produtos"*, e só depois pensar em automação.
+
+Motivo concreto: a coluna "Dif. em R$" da tela de comparação usa
+`produtos.valor_produto` (Supabase), enquanto o `comparativo.py` usa
+`db.valores_por_produto` (Ciclone, preço de venda atacado). Os dois números
+divergem hoje — essa sincronização é o que fecharia a diferença.
+
+O SQL já existe (`db.valores_por_produto`); falta o endpoint e a escrita no
+Supabase, que é operação de gerente e passa por RLS.
+
+⚠️ Se a sincronização falhar, a tela **não pode** exibir valor velho como se
+fosse novo. Foi assim que o antigo `estoque_real` mostrou ~100% de acuracidade
+sobre zero linhas.
+
 ## Migrar para o servidor
 
 O serviço já é portátil; nada de caminho fixo no código.

@@ -20,6 +20,9 @@ import logging
 import os
 import secrets
 import sys
+import threading
+import time
+from contextlib import contextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -87,7 +90,43 @@ logging.basicConfig(
 )
 log = logging.getLogger("erp-gateway")
 
+
+def _log_em_arquivo() -> None:
+    """Espelha os logs num arquivo, incluindo os do uvicorn.
+
+    Existe para a tarefa agendada poder chamar o python DIRETO, sem um .cmd
+    intermediário que redirecione a saída. O .cmd anterior criava um processo pai
+    que o Agendador matava sozinho, deixando o python órfão segurando a porta —
+    e órfão sob token S4U não se mata sem elevação. Com o python como processo da
+    própria tarefa, um Stop-ScheduledTask basta.
+    """
+    caminho = Path(os.getenv("GATEWAY_LOG", AQUI / "servico" / "gateway.log"))
+    try:
+        caminho.parent.mkdir(parents=True, exist_ok=True)
+        handler = logging.FileHandler(caminho, encoding="utf-8")
+    except OSError as exc:  # disco cheio, permissão: não é motivo para não subir
+        log.warning("Não foi possível abrir o log em '%s': %s", caminho, exc)
+        return
+    handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s %(message)s"))
+    # Só o logger raiz: os do uvicorn propagam para ele, e anexar nos dois fazia
+    # cada linha sair duplicada no arquivo. `uvicorn.access` é a exceção — ele não
+    # propaga, então precisa do handler próprio.
+    logging.getLogger().addHandler(handler)
+    logging.getLogger("uvicorn.access").addHandler(handler)
+
+
+_log_em_arquivo()
+
 SEGREDO = os.getenv("GATEWAY_SECRET", "")
+
+# Teto de consultas simultâneas ao Ciclone.
+#
+# `db.conectar()` abre uma conexão POR REQUISIÇÃO, e o FastAPI roda endpoints
+# síncronos num threadpool de dezenas de threads. Uma rajada de cliques na tela
+# vira uma dezena de conexões simultâneas atravessando a VPN, que se atropelam:
+# medimos a mesma consulta indo de 1,5 s para 30 s sob concorrência. O limite
+# enfileira em vez de degradar todas ao mesmo tempo.
+_LIMITE_ERP = threading.Semaphore(int(os.getenv("GATEWAY_MAX_CONCORRENTES", 3)))
 # Teto de linhas por resposta. Diferente do timeout, protege a rede e o browser:
 # `consultar_pedidos` aceita vendedor nulo (= todos), e um intervalo largo pode
 # devolver centenas de milhares de linhas.
@@ -160,6 +199,25 @@ def _conferir_limite(df: pd.DataFrame, rota: str) -> None:
     log.info("%s -> %d linhas", rota, len(df))
 
 
+@contextmanager
+def _fila_erp(rota: str):
+    """Serializa o acesso ao ERP dentro do teto de concorrência.
+
+    A espera é registrada quando passa de 1 s: uma fila longa aparecendo no log é
+    o sinal de que o teto está apertado demais (ou de que a tela está disparando
+    consultas a mais).
+    """
+    inicio = time.monotonic()
+    _LIMITE_ERP.acquire()
+    espera = time.monotonic() - inicio
+    if espera > 1:
+        log.info("%s esperou %.1fs na fila do ERP", rota, espera)
+    try:
+        yield
+    finally:
+        _LIMITE_ERP.release()
+
+
 def _erro_erp(exc: Exception) -> HTTPException:
     """Falha de banco vira 503, não 500.
 
@@ -205,6 +263,62 @@ def vendedores():
     return {"total": len(df), "dados": _para_json(df)}
 
 
+def _unificar_por_codigo(df: pd.DataFrame) -> list[dict]:
+    """Colapsa descrições que compartilham o mesmo código.
+
+    O Ciclone tem códigos com mais de uma descrição — o tipo 13 aparece como
+    'MALA RN' e 'MALA RODRIGO'. Para a conciliação o que existe é o CÓDIGO: é por
+    ele que `movimentos.py` filtra, e o próprio comentário de lá já trata os dois
+    como um só ('venda-mala Rodrigo/RN'). Entregar as duas linhas faria a tela
+    exibir um item repetido em que marcar um marca o outro.
+
+    As descrições são juntadas em vez de descartadas para não esconder do usuário
+    que aquele código cobre mais de uma coisa.
+    """
+    juntos: dict[int, list[str]] = {}
+    for r in df.itertuples(index=False):
+        codigo = int(r.codigo)
+        descricao = str(r.descricao or "").strip()
+        if descricao and descricao not in juntos.setdefault(codigo, []):
+            juntos[codigo].append(descricao)
+    return [
+        {"codigo": c, "descricao": " / ".join(d)} for c, d in sorted(juntos.items())
+    ]
+
+
+@app.get("/regras", dependencies=PROTEGIDO)
+def regras_conciliacao():
+    """Vocabulário e padrões das regras de conciliação, numa viagem só.
+
+    A tela precisa das três coisas juntas para montar os checkboxes: a lista de
+    tipos de pedido, a de operações fiscais, e quais vêm marcados por padrão.
+    Separar em três rotas faria a tela pedir três vezes o que nunca é usado em
+    separado.
+
+    Os padrões saem de `movimentos.py` — não são repetidos aqui. É o mesmo módulo
+    que a ferramenta local usa, então tela e tkinter partem da mesma base.
+    """
+    try:
+        with _fila_erp("/regras"):
+            tipos = db.listar_tipos_pedido()
+            operacoes = db.listar_operacoes()
+    except Exception as exc:
+        raise _erro_erp(exc)
+    return {
+        "tipos_pedido": _unificar_por_codigo(tipos),
+        "operacoes": _unificar_por_codigo(operacoes),
+        "padroes": {
+            "tipos_remessa": sorted(movimentos.TIPOS_REMESSA),
+            "tipos_venda": sorted(movimentos.TIPOS_VENDA),
+            # Estas vêm DESMARCADAS: não movimentam estoque físico, então não
+            # devem entrar na conciliação. Todas as demais entram.
+            "operacoes_sem_movimento_estoque": sorted(
+                movimentos.OPERACOES_SEM_MOVIMENTO_ESTOQUE
+            ),
+        },
+    }
+
+
 @app.get("/pedidos", dependencies=PROTEGIDO)
 def pedidos(
     de: date = Query(..., description="Data inicial (AAAA-MM-DD)"),
@@ -223,9 +337,10 @@ def pedidos(
     if de > ate:
         raise HTTPException(422, "A data inicial não pode ser posterior à final.")
     try:
-        bruto = db.consultar_pedidos(vendedores, de, ate, empresas, base_data=base_data)
+        with _fila_erp("/pedidos"):
+            bruto = db.consultar_pedidos(vendedores, de, ate, empresas, base_data=base_data)
+            codigos = db.listar_vendedores()["codigo"].tolist()
         _conferir_limite(bruto, "/pedidos")
-        codigos = db.listar_vendedores()["codigo"].tolist()
         df = regras.enriquecer(bruto, vendedores_codigos=codigos)
         if vendedores:
             df = regras.marcar_papel(df, vendedores)
@@ -243,18 +358,39 @@ def movimentos_(
     ate: date = Query(..., description="Data do inventário final"),
     empresas: list[int] | None = Query(None),
     base_data: str = Query("movimento", pattern="^(movimento|emissao)$"),
+    tipos_venda: list[int] | None = Query(
+        None, description="Tipos de pedido que saem da mala. Omitido = padrão."
+    ),
+    tipos_remessa: list[int] | None = Query(
+        None, description="Tipos de pedido que entram na mala. Omitido = padrão."
+    ),
+    operacoes: list[int] | None = Query(
+        None, description="Operações fiscais a considerar. Omitido = todas."
+    ),
 ):
     """Vendas e remessas agregadas por código auxiliar, para a reconciliação.
 
     Devolve o FATO do ERP e para por aí. A conta `q2_esperado = q1 + remessa −
     venda` fica no app, junto dos inventários — uma cópia só da fórmula.
+
+    As regras de conciliação são as mesmas de `movimentos.py`, com override por
+    consulta: omitir um parâmetro usa o padrão do módulo, que é o que a ferramenta
+    local usa. Nenhuma regra é redefinida aqui.
     """
     if de > ate:
         raise HTTPException(422, "A data inicial não pode ser posterior à final.")
     try:
-        df = movimentos.movimentos_por_produto(
-            vendedor, str(de), str(ate), empresas, base_data=base_data
-        )
+        with _fila_erp("/movimentos"):
+            df = movimentos.movimentos_por_produto(
+                vendedor,
+                str(de),
+                str(ate),
+                empresas,
+                tipos_venda=tipos_venda,
+                tipos_remessa=tipos_remessa,
+                operacoes=operacoes,
+                base_data=base_data,
+            )
         _conferir_limite(df, "/movimentos")
     except HTTPException:
         raise

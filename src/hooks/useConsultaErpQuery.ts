@@ -42,7 +42,71 @@ export interface ParametrosPedidos {
   de: string;
   ate: string;
   vendedores?: number[];
+  /** Empresas (filiais). Omitido = as duas, pelo padrão do gateway. */
+  empresas?: number[];
   base_data?: 'movimento' | 'emissao';
+}
+
+/**
+ * Escolha de empresa nas telas. `ambas` vira `undefined` na chamada, deixando o
+ * padrão do gateway (`EMPRESAS_PADRAO`) valer — se ele mudar um dia, as telas
+ * acompanham sem edição.
+ */
+export type EscolhaEmpresa = 'ambas' | '1' | '2';
+
+export function empresasDaEscolha(e: EscolhaEmpresa): number[] | undefined {
+  return e === 'ambas' ? undefined : [Number(e)];
+}
+
+/**
+ * Vendas e remessas somadas por produto, no intervalo entre dois inventários.
+ * `key` é o código auxiliar já normalizado pelo gateway — é por ele que se casa
+ * com o inventário, nunca pelo `codigo_auxiliar` cru.
+ */
+export interface MovimentoErp {
+  key: string;
+  codigo_auxiliar: string;
+  nome: string;
+  remessa: number;
+  venda: number;
+}
+
+export interface ParametrosMovimentos {
+  /** Código do vendedor no Ciclone. Só um — a reconciliação é por vendedor. */
+  vendedor: number;
+  de: string;
+  ate: string;
+  /** Empresas (filiais). Omitido = as duas, pelo padrão do gateway. */
+  empresas?: number[];
+  /** Tipos de pedido que saem da mala. Omitido = padrão de `movimentos.py`. */
+  tipos_venda?: number[];
+  /** Tipos de pedido que entram na mala. Omitido = padrão de `movimentos.py`. */
+  tipos_remessa?: number[];
+  /** Operações fiscais consideradas. Omitido = todas. */
+  operacoes?: number[];
+  /**
+   * Qual data delimita o período: a do movimento da nota (padrão, igual ao
+   * `comparativo.py`) ou a de emissão do pedido. Muda quais notas entram na
+   * janela quando pedido e nota caem em meses diferentes.
+   */
+  base_data?: 'movimento' | 'emissao';
+}
+
+export interface ItemCodigo {
+  codigo: number;
+  descricao: string;
+}
+
+/** Vocabulário e padrões das regras de conciliação, vindos do Ciclone. */
+export interface RegrasErp {
+  tipos_pedido: ItemCodigo[];
+  operacoes: ItemCodigo[];
+  padroes: {
+    tipos_remessa: number[];
+    tipos_venda: number[];
+    /** Vêm DESMARCADAS: não movimentam estoque físico. */
+    operacoes_sem_movimento_estoque: number[];
+  };
 }
 
 interface RespostaErp<T> {
@@ -100,6 +164,22 @@ async function chamarErp<T>(operacao: string, params: Record<string, unknown> = 
   return data as T;
 }
 
+/**
+ * Tipos de pedido, operações fiscais e os padrões de conciliação.
+ *
+ * Muda praticamente nunca (é cadastro do ERP) e é preciso para montar os
+ * checkboxes das regras, então vale um `staleTime` longo.
+ */
+export function useErpRegrasQuery(habilitado = true) {
+  return useQuery<RegrasErp, ErroErp>({
+    queryKey: ['erp', 'regras'],
+    queryFn: () => chamarErp<RegrasErp>('regras'),
+    enabled: habilitado,
+    staleTime: 60 * 60 * 1000,
+    retry: false,
+  });
+}
+
 /** Vendedores cadastrados no Ciclone — alimenta o seletor da consulta. */
 export function useErpVendedoresQuery(habilitado = true) {
   return useQuery<VendedorErp[], ErroErp>({
@@ -127,6 +207,28 @@ export function useErpPedidosQuery(parametros: ParametrosPedidos | null) {
       const r = await chamarErp<RespostaErp<PedidoErp>>('pedidos', {
         ...parametros,
         base_data: parametros?.base_data ?? 'movimento',
+      });
+      return r.dados;
+    },
+    enabled: parametros !== null,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+/**
+ * Movimentos do vendedor entre duas datas, para a reconciliação de inventários.
+ *
+ * Devolve o fato do ERP e nada mais: a conta
+ * `esperado = qtd_A + remessa − venda` é feita na tela, junto dos inventários,
+ * para existir uma cópia só da fórmula.
+ */
+export function useErpMovimentosQuery(parametros: ParametrosMovimentos | null) {
+  return useQuery<MovimentoErp[], ErroErp>({
+    queryKey: ['erp', 'movimentos', parametros],
+    queryFn: async () => {
+      const r = await chamarErp<RespostaErp<MovimentoErp>>('movimentos', {
+        ...parametros,
       });
       return r.dados;
     },

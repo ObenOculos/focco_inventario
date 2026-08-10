@@ -37,14 +37,10 @@ $ErrorActionPreference = 'Stop'
 $NomeTarefa = 'OPTISTOCK - ERP Gateway'
 $Raiz       = Split-Path -Parent $PSScriptRoot
 $Python     = Join-Path $Raiz '.venv\Scripts\python.exe'
-$Lancador   = Join-Path $PSScriptRoot 'executar-gateway.cmd'
 $Log        = Join-Path $PSScriptRoot 'gateway.log'
 
 if (-not (Test-Path $Python)) {
     throw "Não encontrei o Python do venv em '$Raiz\.venv\Scripts'. Rode primeiro: python -m venv .venv"
-}
-if (-not (Test-Path $Lancador)) {
-    throw "executar-gateway.cmd não encontrado em '$PSScriptRoot'."
 }
 
 if (-not (Test-Path (Join-Path $Raiz 'main.py'))) {
@@ -58,11 +54,15 @@ Write-Host "Gateway em : $Raiz"
 Write-Host "Python     : $Python"
 Write-Host "Log        : $Log"
 
-# O lançador é um .cmd porque o Agendador não redireciona saída, e sem log uma
-# queda do gateway fica invisível — foi assim que ele morreu em silêncio antes.
+# O python é o processo DA TAREFA, não filho de um .cmd. Essa diferença é o que
+# permite reiniciar o gateway com um Stop-ScheduledTask comum: com o .cmd no meio,
+# o Agendador matava só o pai e o python ficava órfão segurando a porta — e órfão
+# sob token S4U não se mata sem elevação. O log em arquivo passou para dentro do
+# main.py (ver `_log_em_arquivo`).
 $acao = New-ScheduledTaskAction `
-    -Execute $Lancador `
-    -WorkingDirectory $PSScriptRoot
+    -Execute $Python `
+    -Argument '-m uvicorn main:app --host 127.0.0.1 --port 8000' `
+    -WorkingDirectory $Raiz
 
 $gatilho = New-ScheduledTaskTrigger -AtStartup
 
@@ -82,8 +82,20 @@ $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" 
 
 if (Get-ScheduledTask -TaskName $NomeTarefa -ErrorAction SilentlyContinue) {
     Write-Host "Tarefa já existe — substituindo."
+    Stop-ScheduledTask -TaskName $NomeTarefa -ErrorAction SilentlyContinue
     Unregister-ScheduledTask -TaskName $NomeTarefa -Confirm:$false
 }
+
+# Libera a porta antes de registrar. Instalações anteriores deixavam o python
+# órfão (era filho de um .cmd), e órfão sob token S4U só morre com elevação — que
+# é justamente o que este script tem. Sem isso, a tarefa nova sobe e falha ao
+# fazer bind, deixando o gateway servindo código velho sem nenhum erro visível.
+$ocupando = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+foreach ($c in $ocupando) {
+    Write-Host "Encerrando processo que ocupa a porta 8000 (pid $($c.OwningProcess))..."
+    Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+}
+if ($ocupando) { Start-Sleep -Seconds 2 }
 
 Register-ScheduledTask `
     -TaskName $NomeTarefa `
