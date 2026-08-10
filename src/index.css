@@ -37,6 +37,20 @@
     --border: 220 13% 91%;
     --input: 220 13% 91%;
 
+    /* Preenchimento do campo (input, textarea, select). Note que `--input` acima é o
+       TRAÇO do campo, não o fundo — os dois andam juntos e por isso moram lado a lado.
+
+       Existe como token próprio, em vez de reusar `--background`, por uma razão medida:
+       campo em `--background` (97%) dentro de um `Card` (`--card`, 100%) dá 3% de
+       diferença de luminosidade, razão de contraste 1,04:1. Sobrevive num monitor de
+       mesa e SOME num iPhone — True Tone desloca o ponto branco, o brilho automático
+       comprime os quase-brancos, e o cinza daqui ainda é matizado (220), então um ponto
+       branco quente o puxa para cima do cartão. Em 94% a razão vai a ~1,11:1.
+
+       Fica mais claro que `--muted` (93%) de propósito: campo e cabeçalho de tabela
+       aparecem lado a lado, e o campo não pode ter o mesmo peso do cabeçalho. */
+    --input-background: 220 14% 94%;
+
     /* ---- Marca ------------------------------------------------------------------ */
     --primary: 221 83% 53%;
     --primary-foreground: 210 40% 98%;
@@ -150,6 +164,9 @@
 
     --border: 217 33% 15%;
     --input: 217 33% 15%;
+    /* No escuro a separação já é grande (cartão em 5%), então o campo acompanha
+       `--muted` e não precisa do degrau extra do tema claro. */
+    --input-background: 217 33% 14%;
 
     --primary: 217 91% 60%;
     --primary-foreground: 222 47% 11%;

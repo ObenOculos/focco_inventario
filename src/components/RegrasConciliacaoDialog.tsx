@@ -19,9 +19,9 @@ import type { ErroErp, ItemCodigo, RegrasErp } from '@/hooks/useConsultaErpQuery
  *
  * São as mesmas regras de `movimentos.py` (`TIPOS_VENDA`, `TIPOS_REMESSA`,
  * `OPERACOES_SEM_MOVIMENTO_ESTOQUE`), que na ferramenta local o usuário edita por
- * checkbox. Aqui elas seguem sendo do gateway: esta tela apenas **sobrescreve por
- * consulta**, e "Restaurar padrão" volta a não enviar nada — deixando a regra do
- * servidor valer de novo. Nada é redefinido no cliente.
+ * checkbox. A lista de tipos e operações continua vindo inteira do gateway — o
+ * cliente não inventa código nenhum. O que ele define é quais vêm MARCADOS, e aí
+ * há um desvio deliberado do servidor: `TIPOS_VENDA_FORA_DO_PADRAO`.
  *
  * Fica em modal porque se configura de vez em quando, e porque a lista de
  * operações fiscais tem dezenas de itens: inline, empurraria o resultado para
@@ -40,9 +40,26 @@ export function operacoesPadrao(regras: RegrasErp): number[] {
   return regras.operacoes.map((o) => o.codigo).filter((c) => !excluidas.has(c));
 }
 
+/**
+ * Tipos de pedido que o gateway conta como saída da mala mas a TELA deixa
+ * desmarcados. Hoje: 13 (venda-mala Rodrigo/RN).
+ *
+ * É a única regra que o app decide por conta própria, e é o motivo de a seleção
+ * viajar em toda consulta em vez de só quando o usuário mexe no modal — omiti-la
+ * faria o gateway aplicar o padrão dele, e a tela mostraria 13 desmarcado
+ * enquanto o número na tabela o incluía. Desmarcar é um clique; descobrir que o
+ * total não corresponde ao que a tela declara, não.
+ *
+ * A ferramenta local (`comparativo.py`) segue com o padrão do módulo, que inclui
+ * o 13 — ao conferir um relatório contra o outro, é aqui que eles divergem.
+ */
+const TIPOS_VENDA_FORA_DO_PADRAO = [13];
+
 export function selecaoPadrao(regras: RegrasErp): SelecaoRegras {
   return {
-    tiposVenda: [...regras.padroes.tipos_venda],
+    tiposVenda: regras.padroes.tipos_venda.filter(
+      (t) => !TIPOS_VENDA_FORA_DO_PADRAO.includes(t)
+    ),
     tiposRemessa: [...regras.padroes.tipos_remessa],
     operacoes: operacoesPadrao(regras),
   };

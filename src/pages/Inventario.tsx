@@ -999,7 +999,7 @@ export default function Inventario() {
                 placeholder="Observações adicionais sobre o inventário..."
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
-                className="mt-1 border-input rounded-xl shadow-2xs min-h-[90px]"
+                className="mt-1 shadow-2xs min-h-[90px]"
               />
             </div>
 

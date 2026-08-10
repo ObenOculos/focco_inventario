@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { normalizarCodigoErp } from '@/lib/codigoErp';
 
 export interface InventarioOpcao {
   id: string;
@@ -101,5 +102,56 @@ export function useComparacaoQuery(inventarioA: string | null, inventarioB: stri
 
       return todas;
     },
+  });
+}
+
+/**
+ * Um `.in()` por lote. O código auxiliar viaja na URL do PostgREST, e a lista
+ * inteira de uma vez estoura o limite de tamanho da requisição.
+ */
+const LOTE_CODIGOS = 200;
+
+/**
+ * Preço de catálogo dos produtos que só têm movimento no ERP.
+ *
+ * `comparar_dois_inventarios` só devolve `valor_unitario` de produto CONTADO em A
+ * ou em B — quem apareceu apenas nas remessas e vendas do período ficaria sem
+ * preço, e uma linha sem preço vale R$ 0,00 nos cards de Falta e Sobra e afunda
+ * na ordenação por impacto, que é exatamente onde ela precisa ser vista.
+ *
+ * A fonte é o catálogo do app, sincronizado do Ciclone — a mesma origem que o
+ * `comparativo.py` usa via `db.valores_por_produto`. É o que faz os dois
+ * relatórios fecharem no valor, não só na quantidade.
+ *
+ * O mapa é indexado pelo código NORMALIZADO. A consulta vai pelo código cru
+ * porque é o que está gravado em `produtos`, mas o encontro com a linha da tela
+ * tem de acontecer na mesma chave que o resto da reconciliação usa.
+ */
+export function useValoresProdutosQuery(codigos: string[]) {
+  return useQuery<Map<string, number>, Error>({
+    queryKey: ['valores-produtos', codigos],
+    enabled: codigos.length > 0,
+    queryFn: async () => {
+      const valores = new Map<string, number>();
+
+      for (let i = 0; i < codigos.length; i += LOTE_CODIGOS) {
+        const { data, error } = await supabase
+          .from('produtos')
+          .select('codigo_auxiliar, valor_produto')
+          .in('codigo_auxiliar', codigos.slice(i, i + LOTE_CODIGOS));
+        if (error) throw error;
+
+        for (const p of data || []) {
+          const chave = normalizarCodigoErp(p.codigo_auxiliar);
+          const valor = Number(p.valor_produto) || 0;
+          // Mesmo desempate do `comparativo.py`: o mesmo código existe nas duas
+          // empresas e fica o MAIOR valor de venda.
+          if (valor > (valores.get(chave) ?? 0)) valores.set(chave, valor);
+        }
+      }
+
+      return valores;
+    },
+    staleTime: 60_000,
   });
 }

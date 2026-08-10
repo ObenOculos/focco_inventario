@@ -41,6 +41,8 @@ Só tokens semânticos. **Nenhuma cor crua do Tailwind** (`text-green-700`, `bg-
 | `muted-foreground` | texto secundário, rótulo, ícone inativo |
 | `muted` | fundo neutro (chip, cabeçalho de tabela, código) |
 | `border` | traço; `border-border/80` em superfícies |
+| `input` | traço do campo (`border-input`) |
+| `input-background` | preenchimento do campo (`bg-input-background`) — **não use `bg-background` em campo**: dentro de um `Card` branco dá 1,07:1 e some na tela do celular |
 | `primary` | marca, ação primária, item de menu ativo |
 | `accent` | hover de superfície neutra |
 
@@ -182,7 +184,11 @@ Botão só-ícone **exige** `aria-label`. Botão que dispara operação assíncr
 
 ### Formulário
 
-- `Input` e `SelectTrigger` nascem com 44px e `rounded-xl` — não repetir.
+- `Input` e `SelectTrigger` nascem com 44px e `rounded-xl`; `Textarea` nasce com `rounded-xl`
+  e `min-h-[80px]` — não repetir nenhum dos três.
+- **Fonte de 16px no mobile é obrigatória em campo de texto** (`text-base md:text-sm`, já nos
+  três componentes). Abaixo disso o Safari do iOS amplia a viewport ao focar o campo, e a
+  página fica torta até o usuário dar pinch para voltar.
 - Rótulo sempre com `htmlFor` apontando para o `id` do campo.
 - Texto de ajuda: `<p className="text-xs text-muted-foreground mt-1.5">`.
 - Erro: `text-xs text-destructive-strong mt-1.5`, sempre junto ao campo — nunca só em toast.

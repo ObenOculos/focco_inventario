@@ -41,6 +41,7 @@ import {
 import {
   RegrasConciliacaoDialog,
   ehPadrao,
+  selecaoPadrao,
   type SelecaoRegras,
 } from '@/components/RegrasConciliacaoDialog';
 import { ehAcessorio, normalizarCodigoErp } from '@/lib/codigoErp';
@@ -63,11 +64,14 @@ import { toast } from 'sonner';
 import {
   useComparacaoQuery,
   useInventariosOpcoesQuery,
+  useValoresProdutosQuery,
   type InventarioOpcao,
   type LinhaComparacao,
 } from '@/hooks/useCompararInventariosQuery';
 
 const SEM_MOVIMENTO: MovimentoErp[] = [];
+/** Referência estável, pelo mesmo motivo de `SEM_MOVIMENTO`. */
+const SEM_VALORES = new Map<string, number>();
 
 /** Etapa da seleção. String porque é o formato de valor de aba do Radix Tabs. */
 type Etapa = '1' | '2' | '3';
@@ -176,9 +180,9 @@ type LinhaExibida = LinhaComparacao & {
  * vendedor, que é o caso normal.
  */
 export default function CompararInventarios() {
-  // String porque é o que o Tabs do Radix usa como valor de aba. Começa na 2:
-  // escolher A e B é o que a tela existe para fazer; escopo e ERP são refinamento.
-  const [etapaAtiva, setEtapaAtiva] = useState<Etapa>('2');
+  // String porque é o que o Tabs do Radix usa como valor de aba. Começa na 1, no
+  // início do fluxo: o escopo é o que filtra as listas de A e B da etapa 2.
+  const [etapaAtiva, setEtapaAtiva] = useState<Etapa>('1');
   const [vendedorFiltro, setVendedorFiltro] = useState<string>('todos');
   const [idA, setIdA] = useState<string>('');
   const [idB, setIdB] = useState<string>('');
@@ -212,12 +216,14 @@ export default function CompararInventarios() {
   const [vendaDe, setVendaDe] = useState('');
   const [vendaAte, setVendaAte] = useState('');
   const [empresa, setEmpresa] = useState<EscolhaEmpresa>('ambas');
-  // 'movimento' é o padrão do `comparativo.py`; manter igual é o que permite
-  // conferir o resultado da tela contra a ferramenta local.
-  const [baseData, setBaseData] = useState<'movimento' | 'emissao'>('movimento');
+  // 'emissao' é o padrão da tela. O `comparativo.py` usa 'movimento', então ao
+  // conferir um relatório contra o outro é preciso igualar os dois lados — junto
+  // do tipo de venda 13, que a tela também desmarca (ver RegrasConciliacaoDialog).
+  const [baseData, setBaseData] = useState<'movimento' | 'emissao'>('emissao');
 
-  // `null` = não mexeu nas regras, então nada é enviado e o padrão do gateway
-  // vale. Só vira objeto quando o usuário altera algo no modal.
+  // `null` = não mexeu no modal, e vale o padrão da tela (`selecaoPadrao`). Só
+  // vira objeto quando o usuário altera algo. Note que `null` NÃO significa mais
+  // "não enviar nada": ver `regrasEfetivas`.
   const [regrasSelecao, setRegrasSelecao] = useState<SelecaoRegras | null>(null);
   const [regrasAbertas, setRegrasAbertas] = useState(false);
 
@@ -361,21 +367,28 @@ export default function CompararInventarios() {
   const regrasNoPadrao = ehPadrao(regrasSelecao, consultaRegras.data);
 
   const empresasEscolhidas = empresasDaEscolha(empresa);
-  // Regras só viajam quando o usuário mexeu nelas: omitir mantém o padrão do
-  // gateway, que é a mesma regra da ferramenta local.
-  const regrasParaEnvio = {
+
+  /**
+   * As regras que valem nesta consulta: o que o usuário escolheu ou, enquanto ele
+   * não abriu o modal, o padrão da TELA.
+   *
+   * Elas viajam SEMPRE, e não só quando o usuário mexe. O padrão da tela não é o
+   * do gateway — ela desmarca o tipo de venda 13 — e omitir a seleção faria o
+   * servidor aplicar a regra dele, com o modal exibindo uma coisa e a tabela
+   * somando outra.
+   */
+  const regrasEfetivas =
+    regrasSelecao ?? (consultaRegras.data ? selecaoPadrao(consultaRegras.data) : null);
+
+  const regrasParaEnvio = regrasEfetivas && {
     base_data: baseData,
-    ...(regrasSelecao
-      ? {
-          tipos_venda: regrasSelecao.tiposVenda,
-          tipos_remessa: regrasSelecao.tiposRemessa,
-          operacoes: regrasSelecao.operacoes,
-        }
-      : {}),
+    tipos_venda: regrasEfetivas.tiposVenda,
+    tipos_remessa: regrasEfetivas.tiposRemessa,
+    operacoes: regrasEfetivas.operacoes,
   };
 
   const paramsRemessas =
-    podeReconciliar && considerarRemessas && janelaOk(janelaRemessa)
+    podeReconciliar && considerarRemessas && janelaOk(janelaRemessa) && regrasParaEnvio
       ? {
           vendedor: codigoVendedor,
           de: janelaRemessa.de!,
@@ -385,7 +398,7 @@ export default function CompararInventarios() {
         }
       : null;
   const paramsVendas =
-    podeReconciliar && considerarVendas && janelaOk(janelaVenda)
+    podeReconciliar && considerarVendas && janelaOk(janelaVenda) && regrasParaEnvio
       ? {
           vendedor: codigoVendedor,
           de: janelaVenda.de!,
@@ -440,6 +453,54 @@ export default function CompararInventarios() {
   const tentativaAtual =
     Math.max(consultaRemessas.failureCount, consultaVendas.failureCount) + 1;
 
+  // Cada mapa vem da SUA janela: remessas do período de remessa, vendas do de
+  // venda. É por isso que não dá para ler os dois do mesmo resultado.
+  const remessaPorChave = useMemo(
+    () => new Map(considerarRemessas ? movRemessas.map((m) => [m.key, m] as const) : []),
+    [movRemessas, considerarRemessas]
+  );
+  const vendaPorChave = useMemo(
+    () => new Map(considerarVendas ? movVendas.map((m) => [m.key, m] as const) : []),
+    [movVendas, considerarVendas]
+  );
+
+  /**
+   * Códigos com movimento no ERP que ninguém contou — nem em A, nem em B.
+   *
+   * Fica fora de `linhasExibidas` porque é ele que dispara a busca de preço: a
+   * RPC da comparação só devolve valor de produto contado, e sem preço essas
+   * linhas valeriam R$ 0,00 na tela inteira. Códigos CRUS de propósito — é por
+   * eles que `produtos` é consultado.
+   */
+  const codigosSoMovimento = useMemo(() => {
+    if (!podeReconciliar || !paramsAplicados) return [];
+    const contadas = new Set(
+      linhas
+        .filter((l) => !ehAcessorio(l.codigo_auxiliar))
+        .map((l) => normalizarCodigoErp(l.codigo_auxiliar))
+    );
+    return [...new Set([...remessaPorChave.keys(), ...vendaPorChave.keys()])]
+      .filter((k) => !contadas.has(k))
+      .map(
+        (k) =>
+          remessaPorChave.get(k)?.codigo_auxiliar ??
+          vendaPorChave.get(k)?.codigo_auxiliar ??
+          k
+      )
+      // Ordenado para a chave de cache não mudar só porque os mapas mudaram de
+      // ordem — sem isso o react-query refaz a consulta a cada render novo.
+      .sort();
+  }, [linhas, remessaPorChave, vendaPorChave, podeReconciliar, paramsAplicados]);
+
+  const consultaValores = useValoresProdutosQuery(codigosSoMovimento);
+  const valoresSoMovimento = consultaValores.data ?? SEM_VALORES;
+  /**
+   * O preço dessas linhas chega numa segunda ida ao banco. Enquanto ela não
+   * volta, Falta e Sobra sairiam menores do que são — e são os números que
+   * decidem. Melhor segurar o resultado do que mostrá-lo pela metade.
+   */
+  const carregandoValores = consultaValores.isLoading;
+
   /**
    * Linhas finais da tela. Sem reconciliação, devolve o que a RPC já calculou.
    * Com reconciliação, `esperado = A + remessa − venda` e a diferença passa a ser
@@ -456,15 +517,6 @@ export default function CompararInventarios() {
     }));
 
     if (!podeReconciliar || !paramsAplicados) return base;
-
-    // Cada mapa vem da SUA janela: remessas do período de remessa, vendas do de
-    // venda. É por isso que não dá para ler os dois do mesmo resultado.
-    const remessaPorChave = new Map(
-      considerarRemessas ? movRemessas.map((m) => [m.key, m] as const) : []
-    );
-    const vendaPorChave = new Map(
-      considerarVendas ? movVendas.map((m) => [m.key, m] as const) : []
-    );
     if (remessaPorChave.size === 0 && vendaPorChave.size === 0) return base;
 
     const usadas = new Set<string>();
@@ -496,7 +548,9 @@ export default function CompararInventarios() {
         return {
           codigo_auxiliar: r?.codigo_auxiliar ?? v?.codigo_auxiliar ?? k,
           nome_produto: r?.nome ?? v?.nome ?? k,
-          valor_unitario: 0,
+          // Preço vem do catálogo, não da RPC — a RPC só conhece produto contado.
+          // Ausente = 0, que a tela já mostra como "sem valor" em vez de R$ 0,00.
+          valor_unitario: valoresSoMovimento.get(k) ?? 0,
           quantidade_a: 0,
           quantidade_b: 0,
           presente_em_a: false,
@@ -508,17 +562,26 @@ export default function CompararInventarios() {
           so_movimento: true,
         };
       })
-      .filter((l) => l.esperado !== 0);
+      /**
+       * Só sai a linha que não movimentou NADA nesta configuração — acontece
+       * quando um dos toggles está desligado e a chave veio da outra ponta.
+       *
+       * O filtro anterior era `esperado !== 0`, e descartava também o produto que
+       * entrou e saiu na mesma medida (remessa 2, venda 2). A divergência dele é
+       * zero, mas ele circulou: omitir apaga o rastro do movimento do relatório e
+       * ainda encolhe o denominador da acuracidade. Era essa a diferença que
+       * deixava o comparativo do app com menos linhas que o da ferramenta local.
+       */
+      .filter((l) => l.remessa !== 0 || l.venda !== 0);
 
     return [...reconciliadas, ...soMovimento];
   }, [
     linhas,
-    movRemessas,
-    movVendas,
+    remessaPorChave,
+    vendaPorChave,
+    valoresSoMovimento,
     podeReconciliar,
     paramsAplicados,
-    considerarRemessas,
-    considerarVendas,
   ]);
 
   const resumo = useMemo(() => {
@@ -840,6 +903,17 @@ export default function CompararInventarios() {
                       1
                     </span>
                     <span className="truncate font-medium">Escopo de Busca</span>
+                    {/* Marca escopo REDUZIDO: um ano e um vendedor específicos.
+                        "Todos" é o estado inicial, não uma escolha — por isso não
+                        acende. Não entra aqui se o escopo acha ou não inventário: o
+                        contador e o aviso logo abaixo já dizem isso, e um check que
+                        apaga depois de o usuário ter escolhido os dois se lê como
+                        erro. */}
+                    {anoEfetivo !== 'todos' && vendedorFiltro !== 'todos' && (
+                      <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-success-subtle text-success-strong">
+                        <Check className="size-2.5" />
+                      </span>
+                    )}
                   </div>
                   <span className="mt-0.5 w-full truncate pl-5 text-2xs font-normal text-muted-foreground">
                     {resumoEscopo}
@@ -1162,9 +1236,12 @@ export default function CompararInventarios() {
                 {/* Ação de Busca ERP */}
                 {reconciliar && mesmoVendedor && (
                   <div className="flex flex-wrap items-center gap-3 pt-1">
+                    {/* Sem as regras carregadas não dá para consultar: elas viajam
+                        em toda consulta, e sair sem elas devolveria o padrão do
+                        gateway — que conta o tipo 13 que esta tela declara fora. */}
                     <Button
                       onClick={buscarMovimentos}
-                      disabled={!ordemCorreta || carregandoMovimentos}
+                      disabled={!ordemCorreta || carregandoMovimentos || !regrasEfetivas}
                     >
                       {carregandoMovimentos ? (
                         <>
@@ -1178,11 +1255,20 @@ export default function CompararInventarios() {
                         </>
                       )}
                     </Button>
-                    {buscaDesatualizada && !carregandoMovimentos && (
-                      <span className="flex items-center gap-1.5 text-xs font-medium text-warning-strong">
-                        <TriangleAlert className="size-3.5 shrink-0" />
-                        Parâmetros alterados — clique em atualizar para consultar o ERP.
+                    {!regrasEfetivas ? (
+                      <span className="text-xs text-muted-foreground">
+                        {consultaRegras.error
+                          ? 'Sem as regras de conciliação do ERP não dá para consultar — reabra a tela quando o Ciclone responder.'
+                          : 'Carregando as regras de conciliação…'}
                       </span>
+                    ) : (
+                      buscaDesatualizada &&
+                      !carregandoMovimentos && (
+                        <span className="flex items-center gap-1.5 text-xs font-medium text-warning-strong">
+                          <TriangleAlert className="size-3.5 shrink-0" />
+                          Parâmetros alterados — clique em atualizar para consultar o ERP.
+                        </span>
+                      )
                     )}
                   </div>
                 )}
@@ -1275,7 +1361,7 @@ export default function CompararInventarios() {
               </p>
             </CardContent>
           </Card>
-        ) : carregandoComparacao || carregandoMovimentos ? (
+        ) : carregandoComparacao || carregandoMovimentos || carregandoValores ? (
           <Card>
             <PageLoader
               inline
