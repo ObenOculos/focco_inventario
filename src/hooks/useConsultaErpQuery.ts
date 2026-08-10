@@ -135,6 +135,28 @@ export class ErroErp extends Error {
   }
 }
 
+/** Tentativas totais (a primeira mais duas repetições). */
+export const TENTATIVAS_ERP = 3;
+
+/**
+ * Repete só o que tem chance de mudar de resultado.
+ *
+ * O caminho até o Ciclone passa por Edge Function, túnel, VPN e um Postgres que
+ * não é nosso — falhas passageiras acontecem, e medimos a mesma consulta levando
+ * 32 s numa vez e 2 s na seguinte. Repetir resolve esse caso.
+ *
+ * Só o 503 é repetido: significa "não alcancei o ERP" ou "demorou demais". Os 4xx
+ * são definitivos — repetir um 403 três vezes não muda a permissão de ninguém, só
+ * atrasa a mensagem em vários segundos.
+ */
+function repetirSeTransitorio(falhas: number, erro: ErroErp): boolean {
+  if (!erro?.indisponivel) return false;
+  return falhas < TENTATIVAS_ERP;
+}
+
+/** Espera curta e crescente: 2 s e 4 s. */
+const esperaEntreTentativas = (tentativa: number) => Math.min(2000 * 2 ** tentativa, 6000);
+
 async function chamarErp<T>(operacao: string, params: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = await supabase.functions.invoke('erp-consulta', {
     body: { operacao, params },
@@ -176,7 +198,8 @@ export function useErpRegrasQuery(habilitado = true) {
     queryFn: () => chamarErp<RegrasErp>('regras'),
     enabled: habilitado,
     staleTime: 60 * 60 * 1000,
-    retry: false,
+    retry: repetirSeTransitorio,
+    retryDelay: esperaEntreTentativas,
   });
 }
 
@@ -192,7 +215,8 @@ export function useErpVendedoresQuery(habilitado = true) {
     // A lista muda raramente e cada consulta atravessa VPN + túnel; não vale
     // repetir a cada foco de janela.
     staleTime: 30 * 60 * 1000,
-    retry: false,
+    retry: repetirSeTransitorio,
+    retryDelay: esperaEntreTentativas,
   });
 }
 
@@ -212,7 +236,8 @@ export function useErpPedidosQuery(parametros: ParametrosPedidos | null) {
     },
     enabled: parametros !== null,
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: repetirSeTransitorio,
+    retryDelay: esperaEntreTentativas,
   });
 }
 
@@ -234,6 +259,7 @@ export function useErpMovimentosQuery(parametros: ParametrosMovimentos | null) {
     },
     enabled: parametros !== null,
     staleTime: 5 * 60 * 1000,
-    retry: false,
+    retry: repetirSeTransitorio,
+    retryDelay: esperaEntreTentativas,
   });
 }

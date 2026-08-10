@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { SearchFilter } from '@/components/SearchFilter';
 import { Pagination } from '@/components/Pagination';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -33,6 +34,7 @@ import {
   useErpMovimentosQuery,
   useErpRegrasQuery,
   useErpVendedoresQuery,
+  TENTATIVAS_ERP,
   type EscolhaEmpresa,
   type MovimentoErp,
 } from '@/hooks/useConsultaErpQuery';
@@ -43,7 +45,10 @@ import {
 } from '@/components/RegrasConciliacaoDialog';
 import { ehAcessorio, normalizarCodigoErp } from '@/lib/codigoErp';
 import {
+  ArrowLeft,
   ArrowLeftRight,
+  ArrowRight,
+  Check,
   CloudOff,
   Download,
   GitCompare,
@@ -63,6 +68,9 @@ import {
 } from '@/hooks/useCompararInventariosQuery';
 
 const SEM_MOVIMENTO: MovimentoErp[] = [];
+
+/** Etapa da seleção. String porque é o formato de valor de aba do Radix Tabs. */
+type Etapa = '1' | '2' | '3';
 
 /** `2026-07-14` → `14/07/2026`, sem passar por Date (que interpreta como UTC). */
 function dataBr(iso: string | null) {
@@ -168,6 +176,9 @@ type LinhaExibida = LinhaComparacao & {
  * vendedor, que é o caso normal.
  */
 export default function CompararInventarios() {
+  // String porque é o que o Tabs do Radix usa como valor de aba. Começa na 2:
+  // escolher A e B é o que a tela existe para fazer; escopo e ERP são refinamento.
+  const [etapaAtiva, setEtapaAtiva] = useState<Etapa>('2');
   const [vendedorFiltro, setVendedorFiltro] = useState<string>('todos');
   const [idA, setIdA] = useState<string>('');
   const [idB, setIdB] = useState<string>('');
@@ -421,6 +432,13 @@ export default function CompararInventarios() {
   const movVendas = consultaVendas.data ?? SEM_MOVIMENTO;
   const carregandoMovimentos = consultaRemessas.isLoading || consultaVendas.isLoading;
   const erroMovimentos = consultaRemessas.error ?? consultaVendas.error;
+  /**
+   * Tentativa em curso. Sem exibir isso, uma falha transitória vira até dois
+   * minutos de spinner mudo — o usuário conclui que travou e recarrega a página,
+   * justamente quando o sistema estava se recuperando sozinho.
+   */
+  const tentativaAtual =
+    Math.max(consultaRemessas.failureCount, consultaVendas.failureCount) + 1;
 
   /**
    * Linhas finais da tela. Sem reconciliação, devolve o que a RPC já calculou.
@@ -766,6 +784,29 @@ export default function CompararInventarios() {
     },
   ];
 
+  const nomeVendedorEfetivo =
+    vendedorFiltro === 'todos'
+      ? 'Todos os vendedores'
+      : vendedores.find(([c]) => c === vendedorFiltro)?.[1] || vendedorFiltro;
+  const resumoEscopo = `${anoEfetivo === 'todos' ? 'Todos os anos' : anoEfetivo} · ${nomeVendedorEfetivo}`;
+
+  const resumoInventarios =
+    invA && invB
+      ? `${format(new Date(invA.data_inventario), 'dd/MM')} → ${format(new Date(invB.data_inventario), 'dd/MM')}`
+      : invA
+        ? 'Definir inventário B'
+        : invB
+          ? 'Definir inventário A'
+          : 'Selecione A e B';
+
+  const resumoErp = !reconciliar
+    ? 'Desativado'
+    : considerarRemessas && considerarVendas
+      ? 'Remessas + Vendas'
+      : considerarRemessas
+        ? 'Só Remessas'
+        : 'Só Vendas';
+
   return (
     <AppLayout>
       <div className="space-y-6">
@@ -775,233 +816,402 @@ export default function CompararInventarios() {
           isFetching={isFetching && !carregandoComparacao}
         />
 
-        {/* ── Bloco 1 · Seleção ─────────────────────────────────────────────────────
-            Uma linha só a partir de `lg`. O botão de inverter fica entre A e B, onde a
-            relação que ele altera está visível. */}
+        {/* ── Bloco 1 · Seleção em etapas ─────────────────────────────────────────
+            Usa as primitivas Tabs do projeto (Radix) em vez de <button> soltos: elas
+            trazem role="tab"/aria-selected e navegação por setas do teclado, e o
+            estado ativo vem por `data-[state=active]` em vez de ternário de
+            className. As três etapas não têm ordem obrigatória — o usuário pode ir
+            direto à que quiser, e cada aba resume o que já está configurado nela
+            para o estado não sumir quando o painel fecha. */}
         <Card>
           <CardContent className="p-4 sm:p-5">
-            {/* Funil da esquerda para a direita: Ano → Vendedor → A → B. O ano é o recorte
-                mais amplo, e por isso vem primeiro — que é o "acima" de um layout em linha. */}
-            <div className="grid items-end gap-3 lg:grid-cols-[auto_minmax(0,0.85fr)_minmax(0,1.15fr)_auto_minmax(0,1.15fr)]">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Ano
-                </Label>
-                <Select value={anoEfetivo} onValueChange={trocarAno} disabled={carregandoOpcoes}>
-                  <SelectTrigger className="w-full lg:w-32">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {anos.map((ano) => (
-                      <SelectItem key={ano} value={ano}>
-                        {ano}
-                      </SelectItem>
-                    ))}
-                    <SelectItem value="todos">Todos</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Vendedor
-                </Label>
-                <Select value={vendedorFiltro} onValueChange={trocarVendedor}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Todos" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todos">Todos os vendedores</SelectItem>
-                    {vendedores.map(([codigo, nome]) => (
-                      <SelectItem key={codigo} value={codigo}>
-                        {nome} ({codigo})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Inventário A · base
-                </Label>
-                <Select value={idA} onValueChange={setIdA} disabled={carregandoOpcoes}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Escolha o inventário A" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {opcoesFiltradas.map((o) => (
-                      <SelectItem key={o.id} value={o.id} disabled={o.id === idB}>
-                        {rotulo(o)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={trocarLados}
-                disabled={!idA && !idB}
-                aria-label="Inverter A e B"
-                className="w-full lg:w-11"
-              >
-                <ArrowLeftRight className="h-4 w-4" />
-              </Button>
-
-              <div className="space-y-1.5">
-                <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Inventário B · comparado
-                </Label>
-                <Select value={idB} onValueChange={setIdB} disabled={carregandoOpcoes}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Escolha o inventário B" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {opcoesFiltradas.map((o) => (
-                      <SelectItem key={o.id} value={o.id} disabled={o.id === idA}>
-                        {rotulo(o)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Movimentos do ERP: opcionais e independentes. Desmarcados, a tela é a
-                comparação pura de sempre e não toca no Ciclone. */}
-            <div className="mt-4 space-y-2.5 border-t border-border/60 pt-3.5">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Movimentos do ERP
-                </span>
-                {reconciliar && mesmoVendedor && (
-                  <div className="flex flex-wrap items-center gap-3">
-                    <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground">
-                      <Checkbox
-                        checked={ajustarPeriodo}
-                        onCheckedChange={(v) => setAjustarPeriodo(v === true)}
-                      />
-                      Ajustar períodos
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => setRegrasAbertas(true)}
-                      className="flex items-center gap-1.5 text-xs font-medium text-primary underline-offset-4 hover:underline"
-                    >
-                      <SlidersHorizontal className="size-3.5" />
-                      Regras de conciliação
-                      {!regrasNoPadrao && (
-                        <Badge variant="info" className="px-1.5 py-0 text-2xs">
-                          alteradas
-                        </Badge>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-
-              {reconciliar && mesmoVendedor && (
-                <>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span className="w-48 text-sm">Empresa</span>
-                    <Select
-                      value={empresa}
-                      onValueChange={(v) => setEmpresa(v as EscolhaEmpresa)}
-                    >
-                      <SelectTrigger className="w-56">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="ambas">Ambas (1 e 2)</SelectItem>
-                        <SelectItem value="1">Empresa 1</SelectItem>
-                        <SelectItem value="2">Empresa 2</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-                    <span className="w-48 text-sm">Data base</span>
-                    <Select
-                      value={baseData}
-                      onValueChange={(v) => setBaseData(v as 'movimento' | 'emissao')}
-                    >
-                      <SelectTrigger className="w-56">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="movimento">Movimento da nota</SelectItem>
-                        <SelectItem value="emissao">Emissão do pedido</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </>
-              )}
-
-              <LinhaMovimento
-                id="remessa"
-                rotulo="Considerar remessas"
-                ligado={considerarRemessas}
-                onToggle={setConsiderarRemessas}
-                desabilitado={!mesmoVendedor}
-                ajustando={ajustarPeriodo}
-                de={remessaDe}
-                ate={remessaAte}
-                onDe={setRemessaDe}
-                onAte={setRemessaAte}
-              />
-              <LinhaMovimento
-                id="venda"
-                rotulo="Considerar vendas"
-                ligado={considerarVendas}
-                onToggle={setConsiderarVendas}
-                desabilitado={!mesmoVendedor}
-                ajustando={ajustarPeriodo}
-                de={vendaDe}
-                ate={vendaAte}
-                onDe={setVendaDe}
-                onAte={setVendaAte}
-              />
-
-              {reconciliar && mesmoVendedor && (
-                <div className="flex flex-wrap items-center gap-3 pt-1">
-                  <Button
-                    onClick={buscarMovimentos}
-                    disabled={!ordemCorreta || carregandoMovimentos}
-                  >
-                    {carregandoMovimentos ? (
-                      <>
-                        <span className="mr-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
-                        Consultando o ERP…
-                      </>
-                    ) : (
-                      <>
-                        <Search className="mr-2 size-4" />
-                        {paramsAplicados ? 'Buscar novamente' : 'Buscar movimentos'}
-                      </>
-                    )}
-                  </Button>
-                  {buscaDesatualizada && !carregandoMovimentos && (
-                    <span className="flex items-center gap-1.5 text-xs font-medium text-warning-strong">
-                      <TriangleAlert className="size-3.5 shrink-0" />
-                      Parâmetros mudaram — o resultado abaixo é da busca anterior.
+            <Tabs
+              value={etapaAtiva}
+              onValueChange={(v) => setEtapaAtiva(v as Etapa)}
+              className="space-y-4"
+            >
+              <TabsList className="grid h-auto w-full grid-cols-3 gap-1.5 rounded-xl bg-muted/60 p-1.5">
+                <TabsTrigger
+                  value="1"
+                  className="group flex flex-col items-start justify-start rounded-lg px-3 py-2 text-left text-xs font-normal transition-all data-[state=active]:font-semibold data-[state=active]:shadow-sm"
+                >
+                  <div className="flex w-full items-center gap-1.5">
+                    <span className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/20 text-2xs font-bold text-muted-foreground group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
+                      1
                     </span>
+                    <span className="truncate font-medium">Escopo de Busca</span>
+                  </div>
+                  <span className="mt-0.5 w-full truncate pl-5 text-2xs font-normal text-muted-foreground">
+                    {resumoEscopo}
+                  </span>
+                </TabsTrigger>
+
+                <TabsTrigger
+                  value="2"
+                  className="group flex flex-col items-start justify-start rounded-lg px-3 py-2 text-left text-xs font-normal transition-all data-[state=active]:font-semibold data-[state=active]:shadow-sm"
+                >
+                  <div className="flex w-full items-center gap-1.5">
+                    <span className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/20 text-2xs font-bold text-muted-foreground group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
+                      2
+                    </span>
+                    <span className="truncate font-medium">Inventários</span>
+                    {prontoParaComparar && (
+                      <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-success-subtle text-success-strong">
+                        <Check className="size-2.5" />
+                      </span>
+                    )}
+                  </div>
+                  <span className="mt-0.5 w-full truncate pl-5 text-2xs font-normal text-muted-foreground">
+                    {resumoInventarios}
+                  </span>
+                </TabsTrigger>
+
+                <TabsTrigger
+                  value="3"
+                  className="group flex flex-col items-start justify-start rounded-lg px-3 py-2 text-left text-xs font-normal transition-all data-[state=active]:font-semibold data-[state=active]:shadow-sm"
+                >
+                  <div className="flex w-full items-center gap-1.5">
+                    <span className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/20 text-2xs font-bold text-muted-foreground group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
+                      3
+                    </span>
+                    <span className="truncate font-medium">ERP (Opcional)</span>
+                    {reconciliar && (
+                      <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info-subtle text-info-strong">
+                        <Check className="size-2.5" />
+                      </span>
+                    )}
+                  </div>
+                  <span className="mt-0.5 w-full truncate pl-5 text-2xs font-normal text-muted-foreground">
+                    {resumoErp}
+                  </span>
+                </TabsTrigger>
+              </TabsList>
+
+              <div className="border-t border-border/60" />
+
+              {/* Painel Etapa 1: Escopo de Busca */}
+              <TabsContent value="1" className="mt-0 space-y-4 pt-1">
+              <div className="space-y-4 pt-1">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    Filtre a lista de inventários por ano e representante comercial
+                  </p>
+                  <span className="text-2xs tabular-nums text-muted-foreground">
+                    {opcoesFiltradas.length} inventário(s) encontrado(s)
+                  </span>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Ano
+                    </Label>
+                    <Select value={anoEfetivo} onValueChange={trocarAno} disabled={carregandoOpcoes}>
+                      <SelectTrigger className="w-full">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {anos.map((ano) => (
+                          <SelectItem key={ano} value={ano}>
+                            {ano}
+                          </SelectItem>
+                        ))}
+                        <SelectItem value="todos">Todos os anos</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Vendedor
+                    </Label>
+                    <Select value={vendedorFiltro} onValueChange={trocarVendedor}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Todos os vendedores" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="todos">Todos os vendedores</SelectItem>
+                        {vendedores.map(([codigo, nome]) => (
+                          <SelectItem key={codigo} value={codigo}>
+                            {nome} ({codigo})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end border-t border-border/50 pt-3">
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => setEtapaAtiva('2')}
+                    className="gap-1.5 text-xs"
+                  >
+                    Escolher Inventários
+                    <ArrowRight className="size-3.5" />
+                  </Button>
+                </div>
+              </div>
+              </TabsContent>
+
+              {/* Painel Etapa 2: Escolha dos Inventários A e B */}
+              <TabsContent value="2" className="mt-0 space-y-4 pt-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Selecione a contagem de referência (A) e a comparada (B)
+                  </p>
+                  {invA && invB && (
+                    <Badge variant={mesmoVendedor ? 'outline' : 'warning'} className="text-2xs shrink-0">
+                      {mesmoVendedor ? 'Mesmo vendedor' : 'Vendedores diferentes'}
+                    </Badge>
                   )}
                 </div>
-              )}
 
-              {podeReconciliar && paramsAplicados && (
-                <p className="text-xs text-muted-foreground">
-                  Esperado = Qtd A
-                  {considerarRemessas && ' + remessas'}
-                  {considerarVendas && ' − vendas'}
-                  {empresa !== 'ambas' && ` · só empresa ${empresa}`}
-                  {baseData === 'emissao' && ' · por emissão do pedido'}
-                  {!regrasNoPadrao && ' · regras de conciliação alteradas'}
-                  {!ajustarPeriodo && ' · períodos vindos das datas dos inventários'}
-                </p>
-              )}
-            </div>
+                <div className="grid items-end gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
+                  {/* Inventário A */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Inventário A · Base
+                      </Label>
+                      {invA && (
+                        <span className="text-2xs tabular-nums text-muted-foreground">
+                          {invA.nome_vendedor}
+                        </span>
+                      )}
+                    </div>
+                    <Select value={idA} onValueChange={setIdA} disabled={carregandoOpcoes}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Escolha o inventário A" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {opcoesFiltradas.map((o) => (
+                          <SelectItem key={o.id} value={o.id} disabled={o.id === idB}>
+                            {rotulo(o)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Botão Inverter */}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    onClick={trocarLados}
+                    disabled={!idA && !idB}
+                    aria-label="Inverter A e B"
+                    title="Inverter ordem das contagens (A <-> B)"
+                    className="w-full lg:w-11 mb-0.5"
+                  >
+                    <ArrowLeftRight className="h-4 w-4" />
+                  </Button>
+
+                  {/* Inventário B */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Inventário B · Comparado
+                      </Label>
+                      {invB && (
+                        <span className="text-2xs tabular-nums text-muted-foreground">
+                          {invB.nome_vendedor}
+                        </span>
+                      )}
+                    </div>
+                    <Select value={idB} onValueChange={setIdB} disabled={carregandoOpcoes}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Escolha o inventário B" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {opcoesFiltradas.map((o) => (
+                          <SelectItem key={o.id} value={o.id} disabled={o.id === idA}>
+                            {rotulo(o)}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between border-t border-border/50 pt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEtapaAtiva('1')}
+                    className="gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <ArrowLeft className="size-3.5" />
+                    Alterar Escopo
+                  </Button>
+
+                  <Button
+                    variant={prontoParaComparar ? 'outline' : 'ghost'}
+                    size="sm"
+                    onClick={() => setEtapaAtiva('3')}
+                    className="gap-1.5 text-xs"
+                  >
+                    Configurar ERP (Opcional)
+                    <ArrowRight className="size-3.5" />
+                  </Button>
+                </div>
+              </TabsContent>
+
+              {/* Painel Etapa 3: Movimentos do ERP */}
+              <TabsContent value="3" className="mt-0 space-y-3 pt-1">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs text-muted-foreground">
+                    Reconcilie remessas e vendas faturadas no período do ERP Ciclone
+                  </p>
+                  {reconciliar && mesmoVendedor && (
+                    <div className="flex flex-wrap items-center gap-3">
+                      <label className="flex cursor-pointer items-center gap-2 text-xs text-muted-foreground hover:text-foreground transition-colors">
+                        <Checkbox
+                          checked={ajustarPeriodo}
+                          onCheckedChange={(v) => setAjustarPeriodo(v === true)}
+                        />
+                        Ajustar períodos
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setRegrasAbertas(true)}
+                        className="flex items-center gap-1.5 text-xs font-medium text-primary underline-offset-4 hover:underline"
+                      >
+                        <SlidersHorizontal className="size-3.5" />
+                        Regras
+                        {!regrasNoPadrao && (
+                          <Badge variant="info" className="px-1.5 py-0 text-2xs">
+                            alteradas
+                          </Badge>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Toggles primários dos movimentos */}
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl border border-border/50 bg-muted/20 p-3">
+                    <LinhaMovimento
+                      id="remessa"
+                      rotulo="Considerar remessas"
+                      ligado={considerarRemessas}
+                      onToggle={setConsiderarRemessas}
+                      desabilitado={!mesmoVendedor}
+                      ajustando={ajustarPeriodo}
+                      de={remessaDe}
+                      ate={remessaAte}
+                      onDe={setRemessaDe}
+                      onAte={setRemessaAte}
+                    />
+                  </div>
+                  <div className="rounded-xl border border-border/50 bg-muted/20 p-3">
+                    <LinhaMovimento
+                      id="venda"
+                      rotulo="Considerar vendas"
+                      ligado={considerarVendas}
+                      onToggle={setConsiderarVendas}
+                      desabilitado={!mesmoVendedor}
+                      ajustando={ajustarPeriodo}
+                      de={vendaDe}
+                      ate={vendaAte}
+                      onDe={setVendaDe}
+                      onAte={setVendaAte}
+                    />
+                  </div>
+                </div>
+
+                {/* Parâmetros do ERP: Visíveis quando conciliação ativada */}
+                {reconciliar && mesmoVendedor && (
+                  <div className="grid gap-3 rounded-xl border border-border/60 bg-muted/30 p-3 sm:grid-cols-2">
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground">Empresa</Label>
+                      <Select
+                        value={empresa}
+                        onValueChange={(v) => setEmpresa(v as EscolhaEmpresa)}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ambas">Ambas (Empresa 1 e 2)</SelectItem>
+                          <SelectItem value="1">Empresa 1</SelectItem>
+                          <SelectItem value="2">Empresa 2</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-medium text-muted-foreground">Data base</Label>
+                      <Select
+                        value={baseData}
+                        onValueChange={(v) => setBaseData(v as 'movimento' | 'emissao')}
+                      >
+                        <SelectTrigger className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="movimento">Movimento da nota</SelectItem>
+                          <SelectItem value="emissao">Emissão do pedido</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
+
+                {/* Ação de Busca ERP */}
+                {reconciliar && mesmoVendedor && (
+                  <div className="flex flex-wrap items-center gap-3 pt-1">
+                    <Button
+                      onClick={buscarMovimentos}
+                      disabled={!ordemCorreta || carregandoMovimentos}
+                    >
+                      {carregandoMovimentos ? (
+                        <>
+                          <span className="mr-2 size-4 animate-spin rounded-full border-2 border-current border-t-transparent" />
+                          Consultando o ERP…
+                        </>
+                      ) : (
+                        <>
+                          <Search className="mr-2 size-4" />
+                          {paramsAplicados ? 'Atualizar movimentos' : 'Buscar movimentos no ERP'}
+                        </>
+                      )}
+                    </Button>
+                    {buscaDesatualizada && !carregandoMovimentos && (
+                      <span className="flex items-center gap-1.5 text-xs font-medium text-warning-strong">
+                        <TriangleAlert className="size-3.5 shrink-0" />
+                        Parâmetros alterados — clique em atualizar para consultar o ERP.
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {podeReconciliar && paramsAplicados && (
+                  <p className="text-xs text-muted-foreground">
+                    Fórmula: Esperado = Qtd A
+                    {considerarRemessas && ' + remessas'}
+                    {considerarVendas && ' − vendas'}
+                    {empresa !== 'ambas' && ` · empresa ${empresa}`}
+                    {baseData === 'emissao' && ' · por emissão'}
+                    {!regrasNoPadrao && ' · regras customizadas'}
+                    {!ajustarPeriodo && ' · período padrão entre contagens'}
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between border-t border-border/50 pt-3">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEtapaAtiva('2')}
+                    className="gap-1.5 text-xs text-muted-foreground"
+                  >
+                    <ArrowLeft className="size-3.5" />
+                    Voltar para Escolha de Inventários
+                  </Button>
+                </div>
+              </TabsContent>
+            </Tabs>
 
             <RegrasConciliacaoDialog
               aberto={regrasAbertas}
@@ -1013,7 +1223,7 @@ export default function CompararInventarios() {
               onChange={setRegrasSelecao}
             />
 
-            {/* Avisos condicionais: nada ocupa espaço enquanto está tudo certo. */}
+            {/* Avisos condicionais */}
             {!carregandoOpcoes && opcoesFiltradas.length === 0 && (
               <p className="pt-2.5 text-xs text-muted-foreground">
                 Nenhum inventário em <strong className="text-foreground">{anoEfetivo}</strong>
@@ -1023,14 +1233,14 @@ export default function CompararInventarios() {
             )}
             {mesmoInventario && (
               <p className="pt-2.5 text-xs font-medium text-destructive-strong">
-                Escolha dois inventários diferentes.
+                Escolha dois inventários diferentes para comparar.
               </p>
             )}
             {vendedoresDiferentes && (
               <p className="flex items-center gap-1.5 pt-2.5 text-xs font-medium text-warning-strong">
                 <TriangleAlert className="size-3.5 shrink-0" />
                 A e B são de vendedores diferentes — o comparativo raramente faz sentido, e os
-                movimentos do ERP ficam indisponíveis (são por vendedor).
+                movimentos do ERP ficam indisponíveis.
               </p>
             )}
             {reconciliar && mesmoVendedor && !ordemCorreta && (
@@ -1069,7 +1279,13 @@ export default function CompararInventarios() {
           <Card>
             <PageLoader
               inline
-              label={carregandoMovimentos ? 'Consultando movimentos no ERP' : 'Carregando comparativo'}
+              label={
+                !carregandoMovimentos
+                  ? 'Carregando comparativo'
+                  : tentativaAtual > 1
+                    ? `Sem resposta do ERP — tentando novamente (${tentativaAtual} de ${TENTATIVAS_ERP})`
+                    : 'Consultando movimentos no ERP'
+              }
             />
           </Card>
         ) : error ? (
@@ -1080,8 +1296,6 @@ export default function CompararInventarios() {
             </AlertDescription>
           </Alert>
         ) : erroMovimentos ? (
-          // Falha do ERP não invalida a comparação pura, mas mostrar a tabela sem
-          // dizer nada exibiria "esperado = A" como se os movimentos fossem zero.
           <Alert variant={erroMovimentos.indisponivel ? 'warning' : 'destructive'}>
             {erroMovimentos.indisponivel ? <CloudOff /> : <TriangleAlert />}
             <AlertDescription>
@@ -1103,7 +1317,12 @@ export default function CompararInventarios() {
             <CardHeader className="gap-3 pb-4">
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">
-                  <CardTitle>Resultado</CardTitle>
+                  <div className="flex items-center gap-2">
+                    <CardTitle>Resultado</CardTitle>
+                    <Badge variant="outline" className="text-xs font-normal">
+                      {linhasFiltradas.length} produto{linhasFiltradas.length !== 1 ? 's' : ''}
+                    </Badge>
+                  </div>
                   {invA && invB && (
                     <p className="mt-1 truncate text-xs text-muted-foreground">
                       {rotulo(invA)} <span className="px-1 text-foreground">→</span> {rotulo(invB)}
@@ -1111,14 +1330,40 @@ export default function CompararInventarios() {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2 sm:flex-row lg:justify-end">
+                <div className="flex flex-col gap-2 sm:flex-row lg:items-center lg:justify-end">
+                  {/* Busca rápida */}
                   <SearchFilter
                     value={busca}
                     onChange={setBusca}
                     placeholder="Buscar produto..."
                     className="max-w-none sm:w-56"
                   />
-                  <div className="flex gap-2">
+
+                  <div className="flex items-center gap-2">
+                    {/* Filtro de Linhas */}
+                    <Select value={filtroLinha} onValueChange={setFiltroLinha}>
+                      <SelectTrigger className="w-full font-normal sm:w-52">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="com_diferenca">
+                          Com diferença ({resumo.total - resumo.iguais})
+                        </SelectItem>
+                        <SelectItem value="todos">
+                          Todos os produtos ({resumo.total})
+                        </SelectItem>
+                        <SelectItem value="iguais">
+                          Sem diferença ({resumo.iguais})
+                        </SelectItem>
+                        <SelectItem value="em_ambos">
+                          Presentes em ambos ({resumo.emAmbos})
+                        </SelectItem>
+                        <SelectItem value="so_em_a">Só no inventário A</SelectItem>
+                        <SelectItem value="so_em_b">Só no inventário B</SelectItem>
+                      </SelectContent>
+                    </Select>
+
+                    {/* Modo da Tabela */}
                     <Select
                       value={modoTabela}
                       onValueChange={(v) => setModoTabela(v as 'resumido' | 'detalhado')}
@@ -1131,25 +1376,15 @@ export default function CompararInventarios() {
                         <SelectItem value="detalhado">Detalhado</SelectItem>
                       </SelectContent>
                     </Select>
-                    <Select value={filtroLinha} onValueChange={setFiltroLinha}>
-                      <SelectTrigger className="w-full font-normal sm:w-48">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="com_diferenca">Com diferença</SelectItem>
-                        <SelectItem value="todos">Todos os produtos</SelectItem>
-                        <SelectItem value="iguais">Sem diferença</SelectItem>
-                        <SelectItem value="em_ambos">Presentes em ambos</SelectItem>
-                        <SelectItem value="so_em_a">Só no inventário A</SelectItem>
-                        <SelectItem value="so_em_b">Só no inventário B</SelectItem>
-                      </SelectContent>
-                    </Select>
+
+                    {/* Botão Exportar Excel */}
                     <Button
                       variant="outline"
                       size="icon"
                       onClick={exportarExcel}
                       disabled={linhasFiltradas.length === 0}
                       aria-label="Exportar para Excel"
+                      title="Exportar resultados para planilha Excel"
                       className="shrink-0"
                     >
                       <Download className="h-4 w-4" />
@@ -1160,8 +1395,7 @@ export default function CompararInventarios() {
             </CardHeader>
 
             <CardContent className="space-y-4">
-              {/* Resumo em faixa: quatro ladrilhos dentro do cartão, no lugar de quatro
-                  cartões soltos. Some borda, sombra e o espaço entre eles. */}
+              {/* Resumo em faixa */}
               <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-5">
                 {tiles.map((t) => (
                   <div key={t.rotulo} className="rounded-xl bg-muted/50 px-4 py-3">
@@ -1228,8 +1462,6 @@ export default function CompararInventarios() {
                             <TableHead className="text-right font-semibold">Qtd B</TableHead>
                           </>
                         )}
-                        {/* A fórmula mora aqui, onde é lida no momento em que importa —
-                            e não num parágrafo permanente no topo da tela. */}
                         <TableHead className="text-right font-semibold">
                           {podeReconciliar ? 'Dif. qtd (B − esperado)' : 'Dif. qtd (B − A)'}
                         </TableHead>
@@ -1240,9 +1472,6 @@ export default function CompararInventarios() {
                     <TableBody>
                       {paginatedData.length > 0 ? (
                         paginatedData.map((l) => (
-                          // Sem tinta de fundo na linha: com o filtro padrão "com diferença",
-                          // todas as linhas visíveis seriam tintas — o que não distingue nada.
-                          // O número colorido já carrega o sinal.
                           <TableRow key={l.codigo_auxiliar}>
                             <TableCell className="py-3">
                               <span className="font-mono text-sm font-medium">
@@ -1288,8 +1517,6 @@ export default function CompararInventarios() {
                                 </TableCell>
                               </>
                             )}
-                            {/* No resumido a resposta é a coluna principal, então ganha
-                                o corpo maior — é o que o olho procura primeiro. */}
                             <TableCell className="text-right">
                               <span
                                 className={`font-bold tabular-nums ${detalhado ? '' : 'text-lg'} ${corDif(l.diferenca)}`}
@@ -1343,7 +1570,6 @@ export default function CompararInventarios() {
                 </div>
               </div>
 
-              {/* Nota de rodapé, não cartão próprio: é ressalva sobre os totais acima. */}
               {resumo.semValor > 0 && (
                 <p className="text-xs text-muted-foreground">
                   <strong className="text-foreground">{resumo.semValor}</strong> produto(s) sem
