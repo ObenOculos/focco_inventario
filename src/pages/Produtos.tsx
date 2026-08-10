@@ -61,13 +61,29 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Progress } from '@/components/ui/progress';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { SincronizarProdutosDialog } from '@/components/SincronizarProdutosDialog';
+import { ExcluirProdutoDialog } from '@/components/ExcluirProdutoDialog';
 import QRCode from 'qrcode';
 import * as XLSX from 'xlsx';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
 import { RefetchIndicator } from '@/components/RefetchIndicator';
 import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
-import { useProdutosQuery, useInvalidateProdutos } from '@/hooks/useProdutosQuery';
+import {
+  useProdutosQuery,
+  useInvalidateProdutos,
+  FILTROS_PRODUTOS_PADRAO,
+  type FiltrosProdutos,
+} from '@/hooks/useProdutosQuery';
 import { usePagination } from '@/hooks/usePagination';
 import {
   useCodigosCorrecaoQuery,
@@ -126,6 +142,14 @@ function ProdutosTab() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(24);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [sincronizarAberto, setSincronizarAberto] = useState(false);
+  // Padrão "ativos": depois da sincronização, produto que saiu de linha no Ciclone
+  // vira ruído no dia a dia. Ele continua acessível pelo filtro, nunca sumiu.
+  const [filtros, setFiltros] = useState<FiltrosProdutos>(FILTROS_PRODUTOS_PADRAO);
+  // Seleção por id, acumulando entre páginas: dá para filtrar, marcar, virar a
+  // página, marcar mais, e excluir tudo de uma vez.
+  const [selecionados, setSelecionados] = useState<Record<string, Produto>>({});
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState<Produto[]>([]);
   const [qrDialogOpen, setQrDialogOpen] = useState(false);
   const [selectedProduto, setSelectedProduto] = useState<Produto | null>(null);
   const [qrCodeUrl, setQrCodeUrl] = useState('');
@@ -167,12 +191,39 @@ function ProdutosTab() {
     data,
     isLoading: loading,
     isFetching,
-  } = useProdutosQuery(currentPage, itemsPerPage, debouncedSearchTerm);
+  } = useProdutosQuery(currentPage, itemsPerPage, debouncedSearchTerm, filtros);
   const invalidateProdutos = useInvalidateProdutos();
+
+  /** Trocar filtro volta para a página 1: a página 7 do recorte antigo não existe no novo. */
+  const trocarFiltro = (parcial: Partial<FiltrosProdutos>) => {
+    setFiltros((f) => ({ ...f, ...parcial }));
+    setCurrentPage(1);
+  };
+  const filtrosAtivos =
+    filtros.situacao !== FILTROS_PRODUTOS_PADRAO.situacao ||
+    filtros.origem !== FILTROS_PRODUTOS_PADRAO.origem ||
+    filtros.somenteSemValor;
 
   const produtos = data?.data ?? [];
   const totalItems = data?.count ?? 0;
   const totalPages = Math.ceil(totalItems / itemsPerPage);
+  const listaSelecionada = Object.values(selecionados);
+  const alternarSelecao = (produto: Produto) =>
+    setSelecionados((s) => {
+      const novo = { ...s };
+      if (novo[produto.id]) delete novo[produto.id];
+      else novo[produto.id] = produto;
+      return novo;
+    });
+  const paginaToda = produtos.length > 0 && produtos.every((p) => selecionados[p.id]);
+  const alternarPagina = () =>
+    setSelecionados((s) => {
+      const novo = { ...s };
+      if (paginaToda) produtos.forEach((p) => delete novo[p.id]);
+      else produtos.forEach((p) => (novo[p.id] = p));
+      return novo;
+    });
+
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = Math.min(startIndex + itemsPerPage - 1, totalItems - 1);
 
@@ -470,6 +521,46 @@ function ProdutosTab() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
+
+        {/* Filtros aplicados no servidor, junto da paginação — por isso o total
+            abaixo continua batendo com o que a lista mostra. */}
+        <Select
+          value={filtros.situacao}
+          onValueChange={(v) => trocarFiltro({ situacao: v as FiltrosProdutos['situacao'] })}
+        >
+          <SelectTrigger className="w-full font-normal sm:w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="ativos">Ativos</SelectItem>
+            <SelectItem value="inativos">Inativos</SelectItem>
+            <SelectItem value="todos">Todas as situações</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Select
+          value={filtros.origem}
+          onValueChange={(v) => trocarFiltro({ origem: v as FiltrosProdutos['origem'] })}
+        >
+          <SelectTrigger className="w-full font-normal sm:w-44">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todas">Toda origem</SelectItem>
+            <SelectItem value="ciclone">Veio do Ciclone</SelectItem>
+            <SelectItem value="manual">Cadastro manual</SelectItem>
+          </SelectContent>
+        </Select>
+
+        <Button
+          variant={filtros.somenteSemValor ? 'default' : 'outline'}
+          onClick={() => trocarFiltro({ somenteSemValor: !filtros.somenteSemValor })}
+          title="Produtos sem preço entram nas quantidades, mas contam zero nos totais em reais"
+        >
+          <Tags className="mr-2" size={16} />
+          Sem valor
+        </Button>
+
         <RefetchIndicator isFetching={isFetching && !loading} />
         <div className="flex items-center gap-2 sm:ml-auto">
           <DropdownMenu>
@@ -499,12 +590,30 @@ function ProdutosTab() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          <Button variant="outline" onClick={() => setSincronizarAberto(true)}>
+            <RefreshCw className="mr-2" size={16} />
+            Atualizar do Ciclone
+          </Button>
           <Button onClick={() => setDialogOpen(true)}>
             <Plus className="mr-2" size={16} />
             Novo Produto
           </Button>
         </div>
       </div>
+
+      <SincronizarProdutosDialog
+        aberto={sincronizarAberto}
+        onOpenChange={setSincronizarAberto}
+      />
+
+      <ExcluirProdutoDialog
+        produtos={confirmandoExclusao}
+        onOpenChange={(v) => !v && setConfirmandoExclusao([])}
+        onConcluido={() => {
+          invalidateProdutos();
+          setSelecionados({});
+        }}
+      />
 
       {/* New Product Dialog */}
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -797,28 +906,118 @@ function ProdutosTab() {
         <Card>
           <CardContent className="py-12 text-center">
             <Package size={48} className="mx-auto mb-4 text-muted-foreground" />
-            <h2 className="text-xl font-bold mb-2">{searchTerm ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}</h2>
-            <p className="text-muted-foreground">{searchTerm ? 'Tente outro termo de busca' : 'Cadastre produtos ou importe via Excel'}</p>
+            {/* Distingue "não existe" de "está escondido pelo recorte". Sem isso, o
+                filtro padrão de ativos faria um catálogo cheio parecer vazio. */}
+            <h2 className="text-xl font-bold mb-2">
+              {searchTerm || filtrosAtivos ? 'Nenhum produto encontrado' : 'Nenhum produto cadastrado'}
+            </h2>
+            <p className="text-muted-foreground">
+              {filtrosAtivos
+                ? 'Nenhum produto corresponde aos filtros aplicados.'
+                : searchTerm
+                  ? 'Tente outro termo de busca'
+                  : 'Cadastre produtos ou importe via Excel'}
+            </p>
+            {filtrosAtivos && (
+              <Button
+                variant="outline"
+                className="mt-4"
+                onClick={() => trocarFiltro(FILTROS_PRODUTOS_PADRAO)}
+              >
+                Limpar filtros
+              </Button>
+            )}
           </CardContent>
         </Card>
       ) : (
         <>
+          {/* Barra de seleção. Some quando não há nada marcado — não ocupa espaço
+              no uso normal, que é só olhar o catálogo. */}
+          <div className="flex flex-wrap items-center gap-3 rounded-xl border border-border/80 px-4 py-2.5">
+            <label className="flex cursor-pointer items-center gap-2 text-sm">
+              <Checkbox checked={paginaToda} onCheckedChange={alternarPagina} />
+              Selecionar esta página
+            </label>
+            {listaSelecionada.length > 0 && (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  <strong className="tabular-nums text-foreground">
+                    {listaSelecionada.length}
+                  </strong>{' '}
+                  selecionado(s)
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setSelecionados({})}>
+                  Limpar seleção
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="ml-auto text-destructive"
+                  onClick={() => setConfirmandoExclusao(listaSelecionada)}
+                >
+                  <Trash2 className="mr-2" size={16} />
+                  Excluir selecionados
+                </Button>
+              </>
+            )}
+          </div>
+
           <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
             {produtos.map((produto) => (
-              <Card key={produto.id} className="transition-shadow hover:shadow-md">
+              <Card
+                key={produto.id}
+                // Inativo: fundo `bg-muted/30` e borda em `warning`. O fundo é o
+                // padrão que o DESIGN_SYSTEM já nomeia para item desativado — o
+                // mesmo da nota cancelada em Comparar Inventários. Nada de
+                // `opacity`: o card continua selecionável e excluível, e precisa
+                // seguir legível.
+                className={`transition-shadow hover:shadow-md ${
+                  produto.ativo ? '' : 'border-warning/50 bg-muted/30'
+                } ${selecionados[produto.id] ? 'ring-2 ring-primary' : ''}`}
+              >
                 <CardContent className="py-4">
                   <div className="flex items-start justify-between gap-3">
+                    <Checkbox
+                      className="mt-1 shrink-0"
+                      aria-label={`Selecionar ${produto.codigo_auxiliar}`}
+                      checked={!!selecionados[produto.id]}
+                      onCheckedChange={() => alternarSelecao(produto)}
+                    />
                     <div className="min-w-0 flex-1">
-                      <p className="font-mono font-bold text-sm text-foreground">{produto.codigo_auxiliar}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="font-mono font-bold text-sm text-foreground">{produto.codigo_auxiliar}</p>
+                        {!produto.ativo && (
+                          <Badge variant="warning" className="shrink-0 py-0 text-2xs">
+                            Inativo
+                          </Badge>
+                        )}
+                      </div>
                       <p className="text-xs text-muted-foreground truncate font-medium mt-0.5">{produto.nome_produto}</p>
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-xs">
                         <span className="font-medium text-foreground">Venda: <strong className="font-bold text-success-strong">R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
                         <span className="text-muted-foreground font-medium">Remessa: <strong className="font-semibold text-foreground">R$ {Number(produto.valor_remessa ?? 0).toFixed(2)}</strong></span>
                       </div>
                     </div>
-                    <Button variant="outline" size="icon" className="rounded-xl h-9 w-9 shadow-2xs shrink-0" onClick={() => generateQRCode(produto)}>
-                      <QrCode size={16} />
-                    </Button>
+                    <div className="flex shrink-0 items-center gap-1.5">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label={`Gerar QR Code de ${produto.codigo_auxiliar}`}
+                        className="rounded-xl h-9 w-9 shadow-2xs"
+                        onClick={() => generateQRCode(produto)}
+                      >
+                        <QrCode size={16} />
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        aria-label={`Excluir ${produto.codigo_auxiliar}`}
+                        className="rounded-xl h-9 w-9 shadow-2xs text-destructive"
+                        onClick={() => setConfirmandoExclusao([produto])}
+                      >
+                        <Trash2 size={16} />
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>

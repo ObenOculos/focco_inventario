@@ -8,6 +8,10 @@ e a Vercel não está nessa rede.
 — os mesmos módulos da ferramenta tkinter em `Apenas_Para_Consulta/`, sem cópia e
 sem alteração.
 
+> 🔧 **Parou de funcionar? Vai desligar o computador?** Veja
+> [`OPERACAO.md`](OPERACAO.md) — é o guia de plantão, sem pré-requisito técnico.
+> Este arquivo explica como funciona; aquele explica o que fazer.
+
 ## Onde ele fica na arquitetura
 
 ```

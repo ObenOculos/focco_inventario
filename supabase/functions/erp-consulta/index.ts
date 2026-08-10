@@ -91,6 +91,14 @@ const OPERACOES: Record<string, { caminho: string; montar: (p: Params) => URLSea
     caminho: '/regras',
     montar: () => new URLSearchParams(),
   },
+  produtos: {
+    caminho: '/produtos',
+    montar: (p) => {
+      const q = new URLSearchParams();
+      for (const e of listaInteiros(p.empresas, 'empresas')) q.append('empresas', e);
+      return q;
+    },
+  },
 };
 
 type Params = Record<string, unknown>;

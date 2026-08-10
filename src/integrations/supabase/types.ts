@@ -141,6 +141,7 @@ export type Database = {
       }
       produtos: {
         Row: {
+          ativo: boolean
           codigo_auxiliar: string
           codigo_produto: string
           cor: string
@@ -148,11 +149,13 @@ export type Database = {
           id: string
           modelo: string
           nome_produto: string
+          sincronizado_em: string | null
           updated_at: string
           valor_produto: number | null
           valor_remessa: number | null
         }
         Insert: {
+          ativo?: boolean
           codigo_auxiliar: string
           codigo_produto: string
           cor: string
@@ -160,11 +163,13 @@ export type Database = {
           id?: string
           modelo: string
           nome_produto: string
+          sincronizado_em?: string | null
           updated_at?: string
           valor_produto?: number | null
           valor_remessa?: number | null
         }
         Update: {
+          ativo?: boolean
           codigo_auxiliar?: string
           codigo_produto?: string
           cor?: string
@@ -172,7 +177,44 @@ export type Database = {
           id?: string
           modelo?: string
           nome_produto?: string
+          sincronizado_em?: string | null
           updated_at?: string
+          valor_produto?: number | null
+          valor_remessa?: number | null
+        }
+        Relationships: []
+      }
+      produtos_sincronizacao: {
+        Row: {
+          ativo: boolean
+          codigo_auxiliar: string
+          codigo_produto: string
+          cor: string
+          modelo: string
+          nome_produto: string
+          sincronizacao_id: string
+          valor_produto: number | null
+          valor_remessa: number | null
+        }
+        Insert: {
+          ativo?: boolean
+          codigo_auxiliar: string
+          codigo_produto: string
+          cor: string
+          modelo: string
+          nome_produto: string
+          sincronizacao_id: string
+          valor_produto?: number | null
+          valor_remessa?: number | null
+        }
+        Update: {
+          ativo?: boolean
+          codigo_auxiliar?: string
+          codigo_produto?: string
+          cor?: string
+          modelo?: string
+          nome_produto?: string
+          sincronizacao_id?: string
           valor_produto?: number | null
           valor_remessa?: number | null
         }
@@ -238,11 +280,20 @@ export type Database = {
           valor_unitario: number
         }[]
       }
+      concluir_sincronizacao_produtos: {
+        Args: { p_sincronizacao_id: string }
+        Returns: Json
+      }
+      enviar_lote_produtos: {
+        Args: { p_produtos: Json; p_sincronizacao_id: string }
+        Returns: number
+      }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }
       get_user_role: {
         Args: { user_id: string }
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      iniciar_sincronizacao_produtos: { Args: never; Returns: string }
       juntar_inventarios: {
         Args: { p_inventario_destino: string; p_inventarios_origem: string[] }
         Returns: {
@@ -251,6 +302,10 @@ export type Database = {
           total_produtos: number
           total_unidades: number
         }[]
+      }
+      previa_sincronizacao_produtos: {
+        Args: { p_sincronizacao_id: string }
+        Returns: Json
       }
       salvar_inventario: {
         Args: {

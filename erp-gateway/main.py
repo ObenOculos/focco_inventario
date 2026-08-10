@@ -286,6 +286,121 @@ def _unificar_por_codigo(df: pd.DataFrame) -> list[dict]:
     ]
 
 
+# Tipos de produto que são ÓCULOS — o que entra no inventário do representante.
+# É allowlist de propósito: um tipo novo no Ciclone (uma "cordinha", um brinde)
+# fica de fora por padrão. A lista de acessórios de `movimentos.py` é denylist e
+# deixou passar 16 itens quando conferida contra este campo — expositores, brinde
+# e cadastros genéricos de faturamento.
+TIPOS_OCULOS = (2, 3)  # 2=OCULOS RECEITUARIO, 3=OCULOS SOLAR
+
+SQL_CATALOGO = """
+SELECT
+    gen.eqpdg_codigo                                          AS codigo_produto,
+    gen.eqpdg_nome                                            AS nome_produto,
+    est.eqpee_cor                                             AS cor,
+    COALESCE(est.eqpee_referenciaauxiliargrade,
+             CASE WHEN est.eqpee_cor IS NOT NULL AND est.eqpee_cor <> ''
+                       AND est.eqpee_cor <> 'COR'
+                  THEN CONCAT(gen.eqpdg_codigo, ' ', est.eqpee_cor)
+                  ELSE gen.eqpdg_codigo END)                  AS codigo_auxiliar,
+    COALESCE(prod.eqpde_valorvendaatacado,
+             prod.eqpde_valorvendavarejo, 0)                  AS valor_produto,
+    COALESCE(prod.eqpde_valorvendaatacado, prod.eqpde_valorvendavarejo, 0)
+      - (COALESCE(prod.eqpde_valorvendaatacado, prod.eqpde_valorvendavarejo, 0)
+         * COALESCE(remessa.preco_remessa_atacado,
+                    remessa.preco_remessa_varejo, 0) / 100)   AS valor_remessa,
+    -- A situação da GRADE manda quando existe: no Ciclone o OB1190 pode estar
+    -- ativo enquanto a cor A02 já foi inativada.
+    COALESCE(est.eqpee_situacao, gen.eqpdg_situacao)           AS situacao
+FROM eq_produtogenerico gen
+LEFT JOIN eq_produtoespecifico prod
+       ON prod.pgemp_codigo = gen.pgemp_codigo
+      AND prod.eqpdg_codigo = gen.eqpdg_codigo
+LEFT JOIN eq_produtoespecificoestoque est
+       ON est.pgemp_codigo = prod.pgemp_codigo
+      AND est.pgfll_codigo = prod.pgfll_codigo
+      AND est.eqpdg_codigo = prod.eqpdg_codigo
+      AND COALESCE(est.eqpee_cor, '') <> 'COR'
+LEFT JOIN (SELECT eqpdg_codigo,
+                  MAX(vdtvp_valorreajusteatacado) AS preco_remessa_atacado,
+                  MAX(vdtvp_valorreajustevarejo)  AS preco_remessa_varejo
+           FROM vd_tabelavendaproduto
+           WHERE vdtbv_codigo = 3 AND vdtvp_situacao = 'A'
+           GROUP BY eqpdg_codigo) remessa
+       ON remessa.eqpdg_codigo = prod.eqpdg_codigo
+WHERE gen.pgemp_codigo = ANY(%(empresas)s)
+  AND gen.eqtpr_codigo = ANY(%(tipos)s)
+  AND est.eqpee_cor IS NOT NULL
+"""
+
+
+@app.get("/produtos", dependencies=PROTEGIDO)
+def catalogo_produtos(
+    empresas: list[int] | None = Query(None),
+    incluir_inativos: bool = Query(True, description="Inativos sobem marcados."),
+):
+    """Catálogo de óculos para sincronizar com o Supabase.
+
+    Traz ativos e inativos: produto inativado no Ciclone continua existindo no
+    histórico de inventários, e some do catálogo do app perderia o nome e o valor
+    de contagens antigas. Quem decide o que fazer com a situação é o app.
+
+    Acessórios saem por DOIS filtros que se cobrem: o tipo de produto (allowlist)
+    e a regra de texto de `movimentos.py` (rede para os miscadastros — há estojos
+    cadastrados como "OCULOS SOLAR" no Ciclone).
+    """
+    if empresas is None:
+        empresas = db.EMPRESAS_PADRAO
+    try:
+        with _fila_erp("/produtos"):
+            conn = db.conectar()
+            try:
+                df = pd.read_sql_query(
+                    SQL_CATALOGO, conn,
+                    params={"empresas": list(empresas), "tipos": list(TIPOS_OCULOS)},
+                )
+            finally:
+                conn.close()
+    except Exception as exc:
+        raise _erro_erp(exc)
+
+    if df.empty:
+        return {"total": 0, "dados": []}
+
+    df["codigo_auxiliar"] = df["codigo_auxiliar"].fillna("").astype(str).str.strip()
+
+    # Produto sem código auxiliar não sobe: o código é a chave do catálogo no app e
+    # de todo item de inventário. Hoje isso não descarta nada — a consulta deriva o
+    # código de `produto + cor` quando o Ciclone não tem a referência registrada,
+    # e não há grade sem cor. É guarda contra dado futuro, não filtro ativo.
+    sem_codigo = int((df["codigo_auxiliar"] == "").sum())
+    if sem_codigo:
+        log.warning("/produtos: %d linhas descartadas por não terem código auxiliar", sem_codigo)
+        df = df[df["codigo_auxiliar"] != ""]
+
+    df = df[~df["codigo_auxiliar"].map(movimentos.eh_acessorio)]
+    df["ativo"] = df["situacao"].astype(str).str.upper().str.strip() == "A"
+
+    if not incluir_inativos:
+        df = df[df["ativo"]]
+
+    # O mesmo código auxiliar existe nas duas empresas. Fica UMA linha por código,
+    # preferindo a ativa e, entre ativas, a de maior valor — que é a regra que
+    # `comparativo.py` já usa ao consolidar valores por chave.
+    df = (
+        df.sort_values(["ativo", "valor_produto"], ascending=[False, False])
+        .drop_duplicates("codigo_auxiliar", keep="first")
+        .reset_index(drop=True)
+    )
+    df["modelo"] = df["codigo_produto"].astype(str).str.strip()
+    df["cor"] = df["cor"].astype(str).str.strip()
+
+    colunas = ["codigo_auxiliar", "codigo_produto", "nome_produto",
+               "modelo", "cor", "valor_produto", "valor_remessa", "ativo"]
+    _conferir_limite(df, "/produtos")
+    return {"total": len(df), "dados": _para_json(df[colunas])}
+
+
 @app.get("/regras", dependencies=PROTEGIDO)
 def regras_conciliacao():
     """Vocabulário e padrões das regras de conciliação, numa viagem só.
