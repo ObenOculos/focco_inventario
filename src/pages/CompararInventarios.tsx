@@ -11,7 +11,9 @@ import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
@@ -81,6 +83,22 @@ function dataBr(iso: string | null) {
   if (!iso) return '—';
   const [a, m, d] = iso.split('-');
   return `${d}/${m}/${a}`;
+}
+
+/**
+ * Nome de vendedor virando pedaço de nome de arquivo.
+ *
+ * Acento e espaço saem porque o arquivo é baixado, anexado em e-mail e aberto em
+ * outra máquina — `José da Silva` vira `Jose-da-Silva`. A caixa é preservada: o nome
+ * é para ser lido, e é assim que a ferramenta local já nomeia os inventários
+ * (`inventario_Michel_16-03-2026.xlsx`).
+ */
+function nomeParaArquivo(nome: string) {
+  return nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
 }
 
 /**
@@ -186,8 +204,25 @@ export default function CompararInventarios() {
   const [vendedorFiltro, setVendedorFiltro] = useState<string>('todos');
   const [idA, setIdA] = useState<string>('');
   const [idB, setIdB] = useState<string>('');
+
+  /**
+   * Primeiro inventário do representante: não existe contagem anterior para ser o A.
+   *
+   * O lado A vira uma **data** — o dia em que a mala estava vazia — e o esperado passa a
+   * ser `0 + remessa − venda`. É a mesma fórmula da tela com o primeiro termo zerado, e é
+   * por isso que este modo não tem cálculo próprio: só troca de onde vem o `q1` e a data
+   * de início da janela.
+   *
+   * Vale para representante NOVO, cuja mala nasceu do zero. Para quem já rodava antes, a
+   * janela não teria início honesto e todo o estoque anterior apareceria como sobra — daí
+   * o aviso de `temInventarioAnterior`.
+   */
+  const [primeiroInventario, setPrimeiroInventario] = useState(false);
+  const [dataMalaVazia, setDataMalaVazia] = useState('');
   const [busca, setBusca] = useState('');
-  const [filtroLinha, setFiltroLinha] = useState<string>('com_diferenca');
+  // Abre em "Todos os produtos": o recorte é escolha de quem lê, e os cards agora dão
+  // o atalho para cada um deles.
+  const [filtroLinha, setFiltroLinha] = useState<string>('todos');
 
   /**
    * A tabela mostrava a derivação inteira (Qtd A, remessa, venda, esperado, Qtd B)
@@ -233,7 +268,7 @@ export default function CompararInventarios() {
     isLoading: carregandoComparacao,
     isFetching,
     error,
-  } = useComparacaoQuery(idA || null, idB || null);
+  } = useComparacaoQuery(primeiroInventario ? null : idA || null, idB || null);
 
   // O ano é o primeiro recorte: vendedor e as listas de A/B trabalham dentro dele.
   // A regra (padrão no ano corrente, com recuo para o mais recente com dados) mora em
@@ -269,6 +304,21 @@ export default function CompararInventarios() {
     setIdB(idA);
   };
 
+  /**
+   * Entrar no modo primeiro inventário descarta o A escolhido: não há lado A, e deixar o
+   * id guardado faria a consulta continuar mandando um inventário que a tela não mostra.
+   */
+  const trocarModo = (primeiro: boolean) => {
+    setPrimeiroInventario(primeiro);
+    if (!primeiro) return;
+    setIdA('');
+    // Filtros que dependem do lado A somem da lista; deixar um deles selecionado
+    // esvaziaria a tabela sem explicação.
+    if (filtroLinha === 'em_ambos' || filtroLinha === 'so_em_a' || filtroLinha === 'so_em_b') {
+      setFiltroLinha('todos');
+    }
+  };
+
   // Trocar de vendedor invalida a seleção: os inventários escolhidos podem não estar mais
   // na lista filtrada.
   const trocarVendedor = (codigo: string) => {
@@ -292,29 +342,39 @@ export default function CompararInventarios() {
 
   // ── Reconciliação com movimentos do ERP (opcional) ──────────────────────────
   const reconciliar = considerarRemessas || considerarVendas;
-  const mesmoVendedor = !!invA && !!invB && invA.codigo_vendedor === invB.codigo_vendedor;
+  // Sem lado A não há dois vendedores para conferir: o único é o de B.
+  const mesmoVendedor = primeiroInventario
+    ? !!invB
+    : !!invA && !!invB && invA.codigo_vendedor === invB.codigo_vendedor;
 
   const dataIso = (inv: InventarioOpcao | null) =>
     inv ? format(new Date(inv.data_inventario), 'yyyy-MM-dd') : null;
   const dataA = dataIso(invA);
   const dataB = dataIso(invB);
 
+  /**
+   * Início da janela de movimentos. No fluxo normal é a data do inventário A; no primeiro
+   * inventário é a data informada da mala vazia. Um nome só para os dois porque é o mesmo
+   * papel — daqui para baixo nada precisa saber em que modo está.
+   */
+  const dataBase = primeiroInventario ? dataMalaVazia || null : dataA;
+
   // Trocar A ou B repõe o período sugerido. Sobrescrever é decisão pontual sobre
   // um par de inventários — carregar as datas antigas para um par novo produziria
   // uma janela que não corresponde a nada.
   useEffect(() => {
-    setRemessaDe(dataA ?? '');
+    setRemessaDe(dataBase ?? '');
     setRemessaAte(dataB ?? '');
-    setVendaDe(dataA ?? '');
+    setVendaDe(dataBase ?? '');
     setVendaAte(dataB ?? '');
-  }, [dataA, dataB]);
+  }, [dataBase, dataB]);
 
   const janelaRemessa = ajustarPeriodo
     ? { de: remessaDe, ate: remessaAte }
-    : { de: dataA, ate: dataB };
+    : { de: dataBase, ate: dataB };
   const janelaVenda = ajustarPeriodo
     ? { de: vendaDe, ate: vendaAte }
-    : { de: dataA, ate: dataB };
+    : { de: dataBase, ate: dataB };
 
   /** O início precisa ser anterior ao fim; janela desligada não precisa ser válida. */
   const janelaOk = (j: { de: string | null; ate: string | null }) =>
@@ -336,8 +396,7 @@ export default function CompararInventarios() {
    * única feita naquele dia, e bloquear impediria o caso legítimo.
    */
   const sinalFragmento = useMemo(() => {
-    if (!invA || !invB) return null;
-    if (dataA === dataB) return 'mesma-data' as const;
+    if (!invB) return null;
     const irmaos = (inv: InventarioOpcao, data: string | null) =>
       opcoes.some(
         (o) =>
@@ -345,16 +404,40 @@ export default function CompararInventarios() {
           o.codigo_vendedor === inv.codigo_vendedor &&
           dataIso(o) === data
       );
+    // No primeiro inventário não há duas contagens para caírem na mesma data, mas a
+    // contagem única do dia pode continuar sendo um fragmento — esse indício vale igual.
+    if (primeiroInventario) return irmaos(invB, dataB) ? ('irmaos-no-dia' as const) : null;
+    if (!invA) return null;
+    if (dataA === dataB) return 'mesma-data' as const;
     if (irmaos(invA, dataA) || irmaos(invB, dataB)) return 'irmaos-no-dia' as const;
     return null;
-  }, [invA, invB, dataA, dataB, opcoes]);
+  }, [invA, invB, dataA, dataB, opcoes, primeiroInventario]);
+
+  /**
+   * Marcou "primeiro inventário" num representante que já tem contagem anterior.
+   *
+   * É o uso errado mais provável, e o mais caro: a mala não nasceu vazia na data
+   * informada, então tudo que entrou antes dela aparece como SOBRA — com a mesma cara de
+   * uma sobra legítima. Custa nada detectar: a lista de inventários já está carregada.
+   */
+  const temInventarioAnterior = useMemo(() => {
+    if (!primeiroInventario || !invB) return false;
+    return opcoes.some(
+      (o) =>
+        o.id !== invB.id &&
+        o.codigo_vendedor === invB.codigo_vendedor &&
+        o.data_inventario < invB.data_inventario
+    );
+  }, [primeiroInventario, invB, opcoes]);
 
   // A lista do Ciclone serve para conferir que o código do vendedor do app existe
   // mesmo lá. Os cadastros foram feitos com a mesma numeração, mas isso é uma
   // convenção humana — se um dia divergir, o sintoma seria movimento zero em tudo,
   // que é indistinguível de "não houve movimento".
   const { data: vendedoresErp = [] } = useErpVendedoresQuery(reconciliar);
-  const codigoVendedor = invA ? Number(invA.codigo_vendedor) : NaN;
+  // No primeiro inventário o vendedor sai de B, o único lado que existe.
+  const invDoVendedor = primeiroInventario ? invB : invA;
+  const codigoVendedor = invDoVendedor ? Number(invDoVendedor.codigo_vendedor) : NaN;
   const codigoExisteNoErp =
     vendedoresErp.length === 0 || vendedoresErp.some((v) => v.codigo === codigoVendedor);
 
@@ -429,6 +512,20 @@ export default function CompararInventarios() {
   useEffect(() => {
     if (!reconciliar) setParamsAplicados(null);
   }, [reconciliar]);
+
+  /**
+   * No primeiro inventário o ERP deixa de ser opcional.
+   *
+   * Sem movimento, `esperado = 0` e a contagem inteira vira sobra de 100% — um resultado
+   * que parece catastrófico e não significa nada. Os dois lados entram ligados, e a
+   * Etapa 3 os trava enquanto o modo estiver ativo.
+   */
+  useEffect(() => {
+    if (primeiroInventario) {
+      setConsiderarRemessas(true);
+      setConsiderarVendas(true);
+    }
+  }, [primeiroInventario]);
 
   const consultaRemessas = useErpMovimentosQuery(paramsAplicados?.remessas ?? null);
   const consultaVendas = useErpMovimentosQuery(paramsAplicados?.vendas ?? null);
@@ -602,16 +699,31 @@ export default function CompararInventarios() {
     let sobraValor = 0;
     let faltaItens = 0;
     let sobraItens = 0;
+    /**
+     * A divergência em UNIDADES, ao lado da divergência em reais.
+     *
+     * Não é redundância: produto sem preço cadastrado entra com valor 0 e some
+     * inteiro dos totais em R$ — são 1 em cada 439 nos dados reais, e some
+     * justamente quando o cadastro está incompleto, que é quando mais se precisa
+     * enxergar. A quantidade não depende do catálogo.
+     */
+    let faltaQtd = 0;
+    let sobraQtd = 0;
     for (const l of linhas) {
       const v = l.diferenca * l.valor_unitario;
       if (l.diferenca < 0) {
         faltaValor += v;
         faltaItens++;
+        faltaQtd += l.diferenca;
       } else if (l.diferenca > 0) {
         sobraValor += v;
         sobraItens++;
+        sobraQtd += l.diferenca;
       }
     }
+    const soMovimento = linhas.filter((l) => l.so_movimento).length;
+    const soEmA = linhas.filter((l) => l.presente_em_a && !l.presente_em_b).length;
+    const soEmB = linhas.filter((l) => !l.presente_em_a && l.presente_em_b).length;
 
     /**
      * Concentração: quanto da divergência financeira está nos 5 maiores.
@@ -642,6 +754,13 @@ export default function CompararInventarios() {
       saldo: faltaValor + sobraValor,
       faltaItens,
       sobraItens,
+      /** Unidades faltando (negativo) e sobrando (positivo), e o líquido. */
+      faltaQtd,
+      sobraQtd,
+      saldoQtd: faltaQtd + sobraQtd,
+      soMovimento,
+      soEmA,
+      soEmB,
       // Denominador junto de propósito: uma acuracidade sem ele já exibiu ~100%
       // sobre zero linhas neste projeto por meses.
       acuracidade: linhas.length > 0 ? iguais / linhas.length : null,
@@ -654,6 +773,11 @@ export default function CompararInventarios() {
   }, [linhasExibidas]);
 
   const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  /** Quantidade sem casas fixas: `quantidade_fisica` é numeric e admite fração. */
+  const unid = (v: number) =>
+    Math.abs(v).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+  /** `−12` · `+9` · `0` — para a composição do saldo, onde o sinal é a informação. */
+  const unidSinal = (v: number) => (v === 0 ? '0' : `${v < 0 ? '−' : '+'}${unid(v)}`);
 
   const linhasFiltradas = useMemo(() => {
     /**
@@ -675,6 +799,24 @@ export default function CompararInventarios() {
         return linhas.filter((l) => l.diferenca !== 0);
       case 'iguais':
         return linhas.filter((l) => l.diferenca === 0);
+      // Falta e sobra separadas: são problemas de causas diferentes — falta costuma ser
+      // perda, sobra costuma ser remessa não baixada — e "Com diferença" as embaralha.
+      case 'falta':
+        return linhas.filter((l) => l.diferenca < 0);
+      case 'sobra':
+        return linhas.filter((l) => l.diferenca > 0);
+      // Denominador do card de concentração: diverge E tem preço. Sem o preço o
+      // produto não entra na conta financeira, por mais unidades que falte.
+      case 'com_impacto':
+        return linhas.filter((l) => l.diferenca !== 0 && l.valor_unitario !== 0);
+      // Movimento no ERP sem contagem nenhuma. Tinha etiqueta na tabela e nenhum jeito
+      // de isolar — e é a linha que mais pede atenção.
+      case 'so_movimento':
+        return linhas.filter((l) => l.so_movimento);
+      // Produto sem preço: conta nas unidades e vale zero em R$. O rodapé dizia quantos
+      // eram sem dizer quais.
+      case 'sem_valor':
+        return linhas.filter((l) => l.valor_unitario === 0);
       case 'so_em_a':
         return linhas.filter((l) => l.presente_em_a && !l.presente_em_b);
       case 'so_em_b':
@@ -698,8 +840,16 @@ export default function CompararInventarios() {
       toast.error('Não há dados para exportar.');
       return;
     }
-    const nomeA = invA ? format(new Date(invA.data_inventario), 'dd-MM-yyyy') : 'A';
+    const nomeA = primeiroInventario
+      ? 'mala-vazia'
+      : invA
+        ? format(new Date(invA.data_inventario), 'dd-MM-yyyy')
+        : 'A';
     const nomeB = invB ? format(new Date(invB.data_inventario), 'dd-MM-yyyy') : 'B';
+    // O vendedor vem de B no primeiro inventário e de A no fluxo normal — o mesmo
+    // `invDoVendedor` que alimenta a consulta ao ERP, para o arquivo não afirmar um
+    // vendedor diferente do que foi consultado.
+    const nomeVendedor = invDoVendedor ? nomeParaArquivo(invDoVendedor.nome_vendedor) : '';
     try {
       await exportarComparativoExcel({
         // Exporta o que está na tela, com a mesma ordenação por impacto.
@@ -714,8 +864,17 @@ export default function CompararInventarios() {
           quantidade_b: l.quantidade_b,
           diferenca: l.diferenca,
         })),
-        rotuloA: invA ? format(new Date(invA.data_inventario), 'dd/MM/yyyy') : '?',
+        rotuloA: primeiroInventario
+          ? dataBr(dataBase)
+          : invA
+            ? format(new Date(invA.data_inventario), 'dd/MM/yyyy')
+            : '?',
         rotuloB: invB ? format(new Date(invB.data_inventario), 'dd/MM/yyyy') : '?',
+        // A banda A precisa dizer que não houve contagem naquele dia — a planilha sai da
+        // tela e é lida meses depois, sem ninguém para explicar a linha de base.
+        tituloBandaA: primeiroInventario
+          ? `Mala vazia em ${dataBr(dataBase)} — sem contagem inicial`
+          : undefined,
         comMovimentos: podeReconciliar,
         comRemessas: considerarRemessas,
         comVendas: considerarVendas,
@@ -729,7 +888,9 @@ export default function CompararInventarios() {
           janelaVenda.de && janelaVenda.ate
             ? { de: janelaVenda.de, ate: janelaVenda.ate }
             : null,
-        nomeArquivo: `comparativo_${nomeA}_vs_${nomeB}.xlsx`,
+        nomeArquivo: nomeVendedor
+          ? `comparativo_${nomeVendedor}_${nomeA}_vs_${nomeB}.xlsx`
+          : `comparativo_${nomeA}_vs_${nomeB}.xlsx`,
       });
       toast.success('Planilha baixada.');
     } catch (e) {
@@ -739,10 +900,22 @@ export default function CompararInventarios() {
   };
 
 
-  const mesmoInventario = !!idA && idA === idB;
-  const prontoParaComparar = !!idA && !!idB && !mesmoInventario;
+  const mesmoInventario = !primeiroInventario && !!idA && idA === idB;
+  const prontoParaComparar = primeiroInventario
+    ? !!idB && !!dataBase
+    : !!idA && !!idB && !mesmoInventario;
+
+  /**
+   * No primeiro inventário o resultado só existe DEPOIS da consulta ao ERP.
+   *
+   * Sem movimento, `esperado = 0` e a tela mostraria a contagem inteira como sobra de
+   * 100% — um resultado alarmante e sem significado nenhum. No fluxo normal isso não
+   * acontece, porque `B − A` já é uma resposta válida sem o Ciclone; aqui não é. Segurar
+   * o resultado é mais honesto do que exibi-lo e pedir para o usuário desconsiderar.
+   */
+  const aguardandoErp = primeiroInventario && (!paramsAplicados || !podeReconciliar);
   const vendedoresDiferentes =
-    !!invA && !!invB && invA.codigo_vendedor !== invB.codigo_vendedor;
+    !primeiroInventario && !!invA && !!invB && invA.codigo_vendedor !== invB.codigo_vendedor;
 
   const detalhado = modoTabela === 'detalhado';
 
@@ -766,20 +939,35 @@ export default function CompararInventarios() {
   const pct = (v: number) =>
     v.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 1 });
 
+  /**
+   * Os tiles com `filtro` são clicáveis e aplicam aquele recorte na tabela.
+   *
+   * A faixa respondia "quanto e onde", e o "onde" morria ali: para ver os produtos por
+   * trás do número era preciso adivinhar qual opção do seletor correspondia ao card. Um
+   * `filtro` por tile fecha esse laço, e o tile ativo passa a espelhar o seletor.
+   *
+   * `Saldo` fica de fora de propósito: é o líquido de falta e sobra, e não existe
+   * subconjunto de linhas que signifique "saldo" — marcá-lo com um filtro qualquer seria
+   * inventar uma correspondência.
+   */
   const tiles = [
     {
       rotulo: 'Acuracidade',
       valor: resumo.acuracidade === null ? '—' : pct(resumo.acuracidade),
       nota: `${resumo.iguais} de ${resumo.total} produtos sem diferença`,
+      filtro: 'iguais',
     },
     {
       rotulo: 'Falta',
       valor: resumo.faltaValor === 0 ? '—' : moeda(resumo.faltaValor),
+      // A nota passou a carregar a QUANTIDADE: o valor em R$ ignora produto sem preço
+      // cadastrado, e era o único lugar da faixa onde a unidade sumia.
       nota:
         resumo.faltaItens === 0
           ? 'nada faltando'
-          : `${resumo.faltaItens} produto${resumo.faltaItens > 1 ? 's' : ''} abaixo do esperado`,
+          : `${unid(resumo.faltaQtd)} un. em ${resumo.faltaItens} produto${resumo.faltaItens > 1 ? 's' : ''}`,
       cor: resumo.faltaValor < 0 ? 'text-warning-strong' : undefined,
+      filtro: 'falta',
     },
     {
       rotulo: 'Sobra',
@@ -787,8 +975,9 @@ export default function CompararInventarios() {
       nota:
         resumo.sobraItens === 0
           ? 'nada sobrando'
-          : `${resumo.sobraItens} produto${resumo.sobraItens > 1 ? 's' : ''} acima do esperado`,
+          : `${unid(resumo.sobraQtd)} un. em ${resumo.sobraItens} produto${resumo.sobraItens > 1 ? 's' : ''}`,
       cor: resumo.sobraValor > 0 ? 'text-info-strong' : undefined,
+      filtro: 'sobra',
     },
     /**
      * O líquido responde "qual o impacto financeiro final", que é diferente de
@@ -805,16 +994,27 @@ export default function CompararInventarios() {
         resumo.faltaValor === 0 && resumo.sobraValor === 0
           ? '—'
           : `${resumo.saldo > 0 ? '+' : ''}${moeda(resumo.saldo)}`,
+      /**
+       * A nota mostra a composição em UNIDADES, não em reais.
+       *
+       * A intenção original — deixar a compensação visível, para R$ 5.000 faltando
+       * com R$ 5.000 sobrando não se lerem como "tudo certo" — continua de pé: ela
+       * só mudou de unidade. E ganha o que faltava: a conta em reais já está inteira
+       * nos dois cards ao lado (Falta e Sobra mostram exatamente essas parcelas),
+       * enquanto o líquido em quantidade não existia em lugar nenhum.
+       */
       nota:
-        resumo.faltaValor === 0 && resumo.sobraValor === 0
+        resumo.faltaValor === 0 && resumo.sobraValor === 0 && resumo.saldoQtd === 0
           ? 'sem divergência'
-          : `${moeda(resumo.faltaValor)} + ${moeda(resumo.sobraValor)}`,
+          : `${unidSinal(resumo.faltaQtd)} ${unidSinal(resumo.sobraQtd)} = ${unidSinal(resumo.saldoQtd)} un.`,
       cor:
         resumo.saldo < 0
           ? 'text-warning-strong'
           : resumo.saldo > 0
             ? 'text-info-strong'
             : undefined,
+      // O saldo é a soma sobre as linhas que divergem — é exatamente esse o recorte.
+      filtro: 'com_diferenca',
     },
     /**
      * Lidera com a CONCLUSÃO, não com o percentual.
@@ -843,6 +1043,14 @@ export default function CompararInventarios() {
           : resumo.concentracao >= 0.5
             ? `${pct(resumo.concentracao)} dela em ${resumo.concentracaoItens} de ${resumo.divergentesValorizados} produtos`
             : `diluída em ${resumo.divergentesValorizados} produtos — os ${resumo.concentracaoItens} maiores são só ${pct(resumo.concentracao)}`,
+      /**
+       * `com_impacto`, não `com_diferenca`: a concentração é calculada sobre os
+       * produtos que divergem E têm preço — produto sem valor cadastrado não entra
+       * na conta. Apontar para "com diferença" faria o card levar a uma lista maior
+       * que o próprio denominador que ele exibe. É também o que evita este card e o
+       * Saldo acenderem juntos, que se leria como defeito.
+       */
+      filtro: 'com_impacto',
       cor: resumo.concentracao !== null && resumo.concentracao < 0.5 ? 'text-warning-strong' : undefined,
     },
   ];
@@ -853,8 +1061,11 @@ export default function CompararInventarios() {
       : vendedores.find(([c]) => c === vendedorFiltro)?.[1] || vendedorFiltro;
   const resumoEscopo = `${anoEfetivo === 'todos' ? 'Todos os anos' : anoEfetivo} · ${nomeVendedorEfetivo}`;
 
-  const resumoInventarios =
-    invA && invB
+  const resumoInventarios = primeiroInventario
+    ? invB
+      ? `1º inventário · ${dataBase ? dataBr(dataBase) : 'definir mala vazia'} → ${format(new Date(invB.data_inventario), 'dd/MM')}`
+      : 'Escolher a contagem'
+    : invA && invB
       ? `${format(new Date(invA.data_inventario), 'dd/MM')} → ${format(new Date(invB.data_inventario), 'dd/MM')}`
       : invA
         ? 'Definir inventário B'
@@ -948,7 +1159,9 @@ export default function CompararInventarios() {
                     <span className="flex size-4 items-center justify-center rounded-full bg-muted-foreground/20 text-2xs font-bold text-muted-foreground group-data-[state=active]:bg-primary group-data-[state=active]:text-primary-foreground">
                       3
                     </span>
-                    <span className="truncate font-medium">ERP (Opcional)</span>
+                    <span className="truncate font-medium">
+                      {primeiroInventario ? 'ERP (Obrigatório)' : 'ERP (Opcional)'}
+                    </span>
                     {reconciliar && (
                       <span className="ml-auto inline-flex size-4 shrink-0 items-center justify-center rounded-full bg-info-subtle text-info-strong">
                         <Check className="size-2.5" />
@@ -1033,48 +1246,85 @@ export default function CompararInventarios() {
               <TabsContent value="2" className="mt-0 space-y-4 pt-1">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
-                    Selecione a contagem de referência (A) e a comparada (B)
+                    {primeiroInventario
+                      ? 'A base é a mala vazia; a contagem entra no lado B'
+                      : 'Selecione a contagem de referência (A) e a comparada (B)'}
                   </p>
-                  {invA && invB && (
+                  {!primeiroInventario && invA && invB && (
                     <Badge variant={mesmoVendedor ? 'outline' : 'warning'} className="text-2xs shrink-0">
                       {mesmoVendedor ? 'Mesmo vendedor' : 'Vendedores diferentes'}
                     </Badge>
                   )}
                 </div>
 
+                {/* Modo da comparação. Fica ANTES dos seletores porque decide o que o
+                    lado A é: outra contagem, ou uma data de mala vazia. */}
+                <div className="flex flex-wrap items-center gap-2 rounded-xl border border-border/60 bg-muted/30 p-1.5">
+                  <Button
+                    variant={primeiroInventario ? 'ghost' : 'default'}
+                    size="sm"
+                    onClick={() => trocarModo(false)}
+                    className="flex-1 gap-1.5 text-xs"
+                  >
+                    Comparar duas contagens
+                  </Button>
+                  <Button
+                    variant={primeiroInventario ? 'default' : 'ghost'}
+                    size="sm"
+                    onClick={() => trocarModo(true)}
+                    className="flex-1 gap-1.5 text-xs"
+                  >
+                    Primeiro inventário
+                  </Button>
+                </div>
+
                 <div className="grid items-end gap-3 lg:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)]">
-                  {/* Inventário A */}
+                  {/* Lado A: uma contagem, ou a data em que a mala estava vazia */}
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Inventário A · Base
+                      <Label
+                        htmlFor={primeiroInventario ? 'mala-vazia' : undefined}
+                        className="text-xs font-semibold uppercase tracking-wider text-muted-foreground"
+                      >
+                        {primeiroInventario ? 'Mala vazia em · Base' : 'Inventário A · Base'}
                       </Label>
-                      {invA && (
+                      {!primeiroInventario && invA && (
                         <span className="text-2xs tabular-nums text-muted-foreground">
                           {invA.nome_vendedor}
                         </span>
                       )}
                     </div>
-                    <Select value={idA} onValueChange={setIdA} disabled={carregandoOpcoes}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Escolha o inventário A" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {opcoesFiltradas.map((o) => (
-                          <SelectItem key={o.id} value={o.id} disabled={o.id === idB}>
-                            {rotulo(o)}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {primeiroInventario ? (
+                      <Input
+                        id="mala-vazia"
+                        type="date"
+                        value={dataMalaVazia}
+                        max={dataB ?? undefined}
+                        onChange={(e) => setDataMalaVazia(e.target.value)}
+                      />
+                    ) : (
+                      <Select value={idA} onValueChange={setIdA} disabled={carregandoOpcoes}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Escolha o inventário A" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {opcoesFiltradas.map((o) => (
+                            <SelectItem key={o.id} value={o.id} disabled={o.id === idB}>
+                              {rotulo(o)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                   </div>
 
-                  {/* Botão Inverter */}
+                  {/* Botão Inverter — não existe no primeiro inventário: não há dois
+                      lados para trocar de lugar. */}
                   <Button
                     variant="outline"
                     size="icon"
                     onClick={trocarLados}
-                    disabled={!idA && !idB}
+                    disabled={primeiroInventario || (!idA && !idB)}
                     aria-label="Inverter A e B"
                     title="Inverter ordem das contagens (A <-> B)"
                     className="w-full lg:w-11 mb-0.5"
@@ -1086,7 +1336,7 @@ export default function CompararInventarios() {
                   <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Inventário B · Comparado
+                        {primeiroInventario ? 'Contagem · Comparada' : 'Inventário B · Comparado'}
                       </Label>
                       {invB && (
                         <span className="text-2xs tabular-nums text-muted-foreground">
@@ -1126,7 +1376,7 @@ export default function CompararInventarios() {
                     onClick={() => setEtapaAtiva('3')}
                     className="gap-1.5 text-xs"
                   >
-                    Configurar ERP (Opcional)
+                    {primeiroInventario ? 'Configurar ERP' : 'Configurar ERP (Opcional)'}
                     <ArrowRight className="size-3.5" />
                   </Button>
                 </div>
@@ -1136,7 +1386,9 @@ export default function CompararInventarios() {
               <TabsContent value="3" className="mt-0 space-y-3 pt-1">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <p className="text-xs text-muted-foreground">
-                    Reconcilie remessas e vendas faturadas no período do ERP Ciclone
+                    {primeiroInventario
+                      ? 'Sem contagem anterior, o esperado vem só do ERP — remessas e vendas são obrigatórias'
+                      : 'Reconcilie remessas e vendas faturadas no período do ERP Ciclone'}
                   </p>
                   {reconciliar && mesmoVendedor && (
                     <div className="flex flex-wrap items-center gap-3">
@@ -1172,7 +1424,7 @@ export default function CompararInventarios() {
                       rotulo="Considerar remessas"
                       ligado={considerarRemessas}
                       onToggle={setConsiderarRemessas}
-                      desabilitado={!mesmoVendedor}
+                      desabilitado={!mesmoVendedor || primeiroInventario}
                       ajustando={ajustarPeriodo}
                       de={remessaDe}
                       ate={remessaAte}
@@ -1186,7 +1438,7 @@ export default function CompararInventarios() {
                       rotulo="Considerar vendas"
                       ligado={considerarVendas}
                       onToggle={setConsiderarVendas}
-                      desabilitado={!mesmoVendedor}
+                      desabilitado={!mesmoVendedor || primeiroInventario}
                       ajustando={ajustarPeriodo}
                       de={vendaDe}
                       ate={vendaAte}
@@ -1275,7 +1527,8 @@ export default function CompararInventarios() {
 
                 {podeReconciliar && paramsAplicados && (
                   <p className="text-xs text-muted-foreground">
-                    Fórmula: Esperado = Qtd A
+                    Fórmula: Esperado ={' '}
+                    {primeiroInventario ? `mala vazia em ${dataBr(dataBase)}` : 'Qtd A'}
                     {considerarRemessas && ' + remessas'}
                     {considerarVendas && ' − vendas'}
                     {empresa !== 'ambas' && ` · empresa ${empresa}`}
@@ -1322,6 +1575,22 @@ export default function CompararInventarios() {
                 Escolha dois inventários diferentes para comparar.
               </p>
             )}
+            {primeiroInventario && !!idB && !dataBase && (
+              <p className="flex items-center gap-1.5 pt-2.5 text-xs font-medium text-destructive-strong">
+                <TriangleAlert className="size-3.5 shrink-0" />
+                Informe a data em que a mala estava vazia — é ela que define de quando o ERP
+                começa a somar as remessas.
+              </p>
+            )}
+            {/* O erro caro deste modo, e o único que a tela consegue detectar sozinha. */}
+            {temInventarioAnterior && (
+              <p className="flex items-center gap-1.5 pt-2.5 text-xs font-medium text-warning-strong">
+                <TriangleAlert className="size-3.5 shrink-0" />
+                Este vendedor já tem contagem anterior — se a mala não nasceu vazia na data
+                informada, tudo que entrou antes dela vai aparecer como sobra. Comparar com o
+                inventário anterior costuma ser o caminho certo.
+              </p>
+            )}
             {vendedoresDiferentes && (
               <p className="flex items-center gap-1.5 pt-2.5 text-xs font-medium text-warning-strong">
                 <TriangleAlert className="size-3.5 shrink-0" />
@@ -1348,17 +1617,33 @@ export default function CompararInventarios() {
         </Card>
 
         {/* ── Bloco 2 · Resultado ──────────────────────────────────────────────────── */}
-        {!prontoParaComparar ? (
+        {!prontoParaComparar || aguardandoErp ? (
           <Card>
             <CardContent className="flex flex-col items-center px-6 py-20 text-center">
               <div className="mb-4 flex size-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
                 <GitCompare className="size-7" />
               </div>
-              <p className="text-base font-semibold">Nenhum comparativo ainda</p>
-              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
-                Escolha o inventário A e o B acima. O resultado aparece aqui, com o resumo e a
-                diferença produto a produto.
+              <p className="text-base font-semibold">
+                {aguardandoErp ? 'Falta buscar os movimentos' : 'Nenhum comparativo ainda'}
               </p>
+              <p className="mt-1 max-w-sm text-sm text-muted-foreground">
+                {aguardandoErp
+                  ? 'Sem contagem anterior, o esperado vem inteiro do ERP. Vá até a Etapa 3 e busque as remessas e vendas do período — o resultado aparece aqui em seguida.'
+                  : primeiroInventario
+                    ? 'Escolha a contagem e informe a data em que a mala estava vazia. O resultado aparece aqui, com o resumo e a diferença produto a produto.'
+                    : 'Escolha o inventário A e o B acima. O resultado aparece aqui, com o resumo e a diferença produto a produto.'}
+              </p>
+              {aguardandoErp && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setEtapaAtiva('3')}
+                  className="mt-4 gap-1.5 text-xs"
+                >
+                  Ir para a Etapa 3
+                  <ArrowRight className="size-3.5" />
+                </Button>
+              )}
             </CardContent>
           </Card>
         ) : carregandoComparacao || carregandoMovimentos || carregandoValores ? (
@@ -1409,10 +1694,23 @@ export default function CompararInventarios() {
                       {linhasFiltradas.length} produto{linhasFiltradas.length !== 1 ? 's' : ''}
                     </Badge>
                   </div>
-                  {invA && invB && (
+                  {/* A linha de base tem que estar VISÍVEL no resultado: no primeiro
+                      inventário ela é uma premissa digitada, não um dado do sistema, e é
+                      o que separa o número correto do número inventado. */}
+                  {primeiroInventario && invB ? (
                     <p className="mt-1 truncate text-xs text-muted-foreground">
-                      {rotulo(invA)} <span className="px-1 text-foreground">→</span> {rotulo(invB)}
+                      Mala vazia em{' '}
+                      <span className="font-medium text-foreground">{dataBr(dataBase)}</span>
+                      <span className="px-1 text-foreground">→</span> {rotulo(invB)}
                     </p>
+                  ) : (
+                    invA &&
+                    invB && (
+                      <p className="mt-1 truncate text-xs text-muted-foreground">
+                        {rotulo(invA)} <span className="px-1 text-foreground">→</span>{' '}
+                        {rotulo(invB)}
+                      </p>
+                    )
                   )}
                 </div>
 
@@ -1431,21 +1729,63 @@ export default function CompararInventarios() {
                       <SelectTrigger className="w-full font-normal sm:w-52">
                         <SelectValue />
                       </SelectTrigger>
+                      {/* Agrupado por PERGUNTA, não por campo: "o que divergiu",
+                          "de onde veio a linha", "o que impede a leitura em R$". A lista
+                          plana anterior misturava as três e obrigava a ler tudo. */}
                       <SelectContent>
-                        <SelectItem value="com_diferenca">
-                          Com diferença ({resumo.total - resumo.iguais})
-                        </SelectItem>
-                        <SelectItem value="todos">
-                          Todos os produtos ({resumo.total})
-                        </SelectItem>
-                        <SelectItem value="iguais">
-                          Sem diferença ({resumo.iguais})
-                        </SelectItem>
-                        <SelectItem value="em_ambos">
-                          Presentes em ambos ({resumo.emAmbos})
-                        </SelectItem>
-                        <SelectItem value="so_em_a">Só no inventário A</SelectItem>
-                        <SelectItem value="so_em_b">Só no inventário B</SelectItem>
+                        <SelectGroup>
+                          <SelectLabel>Divergência</SelectLabel>
+                          <SelectItem value="com_diferenca">
+                            Com diferença ({resumo.total - resumo.iguais})
+                          </SelectItem>
+                          <SelectItem value="falta">
+                            Só faltas ({resumo.faltaItens})
+                          </SelectItem>
+                          <SelectItem value="sobra">
+                            Só sobras ({resumo.sobraItens})
+                          </SelectItem>
+                          <SelectItem value="com_impacto">
+                            Com impacto em R$ ({resumo.divergentesValorizados})
+                          </SelectItem>
+                          <SelectItem value="iguais">
+                            Sem diferença ({resumo.iguais})
+                          </SelectItem>
+                        </SelectGroup>
+
+                        <SelectGroup>
+                          <SelectLabel>Origem da linha</SelectLabel>
+                          <SelectItem value="todos">
+                            Todos os produtos ({resumo.total})
+                          </SelectItem>
+                          {/* Movimento no ERP sem contagem: existe nos dois modos. */}
+                          <SelectItem value="so_movimento">
+                            Só movimento ({resumo.soMovimento})
+                          </SelectItem>
+                          {/* Sem lado A, "em ambos" e "só no A" devolvem sempre vazio:
+                              nada está em A. Ficariam como opções que não fazem nada. */}
+                          {!primeiroInventario && (
+                            <>
+                              <SelectItem value="em_ambos">
+                                Presentes em ambos ({resumo.emAmbos})
+                              </SelectItem>
+                              <SelectItem value="so_em_a">
+                                Só no inventário A ({resumo.soEmA})
+                              </SelectItem>
+                              <SelectItem value="so_em_b">
+                                Só no inventário B ({resumo.soEmB})
+                              </SelectItem>
+                            </>
+                          )}
+                        </SelectGroup>
+
+                        {resumo.semValor > 0 && (
+                          <SelectGroup>
+                            <SelectLabel>Cadastro</SelectLabel>
+                            <SelectItem value="sem_valor">
+                              Sem valor cadastrado ({resumo.semValor})
+                            </SelectItem>
+                          </SelectGroup>
+                        )}
                       </SelectContent>
                     </Select>
 
@@ -1483,17 +1823,43 @@ export default function CompararInventarios() {
             <CardContent className="space-y-4">
               {/* Resumo em faixa */}
               <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-5">
-                {tiles.map((t) => (
-                  <div key={t.rotulo} className="rounded-xl bg-muted/50 px-4 py-3">
-                    <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      {t.rotulo}
-                    </p>
-                    <p className={`mt-0.5 text-xl font-bold tabular-nums ${t.cor ?? ''}`}>
-                      {t.valor}
-                    </p>
-                    <p className="mt-0.5 truncate text-2xs text-muted-foreground">{t.nota}</p>
-                  </div>
-                ))}
+                {tiles.map((t) => {
+                  const ativo = !!t.filtro && filtroLinha === t.filtro;
+                  const conteudo = (
+                    <>
+                      <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        {t.rotulo}
+                      </p>
+                      <p className={`mt-0.5 text-xl font-bold tabular-nums ${t.cor ?? ''}`}>
+                        {t.valor}
+                      </p>
+                      <p className="mt-0.5 truncate text-2xs text-muted-foreground">{t.nota}</p>
+                    </>
+                  );
+                  // Seleção por BORDA, não por anel: o anel é do `:focus-visible` global e
+                  // dois anéis na mesma peça viram a mesma coisa aos olhos.
+                  const base =
+                    'rounded-xl border px-4 py-3 text-left transition-colors ' +
+                    (ativo
+                      ? 'border-primary bg-muted/70'
+                      : 'border-transparent bg-muted/50');
+                  return t.filtro ? (
+                    <button
+                      key={t.rotulo}
+                      type="button"
+                      aria-pressed={ativo}
+                      onClick={() => setFiltroLinha(ativo ? 'todos' : t.filtro)}
+                      title={ativo ? 'Remover o filtro' : `Filtrar por ${t.rotulo.toLowerCase()}`}
+                      className={`${base} hover:bg-muted/70`}
+                    >
+                      {conteudo}
+                    </button>
+                  ) : (
+                    <div key={t.rotulo} className={base}>
+                      {conteudo}
+                    </div>
+                  );
+                })}
               </div>
 
               {podeReconciliar && sinalFragmento && (
@@ -1511,7 +1877,9 @@ export default function CompararInventarios() {
                 </Alert>
               )}
 
-              {resumo.emAmbos === 0 && resumo.total > 0 && (
+              {/* Não vale no primeiro inventário: lá NADA está em A, por definição — o
+                  aviso dispararia sempre e apontaria para uma causa que não existe. */}
+              {!primeiroInventario && resumo.emAmbos === 0 && resumo.total > 0 && (
                 <Alert variant="warning">
                   <TriangleAlert />
                   <AlertDescription>

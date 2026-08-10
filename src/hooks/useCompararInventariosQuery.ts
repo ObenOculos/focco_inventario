@@ -61,6 +61,10 @@ const BATCH_SIZE = 500;
 /**
  * Comparativo entre dois inventários escolhidos explicitamente.
  *
+ * `inventarioA` nulo é o modo **primeiro inventário**: não há contagem anterior, a RPC
+ * devolve `quantidade_a = 0` em tudo, e o esperado passa a ser só `remessa − venda`. Não
+ * há caminho de cálculo separado para isso — é a mesma fórmula com o primeiro termo zero.
+ *
  * A RPC é paginada para não estourar o limite de linhas por request; aqui os lotes são
  * acumulados, porque a filtragem e a paginação da tela são feitas no cliente sobre o
  * conjunto inteiro.
@@ -68,14 +72,16 @@ const BATCH_SIZE = 500;
 export function useComparacaoQuery(inventarioA: string | null, inventarioB: string | null) {
   return useQuery<LinhaComparacao[], Error>({
     queryKey: ['comparacao-inventarios', inventarioA, inventarioB],
-    enabled: !!inventarioA && !!inventarioB && inventarioA !== inventarioB,
+    enabled: !!inventarioB && inventarioA !== inventarioB,
     queryFn: async () => {
       const todas: LinhaComparacao[] = [];
       let offset = 0;
 
       for (;;) {
         const { data, error } = await supabase.rpc('comparar_dois_inventarios', {
-          p_inventario_a: inventarioA as string,
+          // O tipo gerado exige `string` porque a assinatura da função não mudou — só o
+          // corpo passou a aceitar nulo. O cast é o preço de não regerar os tipos.
+          p_inventario_a: inventarioA as unknown as string,
           p_inventario_b: inventarioB as string,
           p_limit: BATCH_SIZE,
           p_offset: offset,

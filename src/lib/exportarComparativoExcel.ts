@@ -61,6 +61,12 @@ export interface OpcoesExportacao {
   /** dd/MM/yyyy — rótulos das bandas de contagem. */
   rotuloA: string;
   rotuloB: string;
+  /**
+   * Substitui o título da banda A. Existe para o modo primeiro inventário, em que
+   * A não é uma contagem e sim a data em que a mala estava vazia — chamar aquilo de
+   * "Inventário 10/07/2026" faria a planilha afirmar que houve uma contagem nesse dia.
+   */
+  tituloBandaA?: string;
   /** Sem reconciliação a banda de movimento não existe. */
   comMovimentos: boolean;
   comRemessas: boolean;
@@ -164,7 +170,7 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
   // ── Linha 1: bandas por origem do dado ───────────────────────────────────
   const bandas: { banda: string; titulo: string; cor: string }[] = [
     { banda: 'id', titulo: '', cor: COR.cinza },
-    { banda: 'a', titulo: `Inventário ${op.rotuloA}`, cor: COR.invA },
+    { banda: 'a', titulo: op.tituloBandaA ?? `Inventário ${op.rotuloA}`, cor: COR.invA },
   ];
   if (op.comMovimentos) {
     bandas.push({
