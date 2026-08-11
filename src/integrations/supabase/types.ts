@@ -145,11 +145,16 @@ export type Database = {
           codigo_auxiliar: string
           codigo_produto: string
           cor: string
+          cor_nome: string | null
           created_at: string
+          grupo: string | null
           id: string
+          marca: string | null
           modelo: string
           nome_produto: string
           sincronizado_em: string | null
+          subtipo: string | null
+          tipo: string | null
           updated_at: string
           valor_produto: number | null
           valor_remessa: number | null
@@ -159,11 +164,16 @@ export type Database = {
           codigo_auxiliar: string
           codigo_produto: string
           cor: string
+          cor_nome?: string | null
           created_at?: string
+          grupo?: string | null
           id?: string
+          marca?: string | null
           modelo: string
           nome_produto: string
           sincronizado_em?: string | null
+          subtipo?: string | null
+          tipo?: string | null
           updated_at?: string
           valor_produto?: number | null
           valor_remessa?: number | null
@@ -173,11 +183,16 @@ export type Database = {
           codigo_auxiliar?: string
           codigo_produto?: string
           cor?: string
+          cor_nome?: string | null
           created_at?: string
+          grupo?: string | null
           id?: string
+          marca?: string | null
           modelo?: string
           nome_produto?: string
           sincronizado_em?: string | null
+          subtipo?: string | null
+          tipo?: string | null
           updated_at?: string
           valor_produto?: number | null
           valor_remessa?: number | null
@@ -190,9 +205,14 @@ export type Database = {
           codigo_auxiliar: string
           codigo_produto: string
           cor: string
+          cor_nome: string | null
+          grupo: string | null
+          marca: string | null
           modelo: string
           nome_produto: string
           sincronizacao_id: string
+          subtipo: string | null
+          tipo: string | null
           valor_produto: number | null
           valor_remessa: number | null
         }
@@ -201,9 +221,14 @@ export type Database = {
           codigo_auxiliar: string
           codigo_produto: string
           cor: string
+          cor_nome?: string | null
+          grupo?: string | null
+          marca?: string | null
           modelo: string
           nome_produto: string
           sincronizacao_id: string
+          subtipo?: string | null
+          tipo?: string | null
           valor_produto?: number | null
           valor_remessa?: number | null
         }
@@ -212,9 +237,14 @@ export type Database = {
           codigo_auxiliar?: string
           codigo_produto?: string
           cor?: string
+          cor_nome?: string | null
+          grupo?: string | null
+          marca?: string | null
           modelo?: string
           nome_produto?: string
           sincronizacao_id?: string
+          subtipo?: string | null
+          tipo?: string | null
           valor_produto?: number | null
           valor_remessa?: number | null
         }
@@ -272,11 +302,15 @@ export type Database = {
         Returns: {
           codigo_auxiliar: string
           diferenca: number
+          grupo: string
+          marca: string
           nome_produto: string
           presente_em_a: boolean
           presente_em_b: boolean
           quantidade_a: number
           quantidade_b: number
+          subtipo: string
+          tipo: string
           valor_unitario: number
         }[]
       }

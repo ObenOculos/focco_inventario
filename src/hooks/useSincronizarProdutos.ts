@@ -24,10 +24,23 @@ export interface ProdutoCiclone {
   codigo_produto: string;
   nome_produto: string;
   modelo: string;
+  /** Código da cor (`A01`) — é ele que forma o `codigo_auxiliar`. */
   cor: string;
   valor_produto: number;
   valor_remessa: number;
   ativo: boolean;
+  /**
+   * Atributos de categoria, como o Ciclone os escreve (caixa alta, sem acento).
+   * Nulos quando o cadastro de origem não os tem — hoje isso não acontece, mas os
+   * JOINs do gateway são LEFT de propósito: um produto sem coleção deve continuar
+   * aparecendo no inventário.
+   */
+  marca: string | null;
+  tipo: string | null;
+  subtipo: string | null;
+  grupo: string | null;
+  /** Nome da cor (`PRETO BRILHO`), separado do código que vai em `cor`. */
+  cor_nome: string | null;
 }
 
 export interface PreviaSincronizacao {

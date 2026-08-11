@@ -65,15 +65,17 @@ import { format } from 'date-fns';
 import { toast } from 'sonner';
 import {
   useComparacaoQuery,
+  useFichasProdutosQuery,
   useInventariosOpcoesQuery,
-  useValoresProdutosQuery,
+  type FichaProduto,
   type InventarioOpcao,
-  type LinhaComparacao,
+  type LinhaExibida,
 } from '@/hooks/useCompararInventariosQuery';
+import { PainelGestor, type SubmodoGestor } from '@/components/comparativo/PainelGestor';
 
 const SEM_MOVIMENTO: MovimentoErp[] = [];
 /** Referência estável, pelo mesmo motivo de `SEM_MOVIMENTO`. */
-const SEM_VALORES = new Map<string, number>();
+const SEM_FICHAS = new Map<string, FichaProduto>();
 
 /** Etapa da seleção. String porque é o formato de valor de aba do Radix Tabs. */
 type Etapa = '1' | '2' | '3';
@@ -171,15 +173,6 @@ function LinhaMovimento({
   );
 }
 
-/** Linha da tabela. Sem reconciliação, `esperado` é a própria Qtd A. */
-type LinhaExibida = LinhaComparacao & {
-  remessa: number;
-  venda: number;
-  esperado: number;
-  /** Produto que só tem movimento no ERP: não foi contado em A nem em B. */
-  so_movimento: boolean;
-};
-
 /**
  * Comparar Inventários — consulta independente.
  *
@@ -229,8 +222,18 @@ export default function CompararInventarios() {
    * com o mesmo peso da resposta — dez colunas para quem só quer saber quanto
    * faltou e quanto isso custa. O modo resumido é o padrão porque é o que a
    * maioria das leituras precisa; o detalhado existe para auditar o cálculo.
+   *
+   * `gestor` não é uma terceira densidade de tabela: troca a pergunta. Resumido e
+   * detalhado respondem "qual produto divergiu"; gestor responde "qual parte do
+   * estoque divergiu e quanto custa", agregando por categoria antes de mostrar
+   * qualquer produto. Por isso ele substitui a tabela em vez de reconfigurá-la.
    */
-  const [modoTabela, setModoTabela] = useState<'resumido' | 'detalhado'>('resumido');
+  const [modoTabela, setModoTabela] = useState<'resumido' | 'detalhado' | 'gestor'>(
+    'resumido'
+  );
+  const [submodoGestor, setSubmodoGestor] = useState<SubmodoGestor>('analitico');
+  /** Categorias já escolhidas no drill-down, na ordem Marca → Tipo → Subtipo → Grupo. */
+  const [caminhoGestor, setCaminhoGestor] = useState<string[]>([]);
 
   // Movimentos do ERP são OPCIONAIS. Com os dois desmarcados a tela se comporta
   // exatamente como antes — e não faz chamada nenhuma ao Ciclone.
@@ -314,9 +317,7 @@ export default function CompararInventarios() {
     setIdA('');
     // Filtros que dependem do lado A somem da lista; deixar um deles selecionado
     // esvaziaria a tabela sem explicação.
-    if (filtroLinha === 'em_ambos' || filtroLinha === 'so_em_a' || filtroLinha === 'so_em_b') {
-      setFiltroLinha('todos');
-    }
+    if (filtroLinha === 'so_em_a' || filtroLinha === 'so_em_b') setFiltroLinha('todos');
   };
 
   // Trocar de vendedor invalida a seleção: os inventários escolhidos podem não estar mais
@@ -589,14 +590,14 @@ export default function CompararInventarios() {
       .sort();
   }, [linhas, remessaPorChave, vendaPorChave, podeReconciliar, paramsAplicados]);
 
-  const consultaValores = useValoresProdutosQuery(codigosSoMovimento);
-  const valoresSoMovimento = consultaValores.data ?? SEM_VALORES;
+  const consultaFichas = useFichasProdutosQuery(codigosSoMovimento);
+  const fichasSoMovimento = consultaFichas.data ?? SEM_FICHAS;
   /**
    * O preço dessas linhas chega numa segunda ida ao banco. Enquanto ela não
    * volta, Falta e Sobra sairiam menores do que são — e são os números que
    * decidem. Melhor segurar o resultado do que mostrá-lo pela metade.
    */
-  const carregandoValores = consultaValores.isLoading;
+  const carregandoValores = consultaFichas.isLoading;
 
   /**
    * Linhas finais da tela. Sem reconciliação, devolve o que a RPC já calculou.
@@ -642,16 +643,22 @@ export default function CompararInventarios() {
         const remessa = r?.remessa ?? 0;
         const venda = v?.venda ?? 0;
         const esperado = remessa - venda;
+        // Preço e categoria vêm do catálogo, não da RPC — a RPC só conhece produto
+        // contado. Ausente = 0 e nulos, que a tela já mostra como "sem valor" e
+        // agrupa como "Sem categoria" em vez de fingir R$ 0,00 numa categoria real.
+        const ficha = fichasSoMovimento.get(k);
         return {
           codigo_auxiliar: r?.codigo_auxiliar ?? v?.codigo_auxiliar ?? k,
           nome_produto: r?.nome ?? v?.nome ?? k,
-          // Preço vem do catálogo, não da RPC — a RPC só conhece produto contado.
-          // Ausente = 0, que a tela já mostra como "sem valor" em vez de R$ 0,00.
-          valor_unitario: valoresSoMovimento.get(k) ?? 0,
+          valor_unitario: ficha?.valor ?? 0,
           quantidade_a: 0,
           quantidade_b: 0,
           presente_em_a: false,
           presente_em_b: false,
+          marca: ficha?.marca ?? null,
+          tipo: ficha?.tipo ?? null,
+          subtipo: ficha?.subtipo ?? null,
+          grupo: ficha?.grupo ?? null,
           remessa,
           venda,
           esperado,
@@ -676,7 +683,7 @@ export default function CompararInventarios() {
     linhas,
     remessaPorChave,
     vendaPorChave,
-    valoresSoMovimento,
+    fichasSoMovimento,
     podeReconciliar,
     paramsAplicados,
   ]);
@@ -726,25 +733,16 @@ export default function CompararInventarios() {
     const soEmB = linhas.filter((l) => !l.presente_em_a && l.presente_em_b).length;
 
     /**
-     * Concentração: quanto da divergência financeira está nos 5 maiores.
+     * A métrica de CONCENTRAÇÃO saiu daqui (era "Concentrada/Espalhada": quanto do
+     * impacto financeiro estava nos 5 maiores).
      *
-     * É a única métrica da faixa que não dá para ler na tabela, e é a que separa
-     * "confira estes cinco produtos" de "o processo de contagem está ruim".
+     * Não por estar errada — por ser a única da faixa que entregava interpretação em
+     * vez de número, e exigir conhecer o corte arbitrário de 50% para ser lida. A
+     * tabela já responde a mesma pergunta: a ordenação padrão é por impacto, então
+     * primeira linha enorme com o resto pequeno É concentração, visível sem heurística
+     * nenhuma. Se voltar a fazer falta, o lugar dela é uma frase abaixo da faixa, não
+     * um quinto card competindo por atenção.
      */
-    const impactos = linhas
-      .map((l) => Math.abs(l.diferenca * l.valor_unitario))
-      .filter((v) => v > 0)
-      .sort((a, b) => b - a);
-    const impactoTotal = impactos.reduce((a, b) => a + b, 0);
-    const topN = Math.min(5, impactos.length);
-    // Com 5 ou menos produtos divergentes a conta dá 100% por definição e não
-    // informa nada. Nesse caso a métrica não existe — mostrar "100%" seria pior
-    // que não mostrar.
-    const concentracao =
-      impactoTotal > 0 && impactos.length > topN
-        ? impactos.slice(0, topN).reduce((a, b) => a + b, 0) / impactoTotal
-        : null;
-
     return {
       total: linhas.length,
       emAmbos,
@@ -764,10 +762,6 @@ export default function CompararInventarios() {
       // Denominador junto de propósito: uma acuracidade sem ele já exibiu ~100%
       // sobre zero linhas neste projeto por meses.
       acuracidade: linhas.length > 0 ? iguais / linhas.length : null,
-      concentracao,
-      concentracaoItens: topN,
-      /** Quantos produtos têm divergência valorizada — o denominador do card. */
-      divergentesValorizados: impactos.length,
       semValor,
     };
   }, [linhasExibidas]);
@@ -805,10 +799,6 @@ export default function CompararInventarios() {
         return linhas.filter((l) => l.diferenca < 0);
       case 'sobra':
         return linhas.filter((l) => l.diferenca > 0);
-      // Denominador do card de concentração: diverge E tem preço. Sem o preço o
-      // produto não entra na conta financeira, por mais unidades que falte.
-      case 'com_impacto':
-        return linhas.filter((l) => l.diferenca !== 0 && l.valor_unitario !== 0);
       // Movimento no ERP sem contagem nenhuma. Tinha etiqueta na tabela e nenhum jeito
       // de isolar — e é a linha que mais pede atenção.
       case 'so_movimento':
@@ -821,8 +811,6 @@ export default function CompararInventarios() {
         return linhas.filter((l) => l.presente_em_a && !l.presente_em_b);
       case 'so_em_b':
         return linhas.filter((l) => !l.presente_em_a && l.presente_em_b);
-      case 'em_ambos':
-        return linhas.filter((l) => l.presente_em_a && l.presente_em_b);
       default:
         return linhas;
     }
@@ -834,6 +822,14 @@ export default function CompararInventarios() {
     searchFields: ['codigo_auxiliar', 'nome_produto'],
     itemsPerPage: 20,
   });
+
+  /**
+   * O modo gestor consome `filteredData` — o resultado da busca ANTES do corte de
+   * página. Reaproveitar a mesma regra mantém os dois modos concordando sobre o que
+   * está na tela; a paginação, ao contrário, não se aplica a ele: agregação por
+   * categoria sobre 20 de 400 linhas produziria totais errados sem parecer errado.
+   */
+  const linhasParaGestor = paginacao.filteredData;
 
   const exportarExcel = async () => {
     if (linhasFiltradas.length === 0) {
@@ -918,6 +914,7 @@ export default function CompararInventarios() {
     !primeiroInventario && !!invA && !!invB && invA.codigo_vendedor !== invB.codigo_vendedor;
 
   const detalhado = modoTabela === 'detalhado';
+  const modoGestor = modoTabela === 'gestor';
 
   // Resumido: Produto, Dif. qtd, Dif. em R$, Situação.
   // Detalhado: soma Valor unit., Qtd A e Qtd B — mais as colunas de movimento
@@ -1015,43 +1012,6 @@ export default function CompararInventarios() {
             : undefined,
       // O saldo é a soma sobre as linhas que divergem — é exatamente esse o recorte.
       filtro: 'com_diferenca',
-    },
-    /**
-     * Lidera com a CONCLUSÃO, não com o percentual.
-     *
-     * A versão anterior mostrava "68%" e obrigava o leitor a interpretar o que
-     * aquilo significava — e não significava nada sozinho. A palavra responde
-     * direto o que fazer: concentrada manda conferir alguns produtos; espalhada
-     * diz que o problema é o processo de contagem. O número fica embaixo, como
-     * evidência de quem quiser conferir.
-     *
-     * O corte em 50% é arbitrário e está declarado na nota justamente por isso.
-     */
-    {
-      rotulo: 'Divergência',
-      valor:
-        resumo.concentracao === null
-          ? '—'
-          : resumo.concentracao >= 0.5
-            ? 'Concentrada'
-            : 'Espalhada',
-      nota:
-        resumo.concentracao === null
-          ? resumo.divergentesValorizados === 0
-            ? 'sem divergência valorizada'
-            : `em apenas ${resumo.divergentesValorizados} produto${resumo.divergentesValorizados > 1 ? 's' : ''}`
-          : resumo.concentracao >= 0.5
-            ? `${pct(resumo.concentracao)} dela em ${resumo.concentracaoItens} de ${resumo.divergentesValorizados} produtos`
-            : `diluída em ${resumo.divergentesValorizados} produtos — os ${resumo.concentracaoItens} maiores são só ${pct(resumo.concentracao)}`,
-      /**
-       * `com_impacto`, não `com_diferenca`: a concentração é calculada sobre os
-       * produtos que divergem E têm preço — produto sem valor cadastrado não entra
-       * na conta. Apontar para "com diferença" faria o card levar a uma lista maior
-       * que o próprio denominador que ele exibe. É também o que evita este card e o
-       * Saldo acenderem juntos, que se leria como defeito.
-       */
-      filtro: 'com_impacto',
-      cor: resumo.concentracao !== null && resumo.concentracao < 0.5 ? 'text-warning-strong' : undefined,
     },
   ];
 
@@ -1729,10 +1689,21 @@ export default function CompararInventarios() {
                       <SelectTrigger className="w-full font-normal sm:w-52">
                         <SelectValue />
                       </SelectTrigger>
-                      {/* Agrupado por PERGUNTA, não por campo: "o que divergiu",
-                          "de onde veio a linha", "o que impede a leitura em R$". A lista
-                          plana anterior misturava as três e obrigava a ler tudo. */}
+                      {/*
+                        Dois grupos, duas perguntas: "o que aconteceu com a contagem" e
+                        "onde o dado pode estar ruim". Eram três grupos com onze opções,
+                        e "Todos os produtos" morava sob *Origem da linha*, onde não é
+                        origem de nada — agora é o padrão e fica solto no topo.
+
+                        Saíram "Presentes em ambos" (é a maioria; o que interessa é o
+                        complemento dela, que já são três opções) e "Com impacto em R$",
+                        que só existia para dar destino ao card de concentração.
+                      */}
                       <SelectContent>
+                        <SelectItem value="todos">
+                          Todos os produtos ({resumo.total})
+                        </SelectItem>
+
                         <SelectGroup>
                           <SelectLabel>Divergência</SelectLabel>
                           <SelectItem value="com_diferenca">
@@ -1744,30 +1715,21 @@ export default function CompararInventarios() {
                           <SelectItem value="sobra">
                             Só sobras ({resumo.sobraItens})
                           </SelectItem>
-                          <SelectItem value="com_impacto">
-                            Com impacto em R$ ({resumo.divergentesValorizados})
-                          </SelectItem>
                           <SelectItem value="iguais">
                             Sem diferença ({resumo.iguais})
                           </SelectItem>
                         </SelectGroup>
 
                         <SelectGroup>
-                          <SelectLabel>Origem da linha</SelectLabel>
-                          <SelectItem value="todos">
-                            Todos os produtos ({resumo.total})
-                          </SelectItem>
+                          <SelectLabel>Casos a investigar</SelectLabel>
                           {/* Movimento no ERP sem contagem: existe nos dois modos. */}
                           <SelectItem value="so_movimento">
                             Só movimento ({resumo.soMovimento})
                           </SelectItem>
-                          {/* Sem lado A, "em ambos" e "só no A" devolvem sempre vazio:
-                              nada está em A. Ficariam como opções que não fazem nada. */}
+                          {/* Sem lado A, "só no A" devolveria sempre vazio e "só no B"
+                              seria a contagem inteira: nada está em A. */}
                           {!primeiroInventario && (
                             <>
-                              <SelectItem value="em_ambos">
-                                Presentes em ambos ({resumo.emAmbos})
-                              </SelectItem>
                               <SelectItem value="so_em_a">
                                 Só no inventário A ({resumo.soEmA})
                               </SelectItem>
@@ -1776,23 +1738,28 @@ export default function CompararInventarios() {
                               </SelectItem>
                             </>
                           )}
-                        </SelectGroup>
-
-                        {resumo.semValor > 0 && (
-                          <SelectGroup>
-                            <SelectLabel>Cadastro</SelectLabel>
+                          {resumo.semValor > 0 && (
                             <SelectItem value="sem_valor">
                               Sem valor cadastrado ({resumo.semValor})
                             </SelectItem>
-                          </SelectGroup>
-                        )}
+                          )}
+                        </SelectGroup>
                       </SelectContent>
                     </Select>
 
-                    {/* Modo da Tabela */}
+                    {/* Modo de leitura */}
                     <Select
                       value={modoTabela}
-                      onValueChange={(v) => setModoTabela(v as 'resumido' | 'detalhado')}
+                      onValueChange={(v) => {
+                        setModoTabela(v as 'resumido' | 'detalhado' | 'gestor');
+                        // Entrar no gestor recomeça o drill-down. Guardar o caminho
+                        // entre visitas devolveria o usuário a um recorte que ele não
+                        // escolheu — e que pode nem existir na comparação atual.
+                        if (v === 'gestor') {
+                          setCaminhoGestor([]);
+                          setSubmodoGestor('analitico');
+                        }
+                      }}
                     >
                       <SelectTrigger className="w-full font-normal sm:w-36">
                         <SelectValue />
@@ -1800,6 +1767,7 @@ export default function CompararInventarios() {
                       <SelectContent>
                         <SelectItem value="resumido">Resumido</SelectItem>
                         <SelectItem value="detalhado">Detalhado</SelectItem>
+                        <SelectItem value="gestor">Gestor</SelectItem>
                       </SelectContent>
                     </Select>
 
@@ -1822,7 +1790,9 @@ export default function CompararInventarios() {
 
             <CardContent className="space-y-4">
               {/* Resumo em faixa */}
-              <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 lg:grid-cols-5">
+              {/* Quatro colunas no desktop: com o quinto card fora, cada um ganhou 25%
+                  de largura — que é o que faz as notas pararem de truncar. */}
+              <div className="grid grid-cols-2 gap-2.5 lg:grid-cols-4">
                 {tiles.map((t) => {
                   const ativo = !!t.filtro && filtroLinha === t.filtro;
                   const conteudo = (
@@ -1890,6 +1860,16 @@ export default function CompararInventarios() {
                 </Alert>
               )}
 
+              {modoGestor ? (
+                <PainelGestor
+                  linhas={linhasParaGestor}
+                  submodo={submodoGestor}
+                  onSubmodo={setSubmodoGestor}
+                  caminho={caminhoGestor}
+                  onCaminho={setCaminhoGestor}
+                  comEsperado={podeReconciliar}
+                />
+              ) : (
               <div className="overflow-hidden rounded-xl border border-border/80">
                 <div className="overflow-x-auto">
                   <Table>
@@ -2023,16 +2003,27 @@ export default function CompararInventarios() {
                   </Table>
                 </div>
               </div>
+              )}
 
               {resumo.semValor > 0 && (
                 <p className="text-xs text-muted-foreground">
-                  <strong className="text-foreground">{resumo.semValor}</strong> produto(s) sem
-                  valor cadastrado em Produtos — entram nas quantidades, mas contam como zero nos
-                  totais em reais.
+                  {/* O número leva à lista. Antes dizia QUANTOS eram sem dizer QUAIS, e
+                      quem quisesse ver tinha de descobrir a opção certa no seletor. */}
+                  <button
+                    type="button"
+                    onClick={() => setFiltroLinha('sem_valor')}
+                    className="font-semibold text-foreground underline-offset-4 hover:underline"
+                  >
+                    {resumo.semValor} produto(s)
+                  </button>{' '}
+                  sem valor cadastrado em Produtos — entram nas quantidades, mas contam como zero
+                  nos totais em reais.
                 </p>
               )}
 
-              {paginacao.totalPages > 1 && <Pagination {...paginacao} />}
+              {/* O gestor não pagina: ele mostra o conjunto inteiro do recorte, e uma
+                  paginação por baixo controlaria uma tabela que não está na tela. */}
+              {!modoGestor && paginacao.totalPages > 1 && <Pagination {...paginacao} />}
             </CardContent>
           </Card>
         )}

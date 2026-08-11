@@ -311,7 +311,23 @@ SELECT
                     remessa.preco_remessa_varejo, 0) / 100)   AS valor_remessa,
     -- A situação da GRADE manda quando existe: no Ciclone o OB1190 pode estar
     -- ativo enquanto a cor A02 já foi inativada.
-    COALESCE(est.eqpee_situacao, gen.eqpdg_situacao)           AS situacao
+    COALESCE(est.eqpee_situacao, gen.eqpdg_situacao)           AS situacao,
+    -- ---- Atributos de categoria -------------------------------------------
+    -- Só ASCII e Latin-1 nos comentários DESTE SQL: a conexão com o Ciclone é
+    -- cp1252, e um caractere fora dessa tabela (um traço de caixa, por exemplo)
+    -- estoura na codificação da query, antes mesmo de sair da máquina.
+    --
+    -- MARCA vem da COLEÇÃO: no Ciclone não existe cadastro de marca, e as marcas
+    -- da casa (OBEN, POWER, CORE EYES) estão como coleção — é por isso que o
+    -- relatório do próprio ERP se chama "Análise de Estoque por Coleção Marca".
+    col.eqcol_descricao                                        AS marca,
+    tpr.eqtpr_descricao                                        AS tipo,
+    -- No Ciclone o grupo GENÉRICO é o material (ACETATO/METAL) e o ESPECÍFICO é o
+    -- público (FEMININO/MASCULINO). Os nomes das tabelas sugerem hierarquia de
+    -- mesma natureza; os dados dizem que são dimensões diferentes.
+    gru.eqgru_descricao                                        AS subtipo,
+    grg.eqgrg_descricao                                        AS grupo,
+    cor_esp.eqcor_nome                                         AS cor_nome
 FROM eq_produtogenerico gen
 LEFT JOIN eq_produtoespecifico prod
        ON prod.pgemp_codigo = gen.pgemp_codigo
@@ -321,6 +337,18 @@ LEFT JOIN eq_produtoespecificoestoque est
       AND est.pgfll_codigo = prod.pgfll_codigo
       AND est.eqpdg_codigo = prod.eqpdg_codigo
       AND COALESCE(est.eqpee_cor, '') <> 'COR'
+-- Todos LEFT: hoje os cinco atributos estão preenchidos em todos os óculos, mas um
+-- INNER faria um cadastro futuro sem coleção SUMIR do catálogo do app — o produto
+-- desapareceria da tela de inventário por causa de um campo de classificação.
+--
+-- Nada de sinal de porcentagem em comentário DESTE SQL: psycopg2 interpola a query
+-- antes de enviá-la, e um sinal solto vira placeholder malformado ("dict is not a
+-- sequence") sem nenhuma pista de que a causa está num comentário.
+LEFT JOIN eq_colecao        col ON col.eqcol_codigo = gen.eqcol_codigo
+LEFT JOIN eq_tipoproduto    tpr ON tpr.eqtpr_codigo = gen.eqtpr_codigo
+LEFT JOIN eq_grupoespecifico gru ON gru.eqgru_codigo = gen.eqgru_codigo
+LEFT JOIN eq_grupogenerico   grg ON grg.eqgrg_codigo = gru.eqgrg_codigo
+LEFT JOIN eq_corespecifica cor_esp ON cor_esp.eqcor_codigo = est.eqpee_cor
 LEFT JOIN (SELECT eqpdg_codigo,
                   MAX(vdtvp_valorreajusteatacado) AS preco_remessa_atacado,
                   MAX(vdtvp_valorreajustevarejo)  AS preco_remessa_varejo
@@ -395,8 +423,18 @@ def catalogo_produtos(
     df["modelo"] = df["codigo_produto"].astype(str).str.strip()
     df["cor"] = df["cor"].astype(str).str.strip()
 
+    # Atributos de categoria: sobem como o Ciclone os escreve (caixa alta, sem
+    # acento). Traduzir para um vocabulário "bonito" aqui criaria um segundo nome
+    # para cada categoria, e o gestor confere a tela contra o relatório do ERP.
+    # O que se normaliza é só o que atrapalha o AGRUPAMENTO: espaço nas pontas, e
+    # vazio virando ausência — '' e NULL seriam dois grupos com o mesmo sentido.
+    for atributo in ("marca", "tipo", "subtipo", "grupo", "cor_nome"):
+        df[atributo] = df[atributo].fillna("").astype(str).str.strip()
+        df.loc[df[atributo] == "", atributo] = None
+
     colunas = ["codigo_auxiliar", "codigo_produto", "nome_produto",
-               "modelo", "cor", "valor_produto", "valor_remessa", "ativo"]
+               "modelo", "cor", "valor_produto", "valor_remessa", "ativo",
+               "marca", "tipo", "subtipo", "grupo", "cor_nome"]
     _conferir_limite(df, "/produtos")
     return {"total": len(df), "dados": _para_json(df[colunas])}
 
