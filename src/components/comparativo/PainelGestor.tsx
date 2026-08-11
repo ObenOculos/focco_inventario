@@ -1,22 +1,45 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChevronRight, Home, Layers, Minus, Package, TriangleAlert } from 'lucide-react';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import {
+  ChevronDown,
+  ChevronRight,
+  Home,
+  Layers,
+  ListTree,
+  Minus,
+  Package,
+  TriangleAlert,
+} from 'lucide-react';
 import type { LinhaExibida } from '@/hooks/useCompararInventariosQuery';
 
 /**
  * Leitura gerencial do comparativo.
  *
- * A tabela responde "qual produto divergiu"; esta camada responde "qual PARTE do
- * estoque divergiu, e quanto isso custa" — que é a pergunta de quem decide o que
- * fazer, não de quem confere item a item. Por isso ela não é a mesma tabela com
- * outra roupa: os dados chegam agregados por categoria, e o produto individual só
- * aparece depois que o recorte foi escolhido.
+ * A tabela do modo normal responde "qual produto divergiu"; esta camada responde
+ * "qual PARTE do estoque divergiu, e quanto isso custa" — que é a pergunta de quem
+ * decide o que fazer, não de quem confere item a item.
  *
- * A hierarquia é a do próprio Ciclone — Marca → Tipo → Subtipo → Grupo — e a
- * navegação é DRILL-DOWN, não filtro simultâneo: cada clique fecha um nível e o
- * caminho percorrido fica visível para poder ser desfeito.
+ * Três níveis de aproximação, sempre sobre a mesma hierarquia do Ciclone
+ * (Marca → Tipo → Subtipo → Grupo):
+ *
+ *   Sintético  a árvore inteira num scroll, para escolher ONDE olhar
+ *   Analítico  cards de um nível só, para comparar categorias irmãs
+ *   Detalhado  os produtos de um recorte, com o código auxiliar
+ *
+ * O Detalhado não está no seletor de propósito: ele é o fim do caminho, alcançado
+ * clicando numa folha. Oferecê-lo como opção solta significaria "listar todos os
+ * produtos" — que é exatamente a listagem imensa que o modo gestor existe para
+ * evitar, e que os modos Resumido e Detalhado da tela já fazem melhor.
  */
 
 /** Categoria ausente. Produto contado sem cadastro em `produtos`, ou anterior à sincronização. */
@@ -30,7 +53,7 @@ export const NIVEIS = [
 ] as const;
 
 export type NivelGestor = (typeof NIVEIS)[number]['chave'];
-export type SubmodoGestor = 'analitico' | 'detalhado';
+export type SubmodoGestor = 'sintetico' | 'analitico' | 'detalhado';
 
 const moeda = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
@@ -53,8 +76,8 @@ interface Agregado {
   /**
    * Falta e sobra somadas em MÓDULO. O líquido serve para saber o resultado
    * financeiro; o módulo serve para saber onde está o problema — e é essa a
-   * pergunta do card. Numa categoria com R$ 5 mil faltando e R$ 5 mil sobrando o
-   * líquido é zero, e ela é justamente a que mais precisa ser aberta.
+   * pergunta dos dois níveis agregados. Numa categoria com R$ 5 mil faltando e
+   * R$ 5 mil sobrando o líquido é zero, e ela é justamente a que precisa ser aberta.
    */
   impacto: number;
 }
@@ -111,6 +134,61 @@ function agregar(linhas: LinhaExibida[], nivel: NivelGestor): Agregado[] {
     if (qy !== qx) return qy - qx;
     return x.categoria.localeCompare(y.categoria);
   });
+}
+
+// ── Árvore do Sintético ──────────────────────────────────────────────────────
+
+interface No {
+  /** Caminho serializado; identidade estável do nó para o conjunto de expandidos. */
+  chave: string;
+  caminho: string[];
+  /** Índice em `NIVEIS`. Vira a indentação da linha. */
+  nivel: number;
+  agregado: Agregado;
+  filhos: No[];
+}
+
+/**
+ * Monta a hierarquia inteira de uma vez, em memória.
+ *
+ * A recursão parece cara e não é: as linhas já estão todas no cliente (a comparação
+ * as baixou para os cards e para a tabela), e o catálogo real tem ~17 combinações de
+ * categoria. Carregar sob demanda a cada expansão só faria sentido se cada nível
+ * custasse uma ida ao servidor — aqui não custa nenhuma, e a espera seria inventada.
+ */
+function construirArvore(linhas: LinhaExibida[], caminho: string[] = []): No[] {
+  const nivel = caminho.length;
+  if (nivel >= NIVEIS.length) return [];
+
+  const chaveNivel = NIVEIS[nivel].chave;
+  return agregar(linhas, chaveNivel).map((agregado) => {
+    const doNo = linhas.filter((l) => categoriaDa(l, chaveNivel) === agregado.categoria);
+    const novoCaminho = [...caminho, agregado.categoria];
+    return {
+      chave: novoCaminho.join(' › '),
+      caminho: novoCaminho,
+      nivel,
+      agregado,
+      filhos: construirArvore(doNo, novoCaminho),
+    };
+  });
+}
+
+/** Só os nós visíveis, na ordem da tela: um nó abre os filhos logo abaixo de si. */
+function achatar(nos: No[], expandidos: Set<string>, saida: No[] = []): No[] {
+  for (const no of nos) {
+    saida.push(no);
+    if (expandidos.has(no.chave)) achatar(no.filhos, expandidos, saida);
+  }
+  return saida;
+}
+
+function todasAsChaves(nos: No[], saida: string[] = []): string[] {
+  for (const no of nos) {
+    saida.push(no.chave);
+    todasAsChaves(no.filhos, saida);
+  }
+  return saida;
 }
 
 /** Barra de acuracidade da categoria: fração de produtos sem diferença nenhuma. */
@@ -260,6 +338,82 @@ function CardProduto({ l, comEsperado }: { l: LinhaExibida; comEsperado: boolean
   );
 }
 
+/** Uma linha da árvore. Fora do componente-pai para não remontar a cada expansão. */
+function LinhaArvore({
+  no,
+  aberto,
+  onClicar,
+}: {
+  no: No;
+  aberto: boolean;
+  onClicar: () => void;
+}) {
+  const { agregado: a } = no;
+  const folha = no.filhos.length === 0;
+  const acuracidade = a.produtos > 0 ? a.iguais / a.produtos : 0;
+
+  return (
+    <TableRow className="cursor-pointer hover:bg-muted/30" onClick={onClicar}>
+      <TableCell className="py-2.5">
+        {/* A indentação é o que comunica a hierarquia numa tabela plana; o nível
+            entra como padding calculado porque é valor dinâmico. */}
+        <div
+          className="flex items-center gap-1.5"
+          style={{ paddingLeft: `${no.nivel * 1.25}rem` }}
+        >
+          {folha ? (
+            // Folha não expande: o passo seguinte é o produto, não outra categoria.
+            <Package className="size-3.5 shrink-0 text-muted-foreground" />
+          ) : aberto ? (
+            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <span
+            className={`truncate ${no.nivel === 0 ? 'text-sm font-semibold' : 'text-sm'}`}
+            title={a.categoria}
+          >
+            {a.categoria}
+          </span>
+          {a.categoria === SEM_CATEGORIA && (
+            <Badge variant="warning" className="shrink-0 px-2 py-0 text-2xs">
+              Sem cadastro
+            </Badge>
+          )}
+        </div>
+      </TableCell>
+
+      <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
+        {a.produtos}
+      </TableCell>
+
+      <TableCell className="text-right text-sm font-medium tabular-nums text-warning-strong">
+        {a.faltaQtd === 0 ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          `${unid(a.faltaQtd)} un.`
+        )}
+      </TableCell>
+
+      <TableCell className="text-right text-sm font-medium tabular-nums text-info-strong">
+        {a.sobraQtd === 0 ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          `+${unid(a.sobraQtd)} un.`
+        )}
+      </TableCell>
+
+      <TableCell className="hidden text-right text-sm tabular-nums lg:table-cell">
+        {pct(acuracidade)}
+      </TableCell>
+
+      <TableCell className="text-right text-sm font-semibold tabular-nums">
+        {a.impacto === 0 ? <span className="text-muted-foreground">—</span> : moeda(a.impacto)}
+      </TableCell>
+    </TableRow>
+  );
+}
+
 interface Props {
   /** Linhas já filtradas pelos controles da tela (recorte e busca). */
   linhas: LinhaExibida[];
@@ -280,6 +434,8 @@ export function PainelGestor({
   onCaminho,
   comEsperado,
 }: Props) {
+  const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
+
   // Só as linhas dentro do caminho percorrido. Cada passo do drill-down é um
   // AND sobre o nível correspondente.
   const doCaminho = useMemo(
@@ -291,10 +447,23 @@ export function PainelGestor({
   );
 
   const nivelAtual = caminho.length < NIVEIS.length ? NIVEIS[caminho.length] : null;
+
   const agregados = useMemo(
     () => (nivelAtual ? agregar(doCaminho, nivelAtual.chave) : []),
     [doCaminho, nivelAtual]
   );
+
+  // A árvore nasce do caminho atual: entrar no Sintético depois de ter descido no
+  // Analítico mostra a subárvore daquele recorte, não a do catálogo inteiro.
+  const arvore = useMemo(
+    () => construirArvore(doCaminho, caminho),
+    [doCaminho, caminho]
+  );
+  const visiveis = useMemo(() => achatar(arvore, expandidos), [arvore, expandidos]);
+  const tudoAberto = useMemo(() => {
+    const chaves = todasAsChaves(arvore);
+    return chaves.length > 0 && chaves.every((c) => expandidos.has(c));
+  }, [arvore, expandidos]);
 
   const produtosOrdenados = useMemo(
     () =>
@@ -306,6 +475,24 @@ export function PainelGestor({
       }),
     [doCaminho]
   );
+
+  const alternarNo = (no: No) => {
+    // Folha não tem para onde expandir — o passo seguinte é a lista de produtos.
+    if (no.filhos.length === 0) {
+      onCaminho(no.caminho);
+      onSubmodo('detalhado');
+      return;
+    }
+    setExpandidos((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(no.chave)) proximo.delete(no.chave);
+      else proximo.add(no.chave);
+      return proximo;
+    });
+  };
+
+  const alternarTudo = () =>
+    setExpandidos(tudoAberto ? new Set() : new Set(todasAsChaves(arvore)));
 
   /**
    * Abrir uma categoria do ÚLTIMO nível não tem para onde descer: o passo seguinte
@@ -322,7 +509,7 @@ export function PainelGestor({
     onCaminho(caminho.slice(0, n));
     // Subir na hierarquia devolve a visão de categorias: quem clicou numa migalha
     // quer ver o panorama daquele nível, não a lista de produtos de novo.
-    if (n < NIVEIS.length) onSubmodo('analitico');
+    if (submodo === 'detalhado') onSubmodo('sintetico');
   };
 
   const mostrandoProdutos = submodo === 'detalhado' || nivelAtual === null;
@@ -354,6 +541,7 @@ export function PainelGestor({
           </AlertDescription>
         </Alert>
       )}
+
       {/* ── Trilha e alternância de nível ─────────────────────────────────── */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <nav aria-label="Trilha de categorias" className="flex flex-wrap items-center gap-1">
@@ -384,34 +572,38 @@ export function PainelGestor({
           <Badge variant="outline" className="px-2.5 py-0.5 text-2xs font-normal">
             {doCaminho.length} produto{doCaminho.length !== 1 ? 's' : ''}
           </Badge>
-          {/* No último nível não há mais categorias para agregar — o botão de
-              Analítico voltaria para uma tela vazia. */}
+
+          {/* No último nível não há mais categorias para agregar: os dois modos
+              agregados mostrariam uma tela vazia. */}
           {nivelAtual && (
             <div className="flex rounded-xl bg-muted/60 p-1">
-              <button
-                type="button"
-                aria-pressed={submodo === 'analitico'}
-                onClick={() => onSubmodo('analitico')}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  submodo === 'analitico'
-                    ? 'bg-card text-foreground shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Analítico
-              </button>
-              <button
-                type="button"
-                aria-pressed={submodo === 'detalhado'}
-                onClick={() => onSubmodo('detalhado')}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                  submodo === 'detalhado'
-                    ? 'bg-card text-foreground shadow-2xs'
-                    : 'text-muted-foreground hover:text-foreground'
-                }`}
-              >
-                Detalhado
-              </button>
+              {(
+                [
+                  ['sintetico', 'Sintético'],
+                  ['analitico', 'Analítico'],
+                ] as const
+              ).map(([valor, rotulo]) => (
+                <button
+                  key={valor}
+                  type="button"
+                  aria-pressed={submodo === valor}
+                  onClick={() => onSubmodo(valor)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
+                    submodo === valor
+                      ? 'bg-card text-foreground shadow-2xs'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
+                >
+                  {rotulo}
+                </button>
+              ))}
+              {/* Aparece só quando se desceu até os produtos. Não é uma terceira
+                  opção do seletor — é onde você está, e some quando você sai. */}
+              {submodo === 'detalhado' && (
+                <span className="rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-2xs">
+                  Produtos
+                </span>
+              )}
             </div>
           )}
         </div>
@@ -438,11 +630,56 @@ export function PainelGestor({
             ))}
           </div>
         </>
+      ) : submodo === 'sintetico' ? (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ListTree className="size-4" />
+              Árvore completa da divergência — clique para abrir; no{' '}
+              <span className="font-semibold text-foreground">grupo</span> abre os produtos
+            </p>
+            <Button variant="ghost" size="sm" onClick={alternarTudo}>
+              {tudoAberto ? 'Recolher tudo' : 'Expandir tudo'}
+            </Button>
+          </div>
+
+          <div className="overflow-hidden rounded-xl border border-border/80">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground hover:bg-muted/40">
+                    <TableHead className="font-semibold">Categoria</TableHead>
+                    <TableHead className="hidden text-right font-semibold sm:table-cell">
+                      Produtos
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">Falta</TableHead>
+                    <TableHead className="text-right font-semibold">Sobra</TableHead>
+                    <TableHead className="hidden text-right font-semibold lg:table-cell">
+                      Acuracidade
+                    </TableHead>
+                    <TableHead className="text-right font-semibold">Impacto</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {visiveis.map((no) => (
+                    <LinhaArvore
+                      key={no.chave}
+                      no={no}
+                      aberto={expandidos.has(no.chave)}
+                      onClicar={() => alternarNo(no)}
+                    />
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </div>
+        </>
       ) : (
         <>
           <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
             <Layers className="size-4" />
-            Divergência por <span className="font-semibold text-foreground">
+            Divergência por{' '}
+            <span className="font-semibold text-foreground">
               {nivelAtual!.rotulo.toLowerCase()}
             </span>{' '}
             — clique num cartão para abrir

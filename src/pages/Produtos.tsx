@@ -63,13 +63,6 @@ import {
 import { Progress } from '@/components/ui/progress';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { SincronizarProdutosDialog } from '@/components/SincronizarProdutosDialog';
 import { ExcluirProdutoDialog } from '@/components/ExcluirProdutoDialog';
 import QRCode from 'qrcode';
@@ -81,9 +74,12 @@ import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
 import {
   useProdutosQuery,
   useInvalidateProdutos,
+  useCategoriasProdutosQuery,
+  temFiltroAtivo,
   FILTROS_PRODUTOS_PADRAO,
   type FiltrosProdutos,
 } from '@/hooks/useProdutosQuery';
+import { FiltrosProdutosBar } from '@/components/produtos/FiltrosProdutosBar';
 import { usePagination } from '@/hooks/usePagination';
 import {
   useCodigosCorrecaoQuery,
@@ -199,10 +195,8 @@ function ProdutosTab() {
     setFiltros((f) => ({ ...f, ...parcial }));
     setCurrentPage(1);
   };
-  const filtrosAtivos =
-    filtros.situacao !== FILTROS_PRODUTOS_PADRAO.situacao ||
-    filtros.origem !== FILTROS_PRODUTOS_PADRAO.origem ||
-    filtros.somenteSemValor;
+  const filtrosAtivos = temFiltroAtivo(filtros);
+  const { data: categorias = [] } = useCategoriasProdutosQuery();
 
   const produtos = data?.data ?? [];
   const totalItems = data?.count ?? 0;
@@ -519,47 +513,11 @@ function ProdutosTab() {
 
   return (
     <div className="space-y-6">
+      {/* Duas linhas: ações em cima, filtros embaixo. Eram sete controles disputando
+          a mesma linha dos botões de Importar/Sincronizar/Novo — no notebook o
+          "Novo Produto" já saía da tela. */}
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <SearchFilter value={searchTerm} onChange={setSearchTerm} placeholder="Buscar produto..." />
-
-        {/* Filtros aplicados no servidor, junto da paginação — por isso o total
-            abaixo continua batendo com o que a lista mostra. */}
-        <Select
-          value={filtros.situacao}
-          onValueChange={(v) => trocarFiltro({ situacao: v as FiltrosProdutos['situacao'] })}
-        >
-          <SelectTrigger className="w-full font-normal sm:w-40">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ativos">Ativos</SelectItem>
-            <SelectItem value="inativos">Inativos</SelectItem>
-            <SelectItem value="todos">Todas as situações</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Select
-          value={filtros.origem}
-          onValueChange={(v) => trocarFiltro({ origem: v as FiltrosProdutos['origem'] })}
-        >
-          <SelectTrigger className="w-full font-normal sm:w-44">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Toda origem</SelectItem>
-            <SelectItem value="ciclone">Veio do Ciclone</SelectItem>
-            <SelectItem value="manual">Cadastro manual</SelectItem>
-          </SelectContent>
-        </Select>
-
-        <Button
-          variant={filtros.somenteSemValor ? 'default' : 'outline'}
-          onClick={() => trocarFiltro({ somenteSemValor: !filtros.somenteSemValor })}
-          title="Produtos sem preço entram nas quantidades, mas contam zero nos totais em reais"
-        >
-          <Tags className="mr-2" size={16} />
-          Sem valor
-        </Button>
 
         <RefetchIndicator isFetching={isFetching && !loading} />
         <div className="flex items-center gap-2 sm:ml-auto">
@@ -600,6 +558,16 @@ function ProdutosTab() {
           </Button>
         </div>
       </div>
+
+      {/* Filtros aplicados no servidor, junto da paginação — por isso o total
+          abaixo continua batendo com o que a lista mostra. */}
+      <FiltrosProdutosBar
+        filtros={filtros}
+        onFiltros={trocarFiltro}
+        combinacoes={categorias}
+        ativos={filtrosAtivos}
+        onLimpar={() => trocarFiltro(FILTROS_PRODUTOS_PADRAO)}
+      />
 
       <SincronizarProdutosDialog
         aberto={sincronizarAberto}
@@ -985,7 +953,18 @@ function ProdutosTab() {
                     />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <p className="font-mono font-bold text-sm text-foreground">{produto.codigo_auxiliar}</p>
+                        {/* Código e cor formam UMA identificação, com a mesma
+                            tipografia: é assim que o produto é chamado no dia a dia
+                            ("OB6136 A02 - PRETO FOSCO"). O código sozinho carrega a cor
+                            cifrada no sufixo (`A02`), e só quem decorou a tabela sabe
+                            qual é. A cor some quando o Ciclone não tem nome e repete o
+                            código (`C01`): ali não haveria informação nova, só ruído. */}
+                        <p className="min-w-0 truncate font-mono text-sm font-bold text-foreground">
+                          {produto.codigo_auxiliar}
+                          {produto.cor_nome && produto.cor_nome !== produto.cor
+                            ? ` - ${produto.cor_nome}`
+                            : ''}
+                        </p>
                         {!produto.ativo && (
                           <Badge variant="warning" className="shrink-0 py-0 text-2xs">
                             Inativo
@@ -993,6 +972,33 @@ function ProdutosTab() {
                         )}
                       </div>
                       <p className="text-xs text-muted-foreground truncate font-medium mt-0.5">{produto.nome_produto}</p>
+
+                      {/* Categorias do Ciclone. Só aparecem quando existem: produto
+                          criado à mão ou anterior à sincronização não tem nenhuma, e
+                          uma fileira de etiquetas vazias sugeriria cadastro perdido.
+                          A marca vem em `secondary` porque é a dimensão que organiza
+                          o catálogo; as outras três são qualificadores dela. */}
+                      {(produto.marca || produto.tipo || produto.subtipo || produto.grupo) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                          {produto.marca && (
+                            <Badge variant="secondary" className="px-2.5 py-0.5 text-2xs">
+                              {produto.marca}
+                            </Badge>
+                          )}
+                          {[produto.tipo, produto.subtipo, produto.grupo]
+                            .filter(Boolean)
+                            .map((atributo) => (
+                              <Badge
+                                key={atributo}
+                                variant="outline"
+                                className="px-2.5 py-0.5 text-2xs font-normal"
+                              >
+                                {atributo}
+                              </Badge>
+                            ))}
+                        </div>
+                      )}
+
                       <div className="flex flex-wrap gap-x-3 gap-y-0.5 mt-2 text-xs">
                         <span className="font-medium text-foreground">Venda: <strong className="font-bold text-success-strong">R$ {Number(produto.valor_produto).toFixed(2)}</strong></span>
                         <span className="text-muted-foreground font-medium">Remessa: <strong className="font-semibold text-foreground">R$ {Number(produto.valor_remessa ?? 0).toFixed(2)}</strong></span>

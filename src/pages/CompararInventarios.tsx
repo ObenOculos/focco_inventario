@@ -231,7 +231,12 @@ export default function CompararInventarios() {
   const [modoTabela, setModoTabela] = useState<'resumido' | 'detalhado' | 'gestor'>(
     'resumido'
   );
-  const [submodoGestor, setSubmodoGestor] = useState<SubmodoGestor>('analitico');
+  /**
+   * O gestor entra pelo Sintético: é a visão que responde "onde olhar" sem exigir
+   * um clique por camada. O Analítico continua a um toque, para comparar categorias
+   * irmãs lado a lado.
+   */
+  const [submodoGestor, setSubmodoGestor] = useState<SubmodoGestor>('sintetico');
   /** Categorias já escolhidas no drill-down, na ordem Marca → Tipo → Subtipo → Grupo. */
   const [caminhoGestor, setCaminhoGestor] = useState<string[]>([]);
 
@@ -1757,7 +1762,7 @@ export default function CompararInventarios() {
                         // escolheu — e que pode nem existir na comparação atual.
                         if (v === 'gestor') {
                           setCaminhoGestor([]);
-                          setSubmodoGestor('analitico');
+                          setSubmodoGestor('sintetico');
                         }
                       }}
                     >

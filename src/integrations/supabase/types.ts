@@ -292,6 +292,16 @@ export type Database = {
     }
     Functions: {
       atualizar_valores_produtos: { Args: { p_updates: Json }; Returns: number }
+      categorias_produtos: {
+        Args: never
+        Returns: {
+          grupo: string
+          marca: string
+          subtipo: string
+          tipo: string
+          total: number
+        }[]
+      }
       comparar_dois_inventarios: {
         Args: {
           p_inventario_a: string
