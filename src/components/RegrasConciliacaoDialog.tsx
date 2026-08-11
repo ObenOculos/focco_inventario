@@ -19,9 +19,9 @@ import type { ErroErp, ItemCodigo, RegrasErp } from '@/hooks/useConsultaErpQuery
  *
  * São as mesmas regras de `movimentos.py` (`TIPOS_VENDA`, `TIPOS_REMESSA`,
  * `OPERACOES_SEM_MOVIMENTO_ESTOQUE`), que na ferramenta local o usuário edita por
- * checkbox. A lista de tipos e operações continua vindo inteira do gateway — o
- * cliente não inventa código nenhum. O que ele define é quais vêm MARCADOS, e aí
- * há um desvio deliberado do servidor: `TIPOS_VENDA_FORA_DO_PADRAO`.
+ * checkbox. Tudo vem do gateway — a lista de códigos E quais vêm marcados. O cliente
+ * não inventa nem corrige regra: ele mostra a do servidor e deixa o usuário mexer
+ * para aquela consulta.
  *
  * Fica em modal porque se configura de vez em quando, e porque a lista de
  * operações fiscais tem dezenas de itens: inline, empurraria o resultado para
@@ -41,25 +41,22 @@ export function operacoesPadrao(regras: RegrasErp): number[] {
 }
 
 /**
- * Tipos de pedido que o gateway conta como saída da mala mas a TELA deixa
- * desmarcados. Hoje: 13 (venda-mala Rodrigo/RN).
+ * O padrão da tela é, agora, o padrão do servidor — sem exceção nenhuma.
  *
- * É a única regra que o app decide por conta própria, e é o motivo de a seleção
- * viajar em toda consulta em vez de só quando o usuário mexe no modal — omiti-la
- * faria o gateway aplicar o padrão dele, e a tela mostraria 13 desmarcado
- * enquanto o número na tabela o incluía. Desmarcar é um clique; descobrir que o
- * total não corresponde ao que a tela declara, não.
+ * Até 2026-08-11 esta função corrigia a lista de venda por conta própria: tirava o 13
+ * e acrescentava o 14, porque `movimentos.py` declarava `TIPOS_VENDA = {2, 13}` e a
+ * mala do representante é {2, 14}. A regra foi corrigida na origem — `movimentos.py`
+ * é a fonte única, o gateway importa dele — então a correção no cliente virou
+ * duplicata, e duplicata de regra de negócio é o que faz duas telas discordarem
+ * meses depois sem ninguém saber qual está certa.
  *
- * A ferramenta local (`comparativo.py`) segue com o padrão do módulo, que inclui
- * o 13 — ao conferir um relatório contra o outro, é aqui que eles divergem.
+ * Se a lista de venda voltar a vir errada, o conserto é LÁ, não aqui.
  */
-const TIPOS_VENDA_FORA_DO_PADRAO = [13];
-
 export function selecaoPadrao(regras: RegrasErp): SelecaoRegras {
   return {
-    tiposVenda: regras.padroes.tipos_venda.filter(
-      (t) => !TIPOS_VENDA_FORA_DO_PADRAO.includes(t)
-    ),
+    // Ordenado porque este array vira query string na consulta ao gateway: sem ordem
+    // estável, {2,14} e {14,2} gerariam duas chaves de cache para a mesma pergunta.
+    tiposVenda: [...regras.padroes.tipos_venda].sort((a, b) => a - b),
     tiposRemessa: [...regras.padroes.tipos_remessa],
     operacoes: operacoesPadrao(regras),
   };

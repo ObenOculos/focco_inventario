@@ -59,6 +59,7 @@ import {
   Search,
   SlidersHorizontal,
   TriangleAlert,
+  X,
 } from 'lucide-react';
 import { exportarComparativoExcel } from '@/lib/exportarComparativoExcel';
 import { format } from 'date-fns';
@@ -72,13 +73,55 @@ import {
   type LinhaExibida,
 } from '@/hooks/useCompararInventariosQuery';
 import { PainelGestor, type SubmodoGestor } from '@/components/comparativo/PainelGestor';
+import { FiltroCategorias } from '@/components/FiltroCategorias';
+import { Segmentado } from '@/components/comparativo/Segmentado';
+import {
+  NIVEIS,
+  SELECAO_VAZIA,
+  caminhoDaSelecao,
+  casaComSelecao,
+  sanearSelecao,
+  temSelecao,
+  type SelecaoCategorias,
+} from '@/lib/categoriasProduto';
 
 const SEM_MOVIMENTO: MovimentoErp[] = [];
 /** Referência estável, pelo mesmo motivo de `SEM_MOVIMENTO`. */
 const SEM_FICHAS = new Map<string, FichaProduto>();
 
+/**
+ * A busca varre também os atributos de categoria — eles agora estão ESCRITOS na linha,
+ * e um texto visível que a busca não encontra se lê como busca quebrada. Digitar
+ * "ACETATO" acha os produtos de acetato sem precisar do seletor.
+ *
+ * Fora do componente por referência estável: um literal aqui dentro seria um array novo
+ * a cada render, e o `useMemo` da busca em `usePagination` recalcularia sempre.
+ */
+const CAMPOS_DE_BUSCA: (keyof LinhaExibida)[] = [
+  'codigo_auxiliar',
+  'nome_produto',
+  'marca',
+  'tipo',
+  'subtipo',
+  'grupo',
+];
+
 /** Etapa da seleção. String porque é o formato de valor de aba do Radix Tabs. */
 type Etapa = '1' | '2' | '3';
+
+/**
+ * A trilha de categoria de uma linha — `OBEN · OCULOS SOLAR · FEMININO · ACETATO`.
+ *
+ * Os níveis vazios são OMITIDOS em vez de virarem "Sem categoria" a cada posição: numa
+ * linha de tabela, quatro repetições de "Sem categoria" ocupam mais espaço que a
+ * informação e escondem os níveis que o produto de fato tem. Produto sem categoria
+ * nenhuma devolve string vazia, e a linha não ganha subtítulo.
+ */
+function categoriaDaLinha(l: LinhaExibida): string {
+  return NIVEIS.map(({ chave }) => l[chave])
+    .filter(Boolean)
+    .join(' · ');
+}
 
 /** `2026-07-14` → `14/07/2026`, sem passar por Date (que interpreta como UTC). */
 function dataBr(iso: string | null) {
@@ -218,19 +261,28 @@ export default function CompararInventarios() {
   const [filtroLinha, setFiltroLinha] = useState<string>('todos');
 
   /**
-   * A tabela mostrava a derivação inteira (Qtd A, remessa, venda, esperado, Qtd B)
-   * com o mesmo peso da resposta — dez colunas para quem só quer saber quanto
-   * faltou e quanto isso custa. O modo resumido é o padrão porque é o que a
-   * maioria das leituras precisa; o detalhado existe para auditar o cálculo.
+   * Recorte por categoria de produto (Marca → Tipo → Subtipo → Grupo).
    *
-   * `gestor` não é uma terceira densidade de tabela: troca a pergunta. Resumido e
-   * detalhado respondem "qual produto divergiu"; gestor responde "qual parte do
-   * estoque divergiu e quanto custa", agregando por categoria antes de mostrar
-   * qualquer produto. Por isso ele substitui a tabela em vez de reconfigurá-la.
+   * Vive na PÁGINA, e não dentro do `FiltroCategorias`, porque não é estado de um
+   * controle: é o escopo do que a tela inteira está mostrando. Os cards de resumo, a
+   * tabela, o painel gerencial e o Excel exportado precisam todos concordar com ele.
    */
-  const [modoTabela, setModoTabela] = useState<'resumido' | 'detalhado' | 'gestor'>(
-    'resumido'
-  );
+  const [categorias, setCategorias] = useState<SelecaoCategorias>(SELECAO_VAZIA);
+
+  /**
+   * A leitura tem duas formas, não três densidades.
+   *
+   * Eram `resumido | detalhado | gestor`, e os dois primeiros eram a MESMA leitura com
+   * mais ou menos colunas — uma escolha de densidade disfarçada de escolha de modo,
+   * competindo por atenção com a única distinção que muda a pergunta. Tabela responde
+   * "qual produto divergiu"; Gestor responde "qual parte do estoque divergiu e quanto
+   * custa", agregando por categoria antes de mostrar qualquer produto.
+   *
+   * A tabela ficou com o conjunto completo de colunas: o que o resumido escondia
+   * (valor unitário, Qtd A, Qtd B, a derivação do esperado) é justamente a informação
+   * que sustenta a coluna de divergência, e ela já rola na horizontal em tela estreita.
+   */
+  const [modoLeitura, setModoLeitura] = useState<'tabela' | 'gestor'>('tabela');
   /**
    * O gestor entra pelo Sintético: é a visão que responde "onde olhar" sem exigir
    * um clique por camada. O Analítico continua a um toque, para comparar categorias
@@ -459,12 +511,14 @@ export default function CompararInventarios() {
 
   /**
    * As regras que valem nesta consulta: o que o usuário escolheu ou, enquanto ele
-   * não abriu o modal, o padrão da TELA.
+   * não abriu o modal, o padrão vindo do gateway.
    *
-   * Elas viajam SEMPRE, e não só quando o usuário mexe. O padrão da tela não é o
-   * do gateway — ela desmarca o tipo de venda 13 — e omitir a seleção faria o
-   * servidor aplicar a regra dele, com o modal exibindo uma coisa e a tabela
-   * somando outra.
+   * Elas viajam SEMPRE, e não só quando o usuário mexe. O motivo mudou em 2026-08-11:
+   * era que a tela corrigia o padrão do servidor (desmarcava o tipo 13), e omitir a
+   * seleção faria o modal exibir uma coisa e a tabela somar outra. A correção foi para
+   * a origem e o padrão agora é o mesmo dos dois lados — mas mandar sempre continua
+   * valendo, porque é o que garante que a consulta use exatamente o que o modal está
+   * mostrando, inclusive quando o módulo do gateway for editado de novo.
    */
   const regrasEfetivas =
     regrasSelecao ?? (consultaRegras.data ? selecaoPadrao(consultaRegras.data) : null);
@@ -693,8 +747,40 @@ export default function CompararInventarios() {
     paramsAplicados,
   ]);
 
+  /**
+   * O recorte por categoria entra ANTES do resumo, e não junto do filtro de linha.
+   *
+   * É o que faz os cards responderem "quanto está faltando na OBEN" em vez de repetirem
+   * o total geral enquanto a tabela mostra outra coisa. Um card de Falta que ignora o
+   * recorte não erra por pouco: ele afirma um número que não pertence a nada do que
+   * está na tela, e nada indica isso.
+   *
+   * O filtro de linha (falta/sobra/só movimento) fica DEPOIS de propósito: as contagens
+   * ao lado de cada opção do seletor precisam dizer quantas linhas aquela opção traria
+   * dentro do recorte atual — contá-las já filtradas por elas mesmas daria sempre o
+   * total da opção ativa.
+   */
+  const linhasNoRecorte = useMemo(
+    () =>
+      temSelecao(categorias)
+        ? linhasExibidas.filter((l) => casaComSelecao(l, categorias))
+        : linhasExibidas,
+    [linhasExibidas, categorias]
+  );
+
+  /**
+   * Trocar de comparação pode aposentar a categoria escolhida — o vendedor seguinte
+   * talvez não tenha contado nenhum POWER. Sem isto, a tela abriria vazia com o
+   * seletor apontando para uma marca que não está mais na mesa.
+   */
+  useEffect(() => {
+    setCategorias((atual) =>
+      temSelecao(atual) ? sanearSelecao(linhasExibidas, atual) : atual
+    );
+  }, [linhasExibidas]);
+
   const resumo = useMemo(() => {
-    const linhas = linhasExibidas;
+    const linhas = linhasNoRecorte;
     const emAmbos = linhas.filter((l) => l.presente_em_a && l.presente_em_b).length;
     const iguais = linhas.filter((l) => l.diferenca === 0).length;
     const semValor = linhas.filter((l) => l.valor_unitario === 0).length;
@@ -733,6 +819,24 @@ export default function CompararInventarios() {
         sobraQtd += l.diferenca;
       }
     }
+    /**
+     * O TAMANHO do que foi contado, ao lado do tanto que divergiu.
+     *
+     * A tela sabia dizer quantos produtos existem e quanto o erro custa, mas não quanto
+     * vale o estoque em que o erro aconteceu — e sem essa base R$ 5 mil de divergência
+     * é um número solto: pode ser 1% de uma mala grande ou metade de uma pequena. Falta,
+     * Sobra e Saldo passam a ser lidos contra ele.
+     *
+     * Sai do lado B, a contagem final: é o estoque que existe hoje. No modo primeiro
+     * inventário A é vazio por definição, então B continua sendo a resposta certa.
+     */
+    let unidadesContadas = 0;
+    let valorContado = 0;
+    for (const l of linhas) {
+      unidadesContadas += l.quantidade_b;
+      valorContado += l.quantidade_b * l.valor_unitario;
+    }
+
     const soMovimento = linhas.filter((l) => l.so_movimento).length;
     const soEmA = linhas.filter((l) => l.presente_em_a && !l.presente_em_b).length;
     const soEmB = linhas.filter((l) => !l.presente_em_a && l.presente_em_b).length;
@@ -761,6 +865,8 @@ export default function CompararInventarios() {
       faltaQtd,
       sobraQtd,
       saldoQtd: faltaQtd + sobraQtd,
+      unidadesContadas,
+      valorContado,
       soMovimento,
       soEmA,
       soEmB,
@@ -769,7 +875,39 @@ export default function CompararInventarios() {
       acuracidade: linhas.length > 0 ? iguais / linhas.length : null,
       semValor,
     };
-  }, [linhasExibidas]);
+  }, [linhasNoRecorte]);
+
+  /**
+   * "Nenhum produto em comum" é uma afirmação sobre OS DOIS INVENTÁRIOS, não sobre o
+   * recorte — por isso sai de `linhasExibidas` e não de `resumo`, que agora é escopado
+   * por categoria.
+   *
+   * Tirar daqui não é preciosismo: o aviso sugere JUNTAR os dois inventários na
+   * Conferência, e juntar é destrutivo e irreversível. Escopado, ele dispararia sempre
+   * que uma categoria estreita por acaso não tivesse produto em comum — recomendando
+   * apagar dois inventários por causa de um filtro de tela.
+   */
+  const semSobreposicao = useMemo(
+    () =>
+      linhasExibidas.length > 0 &&
+      !linhasExibidas.some((l) => l.presente_em_a && l.presente_em_b),
+    [linhasExibidas]
+  );
+
+  /**
+   * Os três recortes da barra, tratados como um só para efeito de "limpar".
+   *
+   * Busca, divergência e categoria são independentes entre si, mas a pergunta de quem
+   * clica em limpar é sempre "me devolva a lista inteira" — nunca "tire só um dos três".
+   */
+  const algumFiltroAtivo = busca !== '' || filtroLinha !== 'todos' || temSelecao(categorias);
+
+  const limparFiltros = () => {
+    setBusca('');
+    setFiltroLinha('todos');
+    setCategorias(SELECAO_VAZIA);
+    setCaminhoGestor([]);
+  };
 
   const moeda = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   /** Quantidade sem casas fixas: `quantidade_fisica` é numeric e admite fração. */
@@ -792,7 +930,7 @@ export default function CompararInventarios() {
       if (vb !== va) return vb - va;
       return Math.abs(b.diferenca) - Math.abs(a.diferenca);
     };
-    const linhas = [...linhasExibidas].sort(porImpacto);
+    const linhas = [...linhasNoRecorte].sort(porImpacto);
     switch (filtroLinha) {
       case 'com_diferenca':
         return linhas.filter((l) => l.diferenca !== 0);
@@ -819,12 +957,12 @@ export default function CompararInventarios() {
       default:
         return linhas;
     }
-  }, [linhasExibidas, filtroLinha]);
+  }, [linhasNoRecorte, filtroLinha]);
 
   const { paginatedData, ...paginacao } = usePagination({
     data: linhasFiltradas,
     searchTerm: busca,
-    searchFields: ['codigo_auxiliar', 'nome_produto'],
+    searchFields: CAMPOS_DE_BUSCA,
     itemsPerPage: 20,
   });
 
@@ -918,15 +1056,12 @@ export default function CompararInventarios() {
   const vendedoresDiferentes =
     !primeiroInventario && !!invA && !!invB && invA.codigo_vendedor !== invB.codigo_vendedor;
 
-  const detalhado = modoTabela === 'detalhado';
-  const modoGestor = modoTabela === 'gestor';
+  const modoGestor = modoLeitura === 'gestor';
 
-  // Resumido: Produto, Dif. qtd, Dif. em R$, Situação.
-  // Detalhado: soma Valor unit., Qtd A e Qtd B — mais as colunas de movimento
-  // quando ligadas.
+  // Produto, Valor unit., Qtd A, Qtd B, Dif. qtd, Dif. em R$, Situação — mais as
+  // colunas de movimento (remessa, venda, esperado) quando a reconciliação está ligada.
   const totalColunas =
-    4 +
-    (detalhado ? 3 + (podeReconciliar ? 1 + (considerarRemessas ? 1 : 0) + (considerarVendas ? 1 : 0) : 0) : 0);
+    7 + (podeReconciliar ? 1 + (considerarRemessas ? 1 : 0) + (considerarVendas ? 1 : 0) : 0);
 
   /** Cor da divergência: positiva informativa, negativa em atenção. Escala divergente. */
   const corDif = (v: number) =>
@@ -1453,9 +1588,9 @@ export default function CompararInventarios() {
                 {/* Ação de Busca ERP */}
                 {reconciliar && mesmoVendedor && (
                   <div className="flex flex-wrap items-center gap-3 pt-1">
-                    {/* Sem as regras carregadas não dá para consultar: elas viajam
-                        em toda consulta, e sair sem elas devolveria o padrão do
-                        gateway — que conta o tipo 13 que esta tela declara fora. */}
+                    {/* Sem as regras carregadas não dá para consultar: elas viajam em
+                        toda consulta, e sem elas a tela não teria como declarar sob
+                        quais regras o número foi somado. */}
                     <Button
                       onClick={buscarMovimentos}
                       disabled={!ordemCorreta || carregandoMovimentos || !regrasEfetivas}
@@ -1651,12 +1786,33 @@ export default function CompararInventarios() {
         ) : (
           <Card>
             <CardHeader className="gap-3 pb-4">
+              {/*
+                O cabeçalho responde só "o que estou vendo" e oferece a ação sobre isso.
+
+                Antes carregava título, contagem, subtítulo, busca, filtro de linha,
+                modo de leitura e exportar — sete controles numa fileira que, abaixo de
+                `lg`, viravam uma pilha. Busca e filtro desceram para a barra de recorte;
+                o modo de leitura desceu para junto do conteúdo que ele governa. Ficaram
+                identidade e ação, que é o papel de um cabeçalho de cartão.
+              */}
               <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <CardTitle>Resultado</CardTitle>
-                    <Badge variant="outline" className="text-xs font-normal">
-                      {linhasFiltradas.length} produto{linhasFiltradas.length !== 1 ? 's' : ''}
+                    {/*
+                      A ÚNICA contagem de produtos da tela.
+
+                      Havia três, com denominadores diferentes e nenhuma rotulada — a do
+                      título, a do banner de escopo e a do painel gestor. Esta conta o
+                      que está listado agora; o "de N" aparece só quando há recorte, e é
+                      ele que avisa que os cards abaixo não somam o inventário inteiro.
+                      A do gestor sobrevive porque conta outra coisa (o galho aberto), e
+                      por isso virou texto colado à trilha, com contexto.
+                    */}
+                    <Badge variant="outline" className="text-xs font-normal tabular-nums">
+                      {paginacao.totalItems < linhasExibidas.length
+                        ? `${paginacao.totalItems} de ${linhasExibidas.length} produtos`
+                        : `${linhasExibidas.length} produto${linhasExibidas.length !== 1 ? 's' : ''}`}
                     </Badge>
                   </div>
                   {/* A linha de base tem que estar VISÍVEL no resultado: no primeiro
@@ -1679,8 +1835,34 @@ export default function CompararInventarios() {
                   )}
                 </div>
 
-                <div className="flex flex-col gap-2 sm:flex-row lg:items-center lg:justify-end">
-                  {/* Busca rápida */}
+                <Button
+                  variant="outline"
+                  onClick={exportarExcel}
+                  disabled={linhasFiltradas.length === 0}
+                  title="Exportar resultados para planilha Excel"
+                  className="shrink-0 self-start lg:self-auto"
+                >
+                  <Download className="h-4 w-4" />
+                  Exportar
+                </Button>
+              </div>
+
+              {/*
+                ── Barra de recorte ────────────────────────────────────────────────
+                Todos os filtros numa faixa só, delimitada.
+
+                Estavam em três alturas diferentes — busca e divergência no cabeçalho,
+                categorias abaixo, e os tiles clicáveis (que também aplicam divergência)
+                depois dos cards. Quem lia não tinha como saber o que estava recortando
+                o quê. A moldura é a mesma da barra de seleção da Conferência, então a
+                convenção "caixa com fundo sutil = controles desta lista" já existe no app.
+
+                A divisória separa as duas perguntas sem precisar de rótulo: à esquerda
+                se recorta PELO RESULTADO da contagem ("o que divergiu"), à direita PELO
+                PRODUTO ("em que parte do estoque"). Os dois se combinam.
+              */}
+              <div className="flex flex-col gap-2 rounded-xl border border-border/80 bg-muted/30 p-2 lg:flex-row lg:flex-wrap lg:items-center">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                   <SearchFilter
                     value={busca}
                     onChange={setBusca}
@@ -1688,13 +1870,11 @@ export default function CompararInventarios() {
                     className="max-w-none sm:w-56"
                   />
 
-                  <div className="flex items-center gap-2">
-                    {/* Filtro de Linhas */}
-                    <Select value={filtroLinha} onValueChange={setFiltroLinha}>
-                      <SelectTrigger className="w-full font-normal sm:w-52">
-                        <SelectValue />
-                      </SelectTrigger>
-                      {/*
+                  <Select value={filtroLinha} onValueChange={setFiltroLinha}>
+                    <SelectTrigger className="w-full font-normal sm:w-52">
+                      <SelectValue />
+                    </SelectTrigger>
+                    {/*
                         Dois grupos, duas perguntas: "o que aconteceu com a contagem" e
                         "onde o dado pode estar ruim". Eram três grupos com onze opções,
                         e "Todos os produtos" morava sob *Origem da linha*, onde não é
@@ -1751,49 +1931,94 @@ export default function CompararInventarios() {
                         </SelectGroup>
                       </SelectContent>
                     </Select>
-
-                    {/* Modo de leitura */}
-                    <Select
-                      value={modoTabela}
-                      onValueChange={(v) => {
-                        setModoTabela(v as 'resumido' | 'detalhado' | 'gestor');
-                        // Entrar no gestor recomeça o drill-down. Guardar o caminho
-                        // entre visitas devolveria o usuário a um recorte que ele não
-                        // escolheu — e que pode nem existir na comparação atual.
-                        if (v === 'gestor') {
-                          setCaminhoGestor([]);
-                          setSubmodoGestor('sintetico');
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="w-full font-normal sm:w-36">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="resumido">Resumido</SelectItem>
-                        <SelectItem value="detalhado">Detalhado</SelectItem>
-                        <SelectItem value="gestor">Gestor</SelectItem>
-                      </SelectContent>
-                    </Select>
-
-                    {/* Botão Exportar Excel */}
-                    <Button
-                      variant="outline"
-                      size="icon"
-                      onClick={exportarExcel}
-                      disabled={linhasFiltradas.length === 0}
-                      aria-label="Exportar para Excel"
-                      title="Exportar resultados para planilha Excel"
-                      className="shrink-0"
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  </div>
                 </div>
+
+                {/* A divisória é desenhada pelo próprio FiltroCategorias: catálogo sem
+                    categoria nenhuma faz o componente inteiro sumir, e um separador
+                    vertical sozinho na barra apontaria para um grupo que não existe. */}
+                <FiltroCategorias
+                  linhas={linhasExibidas}
+                  selecao={categorias}
+                  onSelecao={(s) => {
+                    setCategorias(s);
+                    // O drill-down do gestor é o mesmo recorte por outro gesto: deixá-lo
+                    // parado num galho que o filtro acabou de excluir mostraria zero
+                    // produtos sem dizer por quê.
+                    setCaminhoGestor(caminhoDaSelecao(s));
+                  }}
+                />
+
+                {/*
+                  UMA saída para todos os filtros, e não uma por grupo.
+
+                  Havia duas — "Limpar categorias" na barra e "Ver todos" no banner de
+                  escopo — e nenhuma das duas devolvia a tela ao estado inicial: quem
+                  clicasse continuaria com a busca ou a divergência presas, sem pista de
+                  qual dos controles ainda estava recortando.
+                */}
+                {algumFiltroAtivo && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={limparFiltros}
+                    className="lg:ml-auto"
+                  >
+                    <X className="size-4" />
+                    Limpar filtros
+                  </Button>
+                )}
               </div>
             </CardHeader>
 
             <CardContent className="space-y-4">
+              {/*
+                O banner de escopo SAIU daqui.
+
+                Ele existia para avisar que os cards somam dentro do recorte de categoria
+                — mas repetia, em badges, exatamente o que os seletores logo acima já
+                mostram por extenso ("Marca: OBEN"), e gastava uma quarta faixa horizontal
+                para isso. O que ele tinha de único sobreviveu: o `N de M` está na
+                contagem do cabeçalho e o "ver todos" virou o "Limpar filtros" da barra.
+              */}
+
+              {/*
+                A base contra a qual os quatro tiles são lidos.
+
+                Linha, e não um quinto tile: os tiles respondem "o que deu errado e
+                quanto custou", e o total contado responde "de que tamanho é o estoque
+                em questão" — pergunta diferente, peso menor. Um quinto card também
+                comprimiria os quatro de volta a 20% de largura, que foi exatamente o
+                que fez as notas truncarem antes.
+
+                Acompanha o recorte, como o resto do resumo: com Marca OBEN ligada,
+                mostra as unidades e o valor da OBEN.
+              */}
+              {resumo.total > 0 && (
+                <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  <span className="font-semibold uppercase tracking-wider">Contado</span>
+                  <span className="tabular-nums">
+                    <span className="font-semibold text-foreground">
+                      {unid(resumo.unidadesContadas)}
+                    </span>{' '}
+                    unidades
+                  </span>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">
+                    <span className="font-semibold text-foreground">
+                      {moeda(resumo.valorContado)}
+                    </span>{' '}
+                    em estoque
+                  </span>
+                  {/* Produto sem preço vale zero no total; sem este aviso o valor parece
+                      completo e é o cadastro que está furado. */}
+                  {resumo.semValor > 0 && (
+                    <span className="text-2xs">
+                      (sem {resumo.semValor} produto{resumo.semValor > 1 ? 's' : ''} sem preço)
+                    </span>
+                  )}
+                </p>
+              )}
+
               {/* Resumo em faixa */}
               {/* Quatro colunas no desktop: com o quinto card fora, cada um ganhou 25%
                   de largura — que é o que faz as notas pararem de truncar. */}
@@ -1854,7 +2079,7 @@ export default function CompararInventarios() {
 
               {/* Não vale no primeiro inventário: lá NADA está em A, por definição — o
                   aviso dispararia sempre e apontaria para uma causa que não existe. */}
-              {!primeiroInventario && resumo.emAmbos === 0 && resumo.total > 0 && (
+              {!primeiroInventario && semSobreposicao && (
                 <Alert variant="warning">
                   <TriangleAlert />
                   <AlertDescription>
@@ -1864,6 +2089,59 @@ export default function CompararInventarios() {
                   </AlertDescription>
                 </Alert>
               )}
+
+              {/*
+                ── Faixa de leitura ────────────────────────────────────────────────
+                Modo e submodo lado a lado, imediatamente acima do que eles governam.
+
+                O modo morava no cabeçalho, entre o filtro de divergência e o botão de
+                exportar — uma escolha de VISUALIZAÇÃO no meio dos controles de RECORTE.
+                O submodo do gestor morava dentro do painel, com desenho idêntico e a uns
+                duzentos pixels de distância. Um é subordinado ao outro; agora isso está
+                dito pela disposição, e não só pelo comportamento.
+
+                O submodo some quando não há nível para agregar (caminho completo): ali
+                os dois modos agregados mostrariam uma tela vazia, e o "Produtos" fixo
+                indica onde se está.
+              */}
+              <div className="flex flex-wrap items-center gap-2">
+                <Segmentado
+                  nome="Modo de leitura"
+                  valor={modoLeitura}
+                  onValor={(v) => {
+                    setModoLeitura(v);
+                    // Entrar no gestor recomeça o drill-down — mas já dentro do recorte
+                    // de categoria, quando ele forma um prefixo da hierarquia. Começar
+                    // do topo obrigaria a reclicar numa árvore que o filtro já reduziu
+                    // a um galho só.
+                    if (v === 'gestor') {
+                      setCaminhoGestor(caminhoDaSelecao(categorias));
+                      setSubmodoGestor('sintetico');
+                    }
+                  }}
+                  opcoes={[
+                    { valor: 'tabela', rotulo: 'Tabela' },
+                    { valor: 'gestor', rotulo: 'Gestor' },
+                  ]}
+                />
+
+                {modoGestor && caminhoGestor.length < NIVEIS.length && (
+                  <Segmentado
+                    nome="Nível de leitura do gestor"
+                    tamanho="sm"
+                    valor={submodoGestor}
+                    // Arrow, e não `setSubmodoGestor` direto: passar o setter faz o
+                    // `SetStateAction<SubmodoGestor>` disputar a inferência de `T` com
+                    // as opções, e o TypeScript alarga os dois para `string`.
+                    onValor={(v) => setSubmodoGestor(v)}
+                    opcoes={[
+                      { valor: 'sintetico', rotulo: 'Sintético' },
+                      { valor: 'analitico', rotulo: 'Analítico' },
+                    ]}
+                    sufixo={submodoGestor === 'detalhado' ? 'Produtos' : undefined}
+                  />
+                )}
+              </div>
 
               {modoGestor ? (
                 <PainelGestor
@@ -1881,26 +2159,20 @@ export default function CompararInventarios() {
                     <TableHeader>
                       <TableRow className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground hover:bg-muted/40">
                         <TableHead className="font-semibold">Produto</TableHead>
-                        {detalhado && (
+                        <TableHead className="text-right font-semibold">Valor unit.</TableHead>
+                        <TableHead className="text-right font-semibold">Qtd A</TableHead>
+                        {podeReconciliar && (
                           <>
-                            <TableHead className="text-right font-semibold">Valor unit.</TableHead>
-                            <TableHead className="text-right font-semibold">Qtd A</TableHead>
-                            {podeReconciliar && (
-                              <>
-                                {considerarRemessas && (
-                                  <TableHead className="text-right font-semibold">
-                                    Remessa
-                                  </TableHead>
-                                )}
-                                {considerarVendas && (
-                                  <TableHead className="text-right font-semibold">Venda</TableHead>
-                                )}
-                                <TableHead className="text-right font-semibold">Esperado</TableHead>
-                              </>
+                            {considerarRemessas && (
+                              <TableHead className="text-right font-semibold">Remessa</TableHead>
                             )}
-                            <TableHead className="text-right font-semibold">Qtd B</TableHead>
+                            {considerarVendas && (
+                              <TableHead className="text-right font-semibold">Venda</TableHead>
+                            )}
+                            <TableHead className="text-right font-semibold">Esperado</TableHead>
                           </>
                         )}
+                        <TableHead className="text-right font-semibold">Qtd B</TableHead>
                         <TableHead className="text-right font-semibold">
                           {podeReconciliar ? 'Dif. qtd (B − esperado)' : 'Dif. qtd (B − A)'}
                         </TableHead>
@@ -1921,44 +2193,49 @@ export default function CompararInventarios() {
                                   {l.nome_produto}
                                 </span>
                               )}
+                              {/* A categoria do produto na própria linha: é por ela que o
+                                  recorte acima filtra, e sem vê-la não dá para conferir
+                                  se o filtro pegou o que devia — nem para descobrir a
+                                  categoria de um produto achado pela busca. */}
+                              {categoriaDaLinha(l) && (
+                                <span className="mt-0.5 block truncate text-2xs text-muted-foreground/80">
+                                  {categoriaDaLinha(l)}
+                                </span>
+                              )}
                             </TableCell>
-                            {detalhado && (
+                            <TableCell className="text-right text-sm tabular-nums">
+                              {l.valor_unitario === 0 ? (
+                                <span className="text-muted-foreground">—</span>
+                              ) : (
+                                moeda(l.valor_unitario)
+                              )}
+                            </TableCell>
+                            <TableCell className="text-right font-medium tabular-nums">
+                              {l.quantidade_a}
+                            </TableCell>
+                            {podeReconciliar && (
                               <>
-                                <TableCell className="text-right text-sm tabular-nums">
-                                  {l.valor_unitario === 0 ? (
-                                    <span className="text-muted-foreground">—</span>
-                                  ) : (
-                                    moeda(l.valor_unitario)
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right font-medium tabular-nums">
-                                  {l.quantidade_a}
-                                </TableCell>
-                                {podeReconciliar && (
-                                  <>
-                                    {considerarRemessas && (
-                                      <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
-                                        {l.remessa === 0 ? '—' : `+${l.remessa}`}
-                                      </TableCell>
-                                    )}
-                                    {considerarVendas && (
-                                      <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
-                                        {l.venda === 0 ? '—' : `−${l.venda}`}
-                                      </TableCell>
-                                    )}
-                                    <TableCell className="text-right font-medium tabular-nums">
-                                      {l.esperado}
-                                    </TableCell>
-                                  </>
+                                {considerarRemessas && (
+                                  <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                                    {l.remessa === 0 ? '—' : `+${l.remessa}`}
+                                  </TableCell>
+                                )}
+                                {considerarVendas && (
+                                  <TableCell className="text-right text-sm tabular-nums text-muted-foreground">
+                                    {l.venda === 0 ? '—' : `−${l.venda}`}
+                                  </TableCell>
                                 )}
                                 <TableCell className="text-right font-medium tabular-nums">
-                                  {l.quantidade_b}
+                                  {l.esperado}
                                 </TableCell>
                               </>
                             )}
+                            <TableCell className="text-right font-medium tabular-nums">
+                              {l.quantidade_b}
+                            </TableCell>
                             <TableCell className="text-right">
                               <span
-                                className={`font-bold tabular-nums ${detalhado ? '' : 'text-lg'} ${corDif(l.diferenca)}`}
+                                className={`font-bold tabular-nums ${corDif(l.diferenca)}`}
                               >
                                 {l.diferenca > 0 ? `+${l.diferenca}` : l.diferenca}
                               </span>
@@ -1968,7 +2245,7 @@ export default function CompararInventarios() {
                                 <span className="text-muted-foreground">—</span>
                               ) : (
                                 <span
-                                  className={`font-semibold tabular-nums ${detalhado ? '' : 'text-base'} ${corDif(l.diferenca)}`}
+                                  className={`font-semibold tabular-nums ${corDif(l.diferenca)}`}
                                 >
                                   {l.diferenca > 0 ? '+' : ''}
                                   {moeda(l.diferenca * l.valor_unitario)}

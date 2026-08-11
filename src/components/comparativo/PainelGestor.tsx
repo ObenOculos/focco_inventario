@@ -21,6 +21,12 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import type { LinhaExibida } from '@/hooks/useCompararInventariosQuery';
+import {
+  NIVEIS,
+  SEM_CATEGORIA,
+  categoriaDa,
+  type NivelCategoria,
+} from '@/lib/categoriasProduto';
 
 /**
  * Leitura gerencial do comparativo.
@@ -39,20 +45,12 @@ import type { LinhaExibida } from '@/hooks/useCompararInventariosQuery';
  * O Detalhado não está no seletor de propósito: ele é o fim do caminho, alcançado
  * clicando numa folha. Oferecê-lo como opção solta significaria "listar todos os
  * produtos" — que é exatamente a listagem imensa que o modo gestor existe para
- * evitar, e que os modos Resumido e Detalhado da tela já fazem melhor.
+ * evitar, e que o Modo Tabela da tela já faz melhor.
+ *
+ * O alternador entre estes níveis é renderizado PELA PÁGINA, ao lado do alternador de
+ * modo de leitura — ver o comentário na trilha, abaixo.
  */
 
-/** Categoria ausente. Produto contado sem cadastro em `produtos`, ou anterior à sincronização. */
-const SEM_CATEGORIA = 'Sem categoria';
-
-export const NIVEIS = [
-  { chave: 'marca', rotulo: 'Marca' },
-  { chave: 'tipo', rotulo: 'Tipo' },
-  { chave: 'subtipo', rotulo: 'Subtipo' },
-  { chave: 'grupo', rotulo: 'Grupo' },
-] as const;
-
-export type NivelGestor = (typeof NIVEIS)[number]['chave'];
 export type SubmodoGestor = 'sintetico' | 'analitico' | 'detalhado';
 
 const moeda = (v: number) =>
@@ -61,11 +59,17 @@ const unid = (v: number) => Math.abs(v).toLocaleString('pt-BR', { maximumFractio
 const pct = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'percent', minimumFractionDigits: 1 });
 
-const categoriaDa = (l: LinhaExibida, nivel: NivelGestor) => l[nivel] || SEM_CATEGORIA;
-
 interface Agregado {
   categoria: string;
   produtos: number;
+  /**
+   * O TAMANHO da categoria: unidades contadas e quanto elas valem (lado B, a contagem
+   * final). Sem eles, "R$ 5 mil de impacto" não diz se a categoria vai bem ou mal — é
+   * ótimo num estoque de R$ 500 mil e grave num de R$ 8 mil, e o card mostrava
+   * exatamente o mesmo número nos dois casos.
+   */
+  unidades: number;
+  valor: number;
   iguais: number;
   faltaQtd: number;
   faltaValor: number;
@@ -82,7 +86,7 @@ interface Agregado {
   impacto: number;
 }
 
-function agregar(linhas: LinhaExibida[], nivel: NivelGestor): Agregado[] {
+function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
   const mapa = new Map<string, Agregado>();
 
   for (const l of linhas) {
@@ -92,6 +96,8 @@ function agregar(linhas: LinhaExibida[], nivel: NivelGestor): Agregado[] {
       a = {
         categoria,
         produtos: 0,
+        unidades: 0,
+        valor: 0,
         iguais: 0,
         faltaQtd: 0,
         faltaValor: 0,
@@ -105,6 +111,8 @@ function agregar(linhas: LinhaExibida[], nivel: NivelGestor): Agregado[] {
     }
 
     a.produtos++;
+    a.unidades += l.quantidade_b;
+    a.valor += l.quantidade_b * l.valor_unitario;
     const valor = l.diferenca * l.valor_unitario;
     if (l.diferenca < 0) {
       a.faltaQtd += l.diferenca;
@@ -225,8 +233,11 @@ function CardCategoria({ a, onAbrir }: { a: Agregado; onAbrir: () => void }) {
           <p className="truncate text-sm font-semibold" title={a.categoria}>
             {a.categoria}
           </p>
-          <p className="text-2xs text-muted-foreground">
-            {a.produtos} produto{a.produtos !== 1 ? 's' : ''}
+          {/* Produtos, unidades e valor juntos: é o tamanho da categoria, e é contra ele
+              que o Impacto logo abaixo passa a ser lido. */}
+          <p className="text-2xs tabular-nums text-muted-foreground">
+            {a.produtos} produto{a.produtos !== 1 ? 's' : ''} · {unid(a.unidades)} un. ·{' '}
+            {moeda(a.valor)}
           </p>
         </div>
         {semCadastro ? (
@@ -320,6 +331,14 @@ function CardProduto({ l, comEsperado }: { l: LinhaExibida; comEsperado: boolean
               Contado
             </p>
             <p className="font-medium tabular-nums">{l.quantidade_b}</p>
+            {/* Quanto vale o que está lá — não o quanto o erro custou, que é o número
+                da direita. Produto sem preço cadastrado não ganha a linha: "R$ 0,00"
+                se leria como mercadoria sem valor, e não como cadastro incompleto. */}
+            {l.valor_unitario > 0 && (
+              <p className="text-2xs tabular-nums text-muted-foreground">
+                {moeda(l.quantidade_b * l.valor_unitario)}
+              </p>
+            )}
           </div>
         </div>
 
@@ -387,6 +406,14 @@ function LinhaArvore({
         {a.produtos}
       </TableCell>
 
+      <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
+        {unid(a.unidades)} un.
+      </TableCell>
+
+      <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground xl:table-cell">
+        {moeda(a.valor)}
+      </TableCell>
+
       <TableCell className="text-right text-sm font-medium tabular-nums text-warning-strong">
         {a.faltaQtd === 0 ? (
           <span className="text-muted-foreground">—</span>
@@ -447,6 +474,19 @@ export function PainelGestor({
   );
 
   const nivelAtual = caminho.length < NIVEIS.length ? NIVEIS[caminho.length] : null;
+
+  /** Unidades e valor do recorte aberto — o mesmo par que os cards e a árvore mostram. */
+  const totalDoCaminho = useMemo(
+    () =>
+      doCaminho.reduce(
+        (acc, l) => ({
+          unidades: acc.unidades + l.quantidade_b,
+          valor: acc.valor + l.quantidade_b * l.valor_unitario,
+        }),
+        { unidades: 0, valor: 0 }
+      ),
+    [doCaminho]
+  );
 
   const agregados = useMemo(
     () => (nivelAtual ? agregar(doCaminho, nivelAtual.chave) : []),
@@ -542,72 +582,50 @@ export function PainelGestor({
         </Alert>
       )}
 
-      {/* ── Trilha e alternância de nível ─────────────────────────────────── */}
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <nav aria-label="Trilha de categorias" className="flex flex-wrap items-center gap-1">
-          <Button
-            variant={caminho.length === 0 ? 'secondary' : 'ghost'}
-            size="sm"
-            onClick={() => voltarPara(0)}
-          >
-            <Home className="size-4" />
-            Todas
-          </Button>
-          {caminho.map((valor, i) => (
-            <div key={`${NIVEIS[i].chave}-${valor}`} className="flex items-center gap-1">
-              <ChevronRight className="size-3.5 text-muted-foreground" />
-              <Button
-                variant={i === caminho.length - 1 ? 'secondary' : 'ghost'}
-                size="sm"
-                onClick={() => voltarPara(i + 1)}
-                title={`${NIVEIS[i].rotulo}: ${valor}`}
-              >
-                {valor}
-              </Button>
-            </div>
-          ))}
-        </nav>
+      {/*
+        ── Trilha ────────────────────────────────────────────────────────────
+        O alternador Sintético/Analítico SAIU daqui: ele subiu para junto do
+        alternador de modo de leitura, na página. Os dois têm o mesmo desenho e um é
+        subordinado ao outro — separados por duzentos pixels de cards, liam-se como
+        dois controles sem relação, e não havia nada indicando que o segundo só existe
+        dentro do primeiro. A página já era dona do estado `submodo`; só a renderização
+        estava no lugar errado.
 
-        <div className="flex items-center gap-2">
-          <Badge variant="outline" className="px-2.5 py-0.5 text-2xs font-normal">
-            {doCaminho.length} produto{doCaminho.length !== 1 ? 's' : ''}
-          </Badge>
-
-          {/* No último nível não há mais categorias para agregar: os dois modos
-              agregados mostrariam uma tela vazia. */}
-          {nivelAtual && (
-            <div className="flex rounded-xl bg-muted/60 p-1">
-              {(
-                [
-                  ['sintetico', 'Sintético'],
-                  ['analitico', 'Analítico'],
-                ] as const
-              ).map(([valor, rotulo]) => (
-                <button
-                  key={valor}
-                  type="button"
-                  aria-pressed={submodo === valor}
-                  onClick={() => onSubmodo(valor)}
-                  className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors ${
-                    submodo === valor
-                      ? 'bg-card text-foreground shadow-2xs'
-                      : 'text-muted-foreground hover:text-foreground'
-                  }`}
-                >
-                  {rotulo}
-                </button>
-              ))}
-              {/* Aparece só quando se desceu até os produtos. Não é uma terceira
-                  opção do seletor — é onde você está, e some quando você sai. */}
-              {submodo === 'detalhado' && (
-                <span className="rounded-lg bg-card px-3 py-1.5 text-xs font-semibold shadow-2xs">
-                  Produtos
-                </span>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
+        A contagem também saiu do badge solto e virou a cauda da trilha: ela conta os
+        produtos DO RECORTE PERCORRIDO, que é diferente do total no topo do cartão — e
+        um número sem rótulo ao lado de outro número sem rótulo só produzia dúvida
+        sobre qual dos dois estava certo.
+      */}
+      <nav aria-label="Trilha de categorias" className="flex flex-wrap items-center gap-1">
+        <Button
+          variant={caminho.length === 0 ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={() => voltarPara(0)}
+        >
+          <Home className="size-4" />
+          Todas
+        </Button>
+        {caminho.map((valor, i) => (
+          <div key={`${NIVEIS[i].chave}-${valor}`} className="flex items-center gap-1">
+            <ChevronRight className="size-3.5 text-muted-foreground" />
+            <Button
+              variant={i === caminho.length - 1 ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => voltarPara(i + 1)}
+              title={`${NIVEIS[i].rotulo}: ${valor}`}
+            >
+              {valor}
+            </Button>
+          </div>
+        ))}
+        {/* O tamanho do recorte aberto, na mesma linha da trilha: descer de OBEN para
+            OBEN › SOLAR muda os três números, e é o que diz se o galho aberto é grande
+            ou irrelevante antes de olhar a divergência dele. */}
+        <span className="ml-1 text-xs tabular-nums text-muted-foreground">
+          · {doCaminho.length} produto{doCaminho.length !== 1 ? 's' : ''} ·{' '}
+          {unid(totalDoCaminho.unidades)} un. · {moeda(totalDoCaminho.valor)}
+        </span>
+      </nav>
 
       {/* ── Conteúdo ──────────────────────────────────────────────────────── */}
       {doCaminho.length === 0 ? (
@@ -651,6 +669,15 @@ export function PainelGestor({
                     <TableHead className="font-semibold">Categoria</TableHead>
                     <TableHead className="hidden text-right font-semibold sm:table-cell">
                       Produtos
+                    </TableHead>
+                    {/* O tamanho da categoria, antes das colunas de erro. Some antes
+                        delas no estreito: numa tela pequena a pergunta é onde está o
+                        problema, e a base pode esperar o desktop. */}
+                    <TableHead className="hidden text-right font-semibold lg:table-cell">
+                      Contado
+                    </TableHead>
+                    <TableHead className="hidden text-right font-semibold xl:table-cell">
+                      Valor contado
                     </TableHead>
                     <TableHead className="text-right font-semibold">Falta</TableHead>
                     <TableHead className="text-right font-semibold">Sobra</TableHead>

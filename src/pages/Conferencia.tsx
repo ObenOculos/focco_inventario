@@ -26,6 +26,7 @@ import {
   Settings,
   Trash2,
   User,
+  X,
   XCircle,
 } from 'lucide-react';
 import {
@@ -69,6 +70,16 @@ import {
 } from '@/components/ui/table';
 import { useInventariosPendentesQuery, InventarioComItens } from '@/hooks/useConferenciaQuery';
 import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
+import { FiltroCategorias } from '@/components/FiltroCategorias';
+import { CabecalhoOrdenavel } from '@/components/CabecalhoOrdenavel';
+import { alternarOrdem, type DirecaoOrdem, type Ordenacao } from '@/lib/ordenacao';
+import {
+  NIVEIS,
+  SELECAO_VAZIA,
+  casaComSelecao,
+  temSelecao,
+  type SelecaoCategorias,
+} from '@/lib/categoriasProduto';
 
 /**
  * Conferência de Inventários — revisão e aprovação.
@@ -78,16 +89,79 @@ import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
  * funcionalidade independente, na página Comparar Inventários.
  */
 
+/**
+ * O que a tela precisa saber de `produtos` sobre cada código contado.
+ *
+ * Era só o valor. Os atributos de categoria entraram na MESMA consulta que já buscava
+ * o valor — nenhum request a mais — e é o que permite filtrar a revisão por
+ * Marca/Tipo/Subtipo/Grupo em inventários de centenas de itens.
+ */
+type FichaProduto = {
+  valor: number;
+  marca: string | null;
+  tipo: string | null;
+  subtipo: string | null;
+  grupo: string | null;
+};
+
+const FICHA_VAZIA: FichaProduto = {
+  valor: 0,
+  marca: null,
+  tipo: null,
+  subtipo: null,
+  grupo: null,
+};
+
 type ItemRevisao = {
   id: string;
   codigo_auxiliar: string;
   nome_produto: string;
   quantidade_fisica: number;
   valor_unitario: number;
+  marca: string | null;
+  tipo: string | null;
+  subtipo: string | null;
+  grupo: string | null;
 };
 
 const mensagemErro = (e: unknown, fallback = 'Ocorreu um erro.') =>
   e instanceof Error && e.message ? e.message : fallback;
+
+/**
+ * A busca varre também a categoria, que agora está escrita na linha — texto visível que
+ * a busca não encontra se lê como busca quebrada. Referência estável: um literal no
+ * corpo do componente seria um array novo a cada render.
+ */
+const CAMPOS_DE_BUSCA_ITEM: (keyof ItemRevisao)[] = [
+  'codigo_auxiliar',
+  'nome_produto',
+  'marca',
+  'tipo',
+  'subtipo',
+  'grupo',
+];
+
+/** `OBEN · OCULOS SOLAR · FEMININO · ACETATO`, omitindo os níveis vazios. */
+const categoriaDoItem = (i: ItemRevisao) =>
+  NIVEIS.map(({ chave }) => i[chave])
+    .filter(Boolean)
+    .join(' · ');
+
+/** Colunas ordenáveis da revisão. "Ações" fica de fora: não há o que comparar. */
+type CampoOrdemItem = 'codigo_auxiliar' | 'quantidade_fisica' | 'valor_total';
+
+/**
+ * Direção do PRIMEIRO clique de cada coluna.
+ *
+ * Código começa em A→Z. Quantidade e valor começam no maior: quem ordena por eles numa
+ * conferência está atrás do item fora da curva, e abrir nos zeros custa um clique extra
+ * toda vez.
+ */
+const DIRECAO_INICIAL: Record<CampoOrdemItem, DirecaoOrdem> = {
+  codigo_auxiliar: 'asc',
+  quantidade_fisica: 'desc',
+  valor_total: 'desc',
+};
 
 export default function Conferencia() {
   const { profile } = useAuth();
@@ -95,7 +169,7 @@ export default function Conferencia() {
   const queryClient = useQueryClient();
 
   const [selectedInventario, setSelectedInventario] = useState<InventarioComItens | null>(null);
-  const [valoresMap, setValoresMap] = useState<Record<string, number>>({});
+  const [fichasMap, setFichasMap] = useState<Record<string, FichaProduto>>({});
   const [isDetailLoading, setIsDetailLoading] = useState(false);
 
   // Filtros da lista
@@ -105,6 +179,12 @@ export default function Conferencia() {
 
   // Revisão dos itens
   const [buscaItem, setBuscaItem] = useState('');
+  const [categoriasItem, setCategoriasItem] = useState<SelecaoCategorias>(SELECAO_VAZIA);
+  /** Ordem da tabela de revisão. Abre por código, que era a ordem fixa de antes. */
+  const [ordemItens, setOrdemItens] = useState<Ordenacao<CampoOrdemItem>>({
+    campo: 'codigo_auxiliar',
+    direcao: 'asc',
+  });
   const [editedValues, setEditedValues] = useState<Record<string, number>>({});
   const [deletingItem, setDeletingItem] = useState<{
     codigo_auxiliar: string;
@@ -185,25 +265,34 @@ export default function Conferencia() {
       setSelectedInventario(inventario);
       setObservacoes('');
       setBuscaItem('');
+      // O inventário seguinte pode não ter nenhum POWER: manter o recorte abriria a
+      // revisão numa tabela vazia, com o seletor apontando para uma marca ausente.
+      setCategoriasItem(SELECAO_VAZIA);
       setEditedValues({});
 
-      // Valores só para exibir o total por item na revisão; em lotes por causa do
-      // limite de 1000 linhas por request
+      // Valor e categoria do catálogo: o valor para exibir o total por item, a categoria
+      // para o filtro da revisão. Em lotes por causa do limite de 1000 linhas por request.
       const codigos = Array.from(
         new Set(inventario.itens_inventario.map((i) => i.codigo_auxiliar))
       );
-      const novoMap: Record<string, number> = {};
+      const novoMap: Record<string, FichaProduto> = {};
       for (let i = 0; i < codigos.length; i += 500) {
         const lote = codigos.slice(i, i + 500);
         const { data } = await supabase
           .from('produtos')
-          .select('codigo_auxiliar, valor_produto')
+          .select('codigo_auxiliar, valor_produto, marca, tipo, subtipo, grupo')
           .in('codigo_auxiliar', lote);
         data?.forEach((p) => {
-          novoMap[p.codigo_auxiliar] = Number(p.valor_produto) || 0;
+          novoMap[p.codigo_auxiliar] = {
+            valor: Number(p.valor_produto) || 0,
+            marca: p.marca,
+            tipo: p.tipo,
+            subtipo: p.subtipo,
+            grupo: p.grupo,
+          };
         });
       }
-      setValoresMap(novoMap);
+      setFichasMap(novoMap);
       setIsDetailLoading(false);
     },
     [selectedInventario]
@@ -212,20 +301,80 @@ export default function Conferencia() {
   const itensRevisao: ItemRevisao[] = useMemo(() => {
     if (!selectedInventario) return [];
     return selectedInventario.itens_inventario
-      .map((it) => ({
-        id: it.id,
-        codigo_auxiliar: it.codigo_auxiliar,
-        nome_produto: it.nome_produto || it.codigo_auxiliar,
-        quantidade_fisica: Number(it.quantidade_fisica) || 0,
-        valor_unitario: valoresMap[it.codigo_auxiliar] || 0,
-      }))
+      .map((it) => {
+        const ficha = fichasMap[it.codigo_auxiliar] ?? FICHA_VAZIA;
+        return {
+          id: it.id,
+          codigo_auxiliar: it.codigo_auxiliar,
+          nome_produto: it.nome_produto || it.codigo_auxiliar,
+          quantidade_fisica: Number(it.quantidade_fisica) || 0,
+          valor_unitario: ficha.valor,
+          marca: ficha.marca,
+          tipo: ficha.tipo,
+          subtipo: ficha.subtipo,
+          grupo: ficha.grupo,
+        };
+      })
       .sort((a, b) => a.codigo_auxiliar.localeCompare(b.codigo_auxiliar));
-  }, [selectedInventario, valoresMap]);
+  }, [selectedInventario, fichasMap]);
+
+  /**
+   * O recorte por categoria vale para a TABELA, e não para os cards de resumo.
+   *
+   * É o oposto do que o Comparativo faz, de propósito. Lá os cards são análise — "quanto
+   * está faltando na OBEN" é uma pergunta legítima. Aqui eles são a identidade do
+   * inventário que está prestes a ser APROVADO: um "Valor total" que encolhe porque
+   * havia um filtro de tela ligado é exatamente o número que não pode variar conforme a
+   * visualização.
+   */
+  const itensNoRecorte = useMemo(
+    () =>
+      temSelecao(categoriasItem)
+        ? itensRevisao.filter((i) => casaComSelecao(i, categoriasItem))
+        : itensRevisao,
+    [itensRevisao, categoriasItem]
+  );
+
+  /**
+   * A ordem da tabela usa o valor SALVO, nunca o rascunho de `editedValues`.
+   *
+   * Ordenar pelo valor exibido parece mais coerente e quebra a edição: `handleEditValue`
+   * dispara a cada tecla, então trocar 500 por 5 reordenaria a tabela no meio da
+   * digitação — o campo saltaria para longe e perderia o foco depois do primeiro
+   * caractere. Enquanto há edição pendente a ordem fica parada de propósito; ao salvar,
+   * o inventário é recarregado e as duas voltam a coincidir.
+   */
+  const itensOrdenados = useMemo(() => {
+    const { campo, direcao } = ordemItens;
+    const sinal = direcao === 'asc' ? 1 : -1;
+    return [...itensNoRecorte].sort((a, b) => {
+      let comparacao = 0;
+      switch (campo) {
+        case 'codigo_auxiliar':
+          comparacao = a.codigo_auxiliar.localeCompare(b.codigo_auxiliar, 'pt-BR');
+          break;
+        case 'quantidade_fisica':
+          comparacao = a.quantidade_fisica - b.quantidade_fisica;
+          break;
+        case 'valor_total':
+          comparacao =
+            a.quantidade_fisica * a.valor_unitario - b.quantidade_fisica * b.valor_unitario;
+          break;
+      }
+      // Desempate estável pelo código: sem ele, itens de mesma quantidade trocam de lugar
+      // entre renders e a tabela "pisca" ao editar qualquer outra linha.
+      if (comparacao === 0) return a.codigo_auxiliar.localeCompare(b.codigo_auxiliar, 'pt-BR');
+      return sinal * comparacao;
+    });
+  }, [itensNoRecorte, ordemItens]);
+
+  const ordenarItens = (campo: CampoOrdemItem) =>
+    setOrdemItens((atual) => alternarOrdem(atual, campo, DIRECAO_INICIAL[campo]));
 
   const { paginatedData: itensPaginados, ...paginacaoItens } = usePagination({
-    data: itensRevisao,
+    data: itensOrdenados,
     searchTerm: buscaItem,
-    searchFields: ['codigo_auxiliar', 'nome_produto'],
+    searchFields: CAMPOS_DE_BUSCA_ITEM,
     itemsPerPage: 10,
   });
 
@@ -482,6 +631,12 @@ export default function Conferencia() {
       return {
         'Código Auxiliar': item.codigo_auxiliar,
         'Nome Produto': item.nome_produto,
+        // Categoria em colunas separadas, e não numa string só: é assim que serve para
+        // a tabela dinâmica de quem abre a planilha.
+        Marca: item.marca ?? '',
+        Tipo: item.tipo ?? '',
+        Subtipo: item.subtipo ?? '',
+        Grupo: item.grupo ?? '',
         Quantidade: qtd,
         'Valor Unitário': item.valor_unitario,
         'Valor Total': qtd * item.valor_unitario,
@@ -764,14 +919,16 @@ export default function Conferencia() {
                   logo abaixo, com colunas Produto/Quantidade/Valor, já diz o que é.
                   "Ações do Gerente" deixou de ter uma faixa só para si e passou a conviver
                   com o export — ambas em altura padrão, alinhadas entre si e com a busca. */}
-              <CardHeader className="pb-4">
+              <CardHeader className="gap-3 pb-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <SearchFilter
-                    value={buscaItem}
-                    onChange={setBuscaItem}
-                    placeholder="Buscar produto..."
-                    className="max-w-none sm:w-64"
-                  />
+                  {/* Quantos itens a tabela está listando. Sem isso, um recorte por
+                      categoria encolheria a tabela sem nenhum número dizendo o quanto —
+                      e a paginação some quando sobra uma página só. */}
+                  <Badge variant="outline" className="w-fit text-xs font-normal tabular-nums">
+                    {paginacaoItens.totalItems < itensRevisao.length
+                      ? `${paginacaoItens.totalItems} de ${itensRevisao.length} itens`
+                      : `${itensRevisao.length} ${itensRevisao.length === 1 ? 'item' : 'itens'}`}
+                  </Badge>
                   <div className="flex gap-2 sm:justify-end">
                     {isGerente && (
                       <Button onClick={() => setShowManagerActions(true)} variant="outline">
@@ -779,6 +936,9 @@ export default function Conferencia() {
                         Ações do Gerente
                       </Button>
                     )}
+                    {/* Exporta o inventário INTEIRO, não o recorte: o arquivo se chama
+                        `inventario_<vendedor>_<data>` e um filtro de tela não pode fazer
+                        um arquivo com esse nome conter metade das peças. */}
                     <Button
                       variant="outline"
                       size="icon"
@@ -791,15 +951,65 @@ export default function Conferencia() {
                     </Button>
                   </div>
                 </div>
+
+                {/* Mesma barra de recorte do Comparativo: busca à esquerda, categorias à
+                    direita da divisória. Inventário de 400 itens não se confere rolando. */}
+                <div className="flex flex-col gap-2 rounded-xl border border-border/80 bg-muted/30 p-2 lg:flex-row lg:flex-wrap lg:items-center">
+                  <SearchFilter
+                    value={buscaItem}
+                    onChange={setBuscaItem}
+                    placeholder="Buscar produto..."
+                    className="max-w-none sm:w-64"
+                  />
+
+                  <FiltroCategorias
+                    linhas={itensRevisao}
+                    selecao={categoriasItem}
+                    onSelecao={setCategoriasItem}
+                  />
+
+                  {(buscaItem !== '' || temSelecao(categoriasItem)) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setBuscaItem('');
+                        setCategoriasItem(SELECAO_VAZIA);
+                      }}
+                      className="lg:ml-auto"
+                    >
+                      <X className="size-4" />
+                      Limpar filtros
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 <div className="border border-border/80 rounded-xl overflow-hidden shadow-2xs">
                   <Table>
                     <TableHeader>
                       <TableRow>
-                        <TableHead className="w-[45%]">Produto</TableHead>
-                        <TableHead className="text-center">Quantidade</TableHead>
-                        <TableHead className="text-center">Valor (R$)</TableHead>
+                        <CabecalhoOrdenavel
+                          rotulo="Produto"
+                          campo="codigo_auxiliar"
+                          ordenacao={ordemItens}
+                          onOrdenar={ordenarItens}
+                          className="w-[45%]"
+                        />
+                        <CabecalhoOrdenavel
+                          rotulo="Quantidade"
+                          campo="quantidade_fisica"
+                          ordenacao={ordemItens}
+                          onOrdenar={ordenarItens}
+                          alinhamento="center"
+                        />
+                        <CabecalhoOrdenavel
+                          rotulo="Valor (R$)"
+                          campo="valor_total"
+                          ordenacao={ordemItens}
+                          onOrdenar={ordenarItens}
+                          alinhamento="center"
+                        />
                         {isPendingOrRevisao && (
                           <TableHead className="text-center w-[60px]">Ações</TableHead>
                         )}
@@ -817,6 +1027,14 @@ export default function Conferencia() {
                                 {item.nome_produto !== item.codigo_auxiliar && (
                                   <span className="block text-xs text-muted-foreground truncate">
                                     {item.nome_produto}
+                                  </span>
+                                )}
+                                {/* A categoria por baixo do nome: é por ela que o recorte
+                                    acima filtra, e sem vê-la não dá para conferir se o
+                                    filtro pegou o que devia. */}
+                                {categoriaDoItem(item) && (
+                                  <span className="mt-0.5 block truncate text-2xs text-muted-foreground/80">
+                                    {categoriaDoItem(item)}
                                   </span>
                                 )}
                               </TableCell>
