@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,32 @@ interface Agregado {
    */
   unidades: number;
   valor: number;
+  /**
+   * O MOVIMENTO do período, vindo da reconciliação com o Ciclone.
+   *
+   * Fica zerado quando a reconciliação está desligada, e a tela esconde as colunas —
+   * mostrar "0 un." de remessa onde ninguém consultou o ERP afirmaria que não houve
+   * remessa, que é diferente de não ter perguntado.
+   *
+   * Os `Itens` contam PRODUTOS DISTINTOS com movimento, não linhas da categoria: numa
+   * marca de 300 produtos onde 65 receberam remessa, é o 65 que diz o tamanho do que
+   * entrou — e é a leitura que o total de unidades sozinho não dá.
+   */
+  remessaQtd: number;
+  remessaItens: number;
+  vendaQtd: number;
+  vendaItens: number;
+  /**
+   * Os dois extremos da equação da reconciliação: `anterior` é a **Qtd A** — a contagem
+   * do inventário escolhido como lado A, e NÃO o `quantidade_anterior` da recontagem,
+   * que é outra coisa e vive na tela de contagem. `esperado` é `A + remessa − venda`.
+   *
+   * Sem eles a tela mostrava o movimento e a consequência (Falta e Sobra) sem o meio da
+   * conta: dava para ver "+120 de remessa" e "12 faltando" sem nenhum jeito de saber
+   * contra QUE número as unidades contadas foram medidas.
+   */
+  anterior: number;
+  esperado: number;
   iguais: number;
   faltaQtd: number;
   faltaValor: number;
@@ -98,6 +124,12 @@ function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
         produtos: 0,
         unidades: 0,
         valor: 0,
+        remessaQtd: 0,
+        remessaItens: 0,
+        vendaQtd: 0,
+        vendaItens: 0,
+        anterior: 0,
+        esperado: 0,
         iguais: 0,
         faltaQtd: 0,
         faltaValor: 0,
@@ -113,6 +145,12 @@ function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
     a.produtos++;
     a.unidades += l.quantidade_b;
     a.valor += l.quantidade_b * l.valor_unitario;
+    a.remessaQtd += l.remessa;
+    if (l.remessa !== 0) a.remessaItens++;
+    a.vendaQtd += l.venda;
+    if (l.venda !== 0) a.vendaItens++;
+    a.anterior += l.quantidade_a;
+    a.esperado += l.esperado;
     const valor = l.diferenca * l.valor_unitario;
     if (l.diferenca < 0) {
       a.faltaQtd += l.diferenca;
@@ -199,6 +237,44 @@ function todasAsChaves(nos: No[], saida: string[] = []): string[] {
   return saida;
 }
 
+/**
+ * Um número do recorte aberto, na faixa acima do conteúdo.
+ *
+ * `flex-1` com largura mínima em vez de grade de N colunas: a faixa tem um, dois ou três
+ * cartões conforme o que foi reconciliado, e uma grade fixa deixaria um cartão solto
+ * ocupando um terço da largura quando a reconciliação está desligada.
+ */
+function CartaoResumo({
+  rotulo,
+  valor,
+  apoio,
+  nota,
+  destaque = false,
+}: {
+  rotulo: string;
+  valor: string;
+  apoio: string;
+  /** Linha extra, já colorida pelo chamador. Usada pelo desvio contra o esperado. */
+  nota?: ReactNode;
+  /** Marca o cartão como o RESULTADO da cadeia, não mais uma parcela dela. */
+  destaque?: boolean;
+}) {
+  return (
+    <div
+      className={`min-w-[9rem] flex-1 rounded-xl border bg-card px-3.5 py-2.5 shadow-xs ${
+        destaque ? 'border-primary/50' : 'border-border/80'
+      }`}
+    >
+      <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
+        {rotulo}
+      </p>
+      <p className="text-lg font-bold tabular-nums">{valor}</p>
+      <p className="truncate text-2xs tabular-nums text-muted-foreground">{apoio}</p>
+      {nota}
+    </div>
+  );
+}
+
 /** Barra de acuracidade da categoria: fração de produtos sem diferença nenhuma. */
 function BarraAcuracidade({ iguais, produtos }: { iguais: number; produtos: number }) {
   const fracao = produtos > 0 ? iguais / produtos : 0;
@@ -220,7 +296,17 @@ function BarraAcuracidade({ iguais, produtos }: { iguais: number; produtos: numb
   );
 }
 
-function CardCategoria({ a, onAbrir }: { a: Agregado; onAbrir: () => void }) {
+function CardCategoria({
+  a,
+  onAbrir,
+  comRemessa,
+  comVenda,
+}: {
+  a: Agregado;
+  onAbrir: () => void;
+  comRemessa: boolean;
+  comVenda: boolean;
+}) {
   const semCadastro = a.categoria === SEM_CATEGORIA;
   return (
     <button
@@ -239,6 +325,16 @@ function CardCategoria({ a, onAbrir }: { a: Agregado; onAbrir: () => void }) {
             {a.produtos} produto{a.produtos !== 1 ? 's' : ''} · {unid(a.unidades)} un. ·{' '}
             {moeda(a.valor)}
           </p>
+          {/* Uma linha só, e só quando houve movimento: o cartão já carrega oito
+              números, e "Remessa — · Venda —" em toda categoria parada gastaria a linha
+              para não dizer nada. O total do recorte fica na faixa acima da grade. */}
+          {(a.remessaQtd !== 0 || a.vendaQtd !== 0) && (
+            <p className="text-2xs tabular-nums text-muted-foreground">
+              {comRemessa && `Remessa +${unid(a.remessaQtd)}`}
+              {comRemessa && comVenda && ' · '}
+              {comVenda && `Venda −${unid(a.vendaQtd)}`}
+            </p>
+          )}
         </div>
         {semCadastro ? (
           <Badge variant="warning" className="shrink-0 px-2.5 py-0.5 text-2xs">
@@ -362,10 +458,18 @@ function LinhaArvore({
   no,
   aberto,
   onClicar,
+  comRemessa,
+  comVenda,
+  comEsperado,
+  temContagemA,
 }: {
   no: No;
   aberto: boolean;
   onClicar: () => void;
+  comRemessa: boolean;
+  comVenda: boolean;
+  comEsperado: boolean;
+  temContagemA: boolean;
 }) {
   const { agregado: a } = no;
   const folha = no.filhos.length === 0;
@@ -376,42 +480,73 @@ function LinhaArvore({
       <TableCell className="py-2.5">
         {/* A indentação é o que comunica a hierarquia numa tabela plana; o nível
             entra como padding calculado porque é valor dinâmico. */}
-        <div
-          className="flex items-center gap-1.5"
-          style={{ paddingLeft: `${no.nivel * 1.25}rem` }}
-        >
-          {folha ? (
-            // Folha não expande: o passo seguinte é o produto, não outra categoria.
-            <Package className="size-3.5 shrink-0 text-muted-foreground" />
-          ) : aberto ? (
-            <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
-          )}
-          <span
-            className={`truncate ${no.nivel === 0 ? 'text-sm font-semibold' : 'text-sm'}`}
-            title={a.categoria}
-          >
-            {a.categoria}
-          </span>
-          {a.categoria === SEM_CATEGORIA && (
-            <Badge variant="warning" className="shrink-0 px-2 py-0 text-2xs">
-              Sem cadastro
-            </Badge>
-          )}
+        <div style={{ paddingLeft: `${no.nivel * 1.25}rem` }}>
+          <div className="flex items-center gap-1.5">
+            {folha ? (
+              // Folha não expande: o passo seguinte é o produto, não outra categoria.
+              <Package className="size-3.5 shrink-0 text-muted-foreground" />
+            ) : aberto ? (
+              <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+            ) : (
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+            )}
+            <span
+              className={`truncate ${no.nivel === 0 ? 'text-sm font-semibold' : 'text-sm'}`}
+              title={a.categoria}
+            >
+              {a.categoria}
+            </span>
+            {a.categoria === SEM_CATEGORIA && (
+              <Badge variant="warning" className="shrink-0 px-2 py-0 text-2xs">
+                Sem cadastro
+              </Badge>
+            )}
+          </div>
+          {/* O número de produtos virou legenda do nome. Era uma coluna inteira para um
+              número que só qualifica a categoria — e a coluna custava a largura de que
+              Remessa e Venda precisavam. O recuo alinha com o texto, não com o ícone. */}
+          <p className="mt-0.5 pl-[1.375rem] text-2xs tabular-nums text-muted-foreground">
+            {a.produtos} produto{a.produtos !== 1 ? 's' : ''}
+          </p>
         </div>
       </TableCell>
 
-      <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
-        {a.produtos}
-      </TableCell>
+      {/* Movimento antes do Contado, na mesma ordem em que a conta é lida no Modo Tabela
+          (A → remessa → venda → esperado → B). Os dois empilhados numa célula só: são o
+          mesmo assunto, e o sinal já os distingue sem gastar duas colunas. Em cinza de
+          propósito — são contexto, não veredito; o vermelho e o azul ficam para Falta e
+          Sobra. */}
+      {(comRemessa || comVenda) && (
+        <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
+          {comRemessa && <div>{a.remessaQtd === 0 ? '—' : `+${unid(a.remessaQtd)}`}</div>}
+          {comVenda && <div>{a.vendaQtd === 0 ? '—' : `−${unid(a.vendaQtd)}`}</div>}
+        </TableCell>
+      )}
 
-      <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground lg:table-cell">
-        {unid(a.unidades)} un.
-      </TableCell>
+      {/* O resultado da equação, por categoria. `A + remessa − venda` na linha de apoio
+          porque "esperado" sozinho não diz de onde saiu — e é contra ESTE número, não
+          contra a contagem anterior, que Falta e Sobra são medidas quando há
+          reconciliação. */}
+      {comEsperado && (
+        <TableCell className="hidden text-right text-sm tabular-nums sm:table-cell">
+          <div className="font-medium">= {unid(a.esperado)} un.</div>
+          {/* De onde a conta partiu. Só quando existe lado A: no modo primeiro
+              inventário a Qtd A é zero em tudo, e "de 0" não informa nada — o esperado
+              ali é `remessa − venda` e a faixa acima já diz isso. */}
+          {temContagemA && (
+            <div className="whitespace-nowrap text-2xs text-muted-foreground">
+              A: {unid(a.anterior)}
+            </div>
+          )}
+        </TableCell>
+      )}
 
-      <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground xl:table-cell">
-        {moeda(a.valor)}
+      {/* Unidades e valor na mesma célula: são a MESMA grandeza em duas unidades, e
+          separá-los em duas colunas fazia o olho percorrer meia tabela para juntar
+          "quanto tem" com "quanto vale". */}
+      <TableCell className="hidden text-right text-sm tabular-nums sm:table-cell">
+        <div className="text-muted-foreground">{unid(a.unidades)} un.</div>
+        <div className="text-2xs text-muted-foreground/80">{moeda(a.valor)}</div>
       </TableCell>
 
       <TableCell className="text-right text-sm font-medium tabular-nums text-warning-strong">
@@ -430,12 +565,16 @@ function LinhaArvore({
         )}
       </TableCell>
 
-      <TableCell className="hidden text-right text-sm tabular-nums lg:table-cell">
-        {pct(acuracidade)}
-      </TableCell>
-
-      <TableCell className="text-right text-sm font-semibold tabular-nums">
-        {a.impacto === 0 ? <span className="text-muted-foreground">—</span> : moeda(a.impacto)}
+      {/* A acuracidade desceu para debaixo do impacto: ela QUALIFICA o impacto (R$ 1.240
+          com 92% de acerto é outra conversa que os mesmos R$ 1.240 com 40%), e como
+          coluna própria vivia escondida abaixo de 1024px — justo onde faz falta. */}
+      <TableCell className="text-right tabular-nums">
+        <div className="text-sm font-semibold">
+          {a.impacto === 0 ? <span className="text-muted-foreground">—</span> : moeda(a.impacto)}
+        </div>
+        <div className="whitespace-nowrap text-2xs text-muted-foreground">
+          {pct(acuracidade)} acur.
+        </div>
       </TableCell>
     </TableRow>
   );
@@ -451,6 +590,20 @@ interface Props {
   onCaminho: (c: string[]) => void;
   /** Houve reconciliação com o ERP — muda o significado de "esperado". */
   comEsperado: boolean;
+  /**
+   * Remessas e vendas foram efetivamente consultadas no Ciclone. São independentes: a
+   * tela permite reconciliar só um dos dois, e o que não foi consultado não pode
+   * aparecer como zero — "0 un. de remessa" afirmaria que nada foi remetido, quando o
+   * que houve foi ninguém ter perguntado.
+   */
+  comRemessa: boolean;
+  comVenda: boolean;
+  /**
+   * Existe um inventário no lado A. Falso no modo **primeiro inventário**, em que a RPC
+   * devolve Qtd A zerada em tudo e o esperado vira só `remessa − venda` — ali qualquer
+   * menção a "contagem A" mostraria zeros que se leem como estoque vazio.
+   */
+  temContagemA: boolean;
 }
 
 export function PainelGestor({
@@ -460,6 +613,9 @@ export function PainelGestor({
   caminho,
   onCaminho,
   comEsperado,
+  comRemessa,
+  comVenda,
+  temContagemA,
 }: Props) {
   const [expandidos, setExpandidos] = useState<Set<string>>(new Set());
 
@@ -475,18 +631,46 @@ export function PainelGestor({
 
   const nivelAtual = caminho.length < NIVEIS.length ? NIVEIS[caminho.length] : null;
 
-  /** Unidades e valor do recorte aberto — o mesmo par que os cards e a árvore mostram. */
+  /**
+   * O recorte aberto em números: o que foi contado e o que se moveu no período.
+   *
+   * A trilha já dizia "63 produtos · 264 un. · R$ X" — o CONTADO. Faltava contra o quê:
+   * 264 unidades numa marca que recebeu 300 de remessa e vendeu 40 conta uma história
+   * completamente diferente das mesmas 264 sem movimento nenhum, e o gestor não tinha
+   * como ver isso sem voltar ao Modo Tabela e somar na mão.
+   *
+   * Produtos e unidades separados em cada movimento porque respondem coisas distintas:
+   * quantos SKUs foram tocados, e qual o volume disso.
+   */
   const totalDoCaminho = useMemo(
     () =>
       doCaminho.reduce(
         (acc, l) => ({
           unidades: acc.unidades + l.quantidade_b,
           valor: acc.valor + l.quantidade_b * l.valor_unitario,
+          remessaQtd: acc.remessaQtd + l.remessa,
+          remessaItens: acc.remessaItens + (l.remessa !== 0 ? 1 : 0),
+          vendaQtd: acc.vendaQtd + l.venda,
+          vendaItens: acc.vendaItens + (l.venda !== 0 ? 1 : 0),
+          anterior: acc.anterior + l.quantidade_a,
+          esperado: acc.esperado + l.esperado,
         }),
-        { unidades: 0, valor: 0 }
+        {
+          unidades: 0,
+          valor: 0,
+          remessaQtd: 0,
+          remessaItens: 0,
+          vendaQtd: 0,
+          vendaItens: 0,
+          anterior: 0,
+          esperado: 0,
+        }
       ),
     [doCaminho]
   );
+
+  /** Sobra da conta: o que foi contado menos o que se esperava encontrar. */
+  const desvioDoCaminho = totalDoCaminho.unidades - totalDoCaminho.esperado;
 
   const agregados = useMemo(
     () => (nivelAtual ? agregar(doCaminho, nivelAtual.chave) : []),
@@ -591,10 +775,10 @@ export function PainelGestor({
         dentro do primeiro. A página já era dona do estado `submodo`; só a renderização
         estava no lugar errado.
 
-        A contagem também saiu do badge solto e virou a cauda da trilha: ela conta os
-        produtos DO RECORTE PERCORRIDO, que é diferente do total no topo do cartão — e
-        um número sem rótulo ao lado de outro número sem rótulo só produzia dúvida
-        sobre qual dos dois estava certo.
+        O tamanho do recorte também já morou aqui, como cauda de texto da trilha. Saiu
+        para a faixa de cartões logo abaixo quando remessa e venda entraram: são seis
+        números, e enfileirá-los depois das migalhas transformava a trilha num parágrafo
+        que ninguém lê. A trilha voltou a ser só navegação.
       */}
       <nav aria-label="Trilha de categorias" className="flex flex-wrap items-center gap-1">
         <Button
@@ -618,14 +802,99 @@ export function PainelGestor({
             </Button>
           </div>
         ))}
-        {/* O tamanho do recorte aberto, na mesma linha da trilha: descer de OBEN para
-            OBEN › SOLAR muda os três números, e é o que diz se o galho aberto é grande
-            ou irrelevante antes de olhar a divergência dele. */}
-        <span className="ml-1 text-xs tabular-nums text-muted-foreground">
-          · {doCaminho.length} produto{doCaminho.length !== 1 ? 's' : ''} ·{' '}
-          {unid(totalDoCaminho.unidades)} un. · {moeda(totalDoCaminho.valor)}
-        </span>
       </nav>
+
+      {/* ── Resumo do recorte ─────────────────────────────────────────────────
+          UM lugar só para o total, igual nos três submodos.
+
+          Antes o mesmo total aparecia de duas formas — cauda de texto na trilha, ou
+          faixa de cartões quando havia reconciliação — e trocar de forma conforme o
+          contexto obrigava a reencontrar o número a cada vez. Aqui ele tem sempre a
+          mesma posição e o mesmo desenho; o que muda é só quantos cartões existem.
+
+          Sobre a tabela, e não dentro dela, porque o Analítico e o Detalhado não têm
+          tabela onde ancorar um rodapé de totais. */}
+      {doCaminho.length > 0 && (
+        /* Com reconciliação, os cartões são a EQUAÇÃO lida da esquerda para a direita:
+           anterior + remessa − venda = esperado, e o contado ao lado para comparar. Era
+           o elo que faltava — a tela mostrava o movimento e a consequência (Falta e
+           Sobra) sem nunca dizer contra que número as unidades contadas foram medidas.
+           Sem reconciliação, esperado é a própria Qtd A e a cadeia inteira seria o mesmo
+           número repetido três vezes; sobra só o Contado. */
+        <div className="flex flex-wrap gap-2">
+          {/* "Contagem A", e não "Anterior": `quantidade_anterior` já significa outra
+              coisa neste app (a referência da recontagem, na tela de contagem), e a tela
+              inteira do comparativo chama os dois lados de A e B. No modo primeiro
+              inventário não há lado A — a Qtd A é zero em tudo, e um cartão com "0 un."
+              afirmaria que o estoque anterior estava vazio. */}
+          {comEsperado && temContagemA && (
+            <CartaoResumo
+              rotulo="Contagem A"
+              valor={`${unid(totalDoCaminho.anterior)} un.`}
+              apoio="ponto de partida"
+            />
+          )}
+          {comRemessa && (
+            <CartaoResumo
+              rotulo="Remessa"
+              valor={
+                totalDoCaminho.remessaQtd === 0
+                  ? '—'
+                  : `+${unid(totalDoCaminho.remessaQtd)} un.`
+              }
+              apoio={`${totalDoCaminho.remessaItens} produto${
+                totalDoCaminho.remessaItens !== 1 ? 's' : ''
+              } com remessa`}
+            />
+          )}
+          {comVenda && (
+            <CartaoResumo
+              rotulo="Venda"
+              valor={
+                totalDoCaminho.vendaQtd === 0 ? '—' : `−${unid(totalDoCaminho.vendaQtd)} un.`
+              }
+              apoio={`${totalDoCaminho.vendaItens} produto${
+                totalDoCaminho.vendaItens !== 1 ? 's' : ''
+              } vendido${totalDoCaminho.vendaItens !== 1 ? 's' : ''}`}
+            />
+          )}
+          {comEsperado && (
+            <CartaoResumo
+              rotulo="Esperado"
+              valor={`= ${unid(totalDoCaminho.esperado)} un.`}
+              apoio={temContagemA ? 'A + remessa − venda' : 'remessa − venda'}
+              destaque
+            />
+          )}
+          <CartaoResumo
+            rotulo="Contado"
+            valor={`${unid(totalDoCaminho.unidades)} un.`}
+            apoio={`${doCaminho.length} produto${doCaminho.length !== 1 ? 's' : ''} · ${moeda(
+              totalDoCaminho.valor
+            )}`}
+            /* O desvio fecha a leitura: sem ele o gestor compara 302 com 264 de cabeça.
+               Cor pela mesma convenção de Falta e Sobra, para não inventar um terceiro
+               vocabulário de cor na mesma tela. */
+            nota={
+              comEsperado ? (
+                <p
+                  className={`truncate text-2xs font-medium tabular-nums ${
+                    desvioDoCaminho < 0
+                      ? 'text-warning-strong'
+                      : desvioDoCaminho > 0
+                        ? 'text-info-strong'
+                        : 'text-muted-foreground'
+                  }`}
+                >
+                  {desvioDoCaminho === 0
+                    ? 'bate com o esperado'
+                    : `${desvioDoCaminho > 0 ? '+' : ''}${desvioDoCaminho} contra o esperado`}
+                </p>
+              ) : undefined
+            }
+          />
+        </div>
+      )}
 
       {/* ── Conteúdo ──────────────────────────────────────────────────────── */}
       {doCaminho.length === 0 ? (
@@ -667,23 +936,36 @@ export function PainelGestor({
                 <TableHeader>
                   <TableRow className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground hover:bg-muted/40">
                     <TableHead className="font-semibold">Categoria</TableHead>
+                    {/* O contexto (movimento e base) some só abaixo de 640px, e não
+                        abaixo de 1024 como antes: qualquer tablet ou notebook mostra a
+                        tabela inteira. No celular a pergunta é onde está o problema, e
+                        sobram Categoria, Falta, Sobra e Impacto. */}
+                    {(comRemessa || comVenda) && (
+                      <TableHead className="hidden text-right font-semibold sm:table-cell">
+                        {comRemessa && comVenda ? (
+                          <>
+                            Movimento
+                            <span className="block text-2xs font-normal normal-case tracking-normal">
+                              remessa / venda
+                            </span>
+                          </>
+                        ) : comRemessa ? (
+                          'Remessa'
+                        ) : (
+                          'Venda'
+                        )}
+                      </TableHead>
+                    )}
+                    {comEsperado && (
+                      <TableHead className="hidden text-right font-semibold sm:table-cell">
+                        Esperado
+                      </TableHead>
+                    )}
                     <TableHead className="hidden text-right font-semibold sm:table-cell">
-                      Produtos
-                    </TableHead>
-                    {/* O tamanho da categoria, antes das colunas de erro. Some antes
-                        delas no estreito: numa tela pequena a pergunta é onde está o
-                        problema, e a base pode esperar o desktop. */}
-                    <TableHead className="hidden text-right font-semibold lg:table-cell">
                       Contado
-                    </TableHead>
-                    <TableHead className="hidden text-right font-semibold xl:table-cell">
-                      Valor contado
                     </TableHead>
                     <TableHead className="text-right font-semibold">Falta</TableHead>
                     <TableHead className="text-right font-semibold">Sobra</TableHead>
-                    <TableHead className="hidden text-right font-semibold lg:table-cell">
-                      Acuracidade
-                    </TableHead>
                     <TableHead className="text-right font-semibold">Impacto</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -694,6 +976,10 @@ export function PainelGestor({
                       no={no}
                       aberto={expandidos.has(no.chave)}
                       onClicar={() => alternarNo(no)}
+                      comRemessa={comRemessa}
+                      comVenda={comVenda}
+                      comEsperado={comEsperado}
+                      temContagemA={temContagemA}
                     />
                   ))}
                 </TableBody>
@@ -713,7 +999,13 @@ export function PainelGestor({
           </p>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
             {agregados.map((a) => (
-              <CardCategoria key={a.categoria} a={a} onAbrir={() => abrir(a.categoria)} />
+              <CardCategoria
+                key={a.categoria}
+                a={a}
+                onAbrir={() => abrir(a.categoria)}
+                comRemessa={comRemessa}
+                comVenda={comVenda}
+              />
             ))}
           </div>
         </>

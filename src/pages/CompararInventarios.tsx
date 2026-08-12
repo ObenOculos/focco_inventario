@@ -2151,6 +2151,11 @@ export default function CompararInventarios() {
                   caminho={caminhoGestor}
                   onCaminho={setCaminhoGestor}
                   comEsperado={podeReconciliar}
+                  // A mesma condição das colunas do Modo Tabela: os dois movimentos são
+                  // ligados separadamente, e o que não foi consultado não aparece.
+                  comRemessa={podeReconciliar && considerarRemessas}
+                  comVenda={podeReconciliar && considerarVendas}
+                  temContagemA={!primeiroInventario}
                 />
               ) : (
               <div className="overflow-hidden rounded-xl border border-border/80">
