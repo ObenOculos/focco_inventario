@@ -96,6 +96,16 @@ Família única: **Plus Jakarta Sans**, carregada pelo `<link>` do `index.html`.
 **`tabular-nums` é obrigatório** em qualquer número que apareça em coluna ou seja comparado
 entre linhas — sem isso os dígitos têm larguras diferentes e a coluna "dança".
 
+**Exceção do código nas telas do vendedor.** Na contagem (`Inventario`), no histórico
+(`CardInventario`) e no balanço de envio, o `codigo_auxiliar` é
+`font-mono text-base font-bold tracking-wide text-foreground` e a **descrição** cai para
+`text-sm text-muted-foreground` — o inverso do resto do app. Não é inconsistência: ali o
+código é o que o vendedor confere contra a etiqueta que tem na mão, e a descrição só
+confirma que o produto é o certo. Com a escala padrão (código `text-xs` cinza, nome
+`text-sm` escuro) a informação secundária parecia a principal. Nas telas do gerente —
+Conferência, Comparativo, Exportar XML — o código continua sendo referência e mantém
+`font-mono text-xs`.
+
 Pesos: `font-medium` para ênfase leve, `font-semibold` para rótulo e botão, `font-bold` só
 para título de página e número de destaque. Nada de `font-black` ou `font-light`.
 

@@ -117,6 +117,15 @@ type ItemRevisao = {
   codigo_auxiliar: string;
   nome_produto: string;
   quantidade_fisica: number;
+  /**
+   * O que este item tinha antes de o vendedor recontá-lo. `null` = não foi recontado.
+   *
+   * É o que torna a SEGUNDA conferência barata: em vez de reler o inventário inteiro
+   * para descobrir o que mudou desde a reprovação, o gerente vê a mudança na própria
+   * linha. Antes desta coluna a contagem original era destruída no reenvio — o
+   * `salvar_inventario` substitui os itens — e não sobrava evidência em lugar nenhum.
+   */
+  quantidade_anterior: number | null;
   valor_unitario: number;
   marca: string | null;
   tipo: string | null;
@@ -308,6 +317,8 @@ export default function Conferencia() {
           codigo_auxiliar: it.codigo_auxiliar,
           nome_produto: it.nome_produto || it.codigo_auxiliar,
           quantidade_fisica: Number(it.quantidade_fisica) || 0,
+          quantidade_anterior:
+            it.quantidade_anterior === null ? null : Number(it.quantidade_anterior),
           valor_unitario: ficha.valor,
           marca: ficha.marca,
           tipo: ficha.tipo,
@@ -638,6 +649,7 @@ export default function Conferencia() {
         Subtipo: item.subtipo ?? '',
         Grupo: item.grupo ?? '',
         Quantidade: qtd,
+        'Contagem Anterior': item.quantidade_anterior ?? '',
         'Valor Unitário': item.valor_unitario,
         'Valor Total': qtd * item.valor_unitario,
       };
@@ -1051,6 +1063,15 @@ export default function Conferencia() {
                                 ) : (
                                   <span className="font-semibold">{qtd}</span>
                                 )}
+                                {/* Só quando houve recontagem E o número mudou: repetir
+                                    "antes 4 → 4" em cada linha esconderia, no meio do
+                                    ruído, as poucas que de fato mudaram. */}
+                                {item.quantidade_anterior !== null &&
+                                  item.quantidade_anterior !== item.quantidade_fisica && (
+                                    <span className="mt-1 block text-2xs text-muted-foreground tabular-nums">
+                                      recontado · antes {item.quantidade_anterior}
+                                    </span>
+                                  )}
                               </TableCell>
                               <TableCell className="text-center">
                                 {item.valor_unitario === 0 ? (

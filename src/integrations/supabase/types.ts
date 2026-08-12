@@ -111,6 +111,7 @@ export type Database = {
           id: string
           inventario_id: string
           nome_produto: string | null
+          quantidade_anterior: number | null
           quantidade_fisica: number
         }
         Insert: {
@@ -119,6 +120,7 @@ export type Database = {
           id?: string
           inventario_id: string
           nome_produto?: string | null
+          quantidade_anterior?: number | null
           quantidade_fisica?: number
         }
         Update: {
@@ -127,6 +129,7 @@ export type Database = {
           id?: string
           inventario_id?: string
           nome_produto?: string | null
+          quantidade_anterior?: number | null
           quantidade_fisica?: number
         }
         Relationships: [

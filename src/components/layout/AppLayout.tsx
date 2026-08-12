@@ -23,6 +23,16 @@ import {
 
 interface AppLayoutProps {
   children: ReactNode;
+  /**
+   * Esconde a barra inferior do mobile e devolve o rodapé para a tela.
+   *
+   * Existe para a contagem de inventário, que é trabalho contínuo com uma barra própria
+   * de captura fixa embaixo. Empilhar as duas gastava 12rem de tela de celular em
+   * navegação que o vendedor não usa enquanto bipa — e ainda deixava os dois conjuntos
+   * de botões disputando o alcance do polegar. A gaveta do cabeçalho continua sendo a
+   * saída, então nada fica inacessível.
+   */
+  semBarraInferior?: boolean;
 }
 
 const SIDEBAR_STORAGE_KEY = 'sidebar_colapsada';
@@ -215,7 +225,7 @@ function RodapePerfil({
  * No mobile o cabeçalho permanece — é onde vive o gatilho da gaveta — e a barra inferior
  * continua sendo o atalho para os módulos mais usados.
  */
-export function AppLayout({ children }: AppLayoutProps) {
+export function AppLayout({ children, semBarraInferior = false }: AppLayoutProps) {
   const { profile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -384,13 +394,19 @@ export function AppLayout({ children }: AppLayoutProps) {
         {/* Calha de 36px entre menu e conteúdo: 12px do `p-3` do aside + 24px daqui.
             Assimetria proposital — a separação da navegação vale mais que a da borda da
             página, e com 24px o conteúdo encostava no painel. */}
-        <main className="min-w-0 flex-1 overflow-x-hidden p-4 pb-[calc(5rem+env(safe-area-inset-bottom))] md:p-6 md:pb-6 md:pl-6">
+        <main
+          className={`min-w-0 flex-1 overflow-x-hidden p-4 md:p-6 md:pb-6 md:pl-6 ${
+            // A folga de 5rem só existe para a barra inferior não cobrir o conteúdo. Sem
+            // barra, ela viraria rolagem sobrando no fim de toda página.
+            semBarraInferior ? 'pb-[env(safe-area-inset-bottom)]' : 'pb-[calc(5rem+env(safe-area-inset-bottom))]'
+          }`}
+        >
           {children}
         </main>
       </div>
 
       {/* Barra inferior do mobile */}
-      {links.length > 0 && (
+      {links.length > 0 && !semBarraInferior && (
         <nav className="fixed bottom-0 left-0 right-0 z-40 flex items-center justify-around border-t border-border/80 bg-card/95 px-2 py-2 pb-[calc(0.5rem+env(safe-area-inset-bottom))] shadow-lg backdrop-blur-md md:hidden">
           {links.slice(0, isGerente ? 4 : 2).map((link) => {
             const ativo = location.pathname === link.to;

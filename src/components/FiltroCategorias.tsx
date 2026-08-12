@@ -35,9 +35,17 @@ interface Props {
   linhas: readonly ComCategorias[];
   selecao: SelecaoCategorias;
   onSelecao: (s: SelecaoCategorias) => void;
+  /**
+   * Traço que separa este bloco do que vem antes dele na mesma barra.
+   *
+   * Só faz sentido onde existe algo à esquerda para separar — a barra do Comparativo,
+   * que mistura filtro de produto com filtro de resultado. Na contagem os seletores
+   * abrem a linha, e o traço apareceria como um risco solto na margem.
+   */
+  comSeparador?: boolean;
 }
 
-export function FiltroCategorias({ linhas, selecao, onSelecao }: Props) {
+export function FiltroCategorias({ linhas, selecao, onSelecao, comSeparador = true }: Props) {
   const niveis = NIVEIS.map((nivel) => ({
     ...nivel,
     opcoes: opcoesDoNivel(linhas, selecao, nivel.chave),
@@ -66,7 +74,7 @@ export function FiltroCategorias({ linhas, selecao, onSelecao }: Props) {
       {/* Separa, dentro da barra de recorte, o filtro POR PRODUTO do filtro PELO
           RESULTADO da contagem. Só no desktop: empilhado, a quebra de linha já separa.
           Mora aqui para nascer e morrer junto dos seletores. */}
-      <div className="hidden h-8 w-px shrink-0 bg-border lg:block" />
+      {comSeparador && <div className="hidden h-8 w-px shrink-0 bg-border lg:block" />}
 
       {visiveis.map(({ chave, rotulo, opcoes }) => {
         const valor = selecao[chave];
