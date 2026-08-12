@@ -30,9 +30,9 @@ import {
 /** Sentinela de "sem recorte neste nível". Ver o comentário acima. */
 const TODOS = 'todos';
 
-interface Props {
+interface Props<T extends ComCategorias> {
   /** Linhas ANTES do recorte por categoria — são elas que definem o que existe para oferecer. */
-  linhas: readonly ComCategorias[];
+  linhas: readonly T[];
   selecao: SelecaoCategorias;
   onSelecao: (s: SelecaoCategorias) => void;
   /**
@@ -43,12 +43,24 @@ interface Props {
    * abrem a linha, e o traço apareceria como um risco solto na margem.
    */
   comSeparador?: boolean;
+  /**
+   * Quantidade de cada linha. Passada, cada opção mostra também as unidades daquela
+   * categoria — na contagem, "63 produtos" e "129 unidades" respondem a perguntas
+   * diferentes, e só o segundo diz o tamanho do trabalho de recontar o recorte.
+   */
+  quantidadeDa?: (linha: T) => number;
 }
 
-export function FiltroCategorias({ linhas, selecao, onSelecao, comSeparador = true }: Props) {
+export function FiltroCategorias<T extends ComCategorias>({
+  linhas,
+  selecao,
+  onSelecao,
+  comSeparador = true,
+  quantidadeDa,
+}: Props<T>) {
   const niveis = NIVEIS.map((nivel) => ({
     ...nivel,
-    opcoes: opcoesDoNivel(linhas, selecao, nivel.chave),
+    opcoes: opcoesDoNivel(linhas, selecao, nivel.chave, quantidadeDa),
   }));
 
   /**
@@ -100,7 +112,13 @@ export function FiltroCategorias({ linhas, selecao, onSelecao, comSeparador = tr
               <SelectSeparator />
               {opcoes.map((o) => (
                 <SelectItem key={o.valor} value={o.valor}>
-                  {o.valor} ({o.total})
+                  <span className="tabular-nums">
+                    {o.valor} (
+                    {o.unidades === undefined
+                      ? o.total
+                      : `${o.total} pçs | ${o.unidades} und`}
+                    )
+                  </span>
                 </SelectItem>
               ))}
             </SelectContent>

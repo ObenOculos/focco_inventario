@@ -10,6 +10,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Pagination } from '@/components/Pagination';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -184,6 +186,17 @@ export default function Inventario() {
   const [showConfirmarRecorte, setShowConfirmarRecorte] = useState(false);
   const [showDescartar, setShowDescartar] = useState(false);
   const [mostrarFiltros, setMostrarFiltros] = useState(false);
+  /**
+   * Paginação DESLIGADA por padrão, e ligada só dentro do painel de filtros.
+   *
+   * A lista inteira é o que serve a quem está bipando: o item bipado sobe para o topo, e
+   * numa página 3 o vendedor bipa e não vê nada acontecer na tela. Mas o outro uso desta
+   * tela é caçar um produto numa contagem de centenas para acertar o número na mão, e aí
+   * rolar a lista toda é o problema. Opt-in resolve os dois sem escolher por ninguém.
+   */
+  const [paginar, setPaginar] = useState(false);
+  const [pagina, setPagina] = useState(1);
+  const [porPagina, setPorPagina] = useState(20);
   const [produtoNaoCadastrado, setProdutoNaoCadastrado] = useState<string | null>(null);
   /**
    * A rede de segurança contra o `1 + 2 = 3`: bipar, em recontagem, um produto que ainda
@@ -414,6 +427,9 @@ export default function Inventario() {
     });
     setUltimoCodigo(codigo);
     setPodeDesfazerBipe(true);
+    // O bipe joga o item para o topo da lista. Com a paginação ligada e o vendedor na
+    // página 3, ele veria a lista inteira embaralhar sem que nada mudasse à vista.
+    setPagina(1);
   };
 
   /** Zera o item e o marca como recontado, já contando o bipe que provocou a decisão. */
@@ -429,6 +445,7 @@ export default function Inventario() {
     setSessao((s) => ({ ...s, recontados: [...new Set([...s.recontados, codigo])] }));
     setUltimoCodigo(codigo);
     setPodeDesfazerBipe(true);
+    setPagina(1);
   };
 
   const processarCodigo = async (bruto: string) => {
@@ -562,11 +579,23 @@ export default function Inventario() {
     });
   };
 
-  /** Sai da tela jogando fora o rascunho — o "sair sem salvar" do aviso de saída. */
+  /**
+   * Sai da tela jogando fora o rascunho — o "sair sem salvar" do aviso de saída.
+   *
+   * O `proceed` só existe com o bloqueio de pé, e chamá-lo fora disso estoura um
+   * invariant do router (`unblocked -> proceeding`). Acontece com dois toques rápidos no
+   * botão: o diálogo é controlado por `blocker.state`, então ele continua na tela até o
+   * render seguinte e aceita o segundo toque.
+   *
+   * O estrago não é o erro no console — é que `descartandoRef` fica preso em `true` com
+   * a navegação abortada, e a partir dali o rascunho PARA DE SER GRAVADO pelo resto da
+   * sessão. O vendedor segue contando com a rede de segurança caída e nada na tela diz.
+   */
   const sairSemSalvar = () => {
+    if (blocker.state !== 'blocked') return;
     descartandoRef.current = true;
     limparRascunho();
-    blocker.proceed?.();
+    blocker.proceed();
   };
 
   const limparTudo = () => {
@@ -787,6 +816,30 @@ export default function Inventario() {
   const alvosDoRecorte = useMemo(() => itensDoRecorte(items, escopo), [items, escopo]);
   const filtrando = temSelecao(escopo) || busca.trim() !== '';
 
+  /** Peças do que está VISÍVEL. É o total do recorte quando há filtro; do tudo, quando não há. */
+  const pecasFiltradas = useMemo(
+    () => itensFiltrados.reduce((s, i) => s + i.quantidade_fisica, 0),
+    [itensFiltrados]
+  );
+
+  /**
+   * A página é derivada e limitada aqui, em vez de corrigida por efeito.
+   *
+   * Apagar itens encolhe a lista, e uma página guardada além do fim renderizaria a tela
+   * vazia por um render inteiro — com o "Nenhum produto neste recorte" aparecendo para
+   * um recorte que tem produtos.
+   */
+  const totalPaginas = Math.max(1, Math.ceil(itensFiltrados.length / porPagina));
+  const paginaAtual = Math.min(pagina, totalPaginas);
+  const inicio = (paginaAtual - 1) * porPagina;
+  const itensVisiveis = paginar ? itensFiltrados.slice(inicio, inicio + porPagina) : itensFiltrados;
+
+  // Mudar o recorte muda a lista inteira; continuar na página 4 mostraria o meio de um
+  // conjunto que o vendedor acabou de trocar.
+  useEffect(() => {
+    setPagina(1);
+  }, [busca, escopo, porPagina, paginar]);
+
   /** Há trabalho na tela que ainda não foi para o banco. */
   const temAlteracoes = useMemo(
     () =>
@@ -974,9 +1027,22 @@ export default function Inventario() {
                   os botões e, em número grande, quebrava a linha de qualquer jeito. */}
               <div className="min-w-0">
                 <CardTitle>Contagem</CardTitle>
+                {/* Com filtro, o contador é do RECORTE — senão ele contradiz a lista logo
+                    abaixo dele, e "776 peças" sobre uma tela que mostra 12 produtos faz o
+                    vendedor duvidar de qual dos dois está errado. O total geral continua
+                    ao lado, como "de X", para o recorte não parecer a contagem inteira. */}
                 <p className="mt-1 text-xs font-medium text-muted-foreground tabular-nums">
-                  {items.length} {items.length === 1 ? 'produto' : 'produtos'} · {totalPecas}{' '}
-                  {totalPecas === 1 ? 'peça' : 'peças'}
+                  {filtrando ? (
+                    <>
+                      {itensFiltrados.length} de {items.length} produtos · {pecasFiltradas} de{' '}
+                      {totalPecas} peças
+                    </>
+                  ) : (
+                    <>
+                      {items.length} {items.length === 1 ? 'produto' : 'produtos'} · {totalPecas}{' '}
+                      {totalPecas === 1 ? 'peça' : 'peças'}
+                    </>
+                  )}
                 </p>
               </div>
 
@@ -992,6 +1058,9 @@ export default function Inventario() {
                     if (mostrarFiltros) {
                       setBusca('');
                       setEscopo(SELECAO_VAZIA);
+                      // A paginação também mora aqui dentro: deixá-la ligada com o painel
+                      // fechado esconderia produtos sem nada na tela explicando por quê.
+                      setPaginar(false);
                     }
                     setMostrarFiltros(!mostrarFiltros);
                   }}
@@ -1075,7 +1144,16 @@ export default function Inventario() {
                     selecao={escopo}
                     onSelecao={setEscopo}
                     comSeparador={false}
+                    quantidadeDa={(i) => i.quantidade_fisica}
                   />
+
+                  <label className="flex w-fit cursor-pointer items-center gap-2.5 rounded-lg px-1.5 py-1 text-sm font-medium text-muted-foreground hover:bg-muted/50">
+                    <Checkbox
+                      checked={paginar}
+                      onCheckedChange={(v) => setPaginar(v === true)}
+                    />
+                    Dividir a lista em páginas
+                  </label>
                 </>
               )}
 
@@ -1115,22 +1193,38 @@ export default function Inventario() {
                 )}
               </div>
             ) : (
-              /* Sem paginação: o item bipado vai para o topo, e com páginas de 10 quem
-                 estivesse na página 2 bipava e não via nada acontecer na tela. */
-              <ul className="overflow-hidden rounded-xl border border-border/80">
-                {itensFiltrados.map((item) => (
-                  <LinhaContagem
-                    key={item.codigo_auxiliar}
-                    item={item}
-                    emRevisao={emRevisao}
-                    recontado={jaRecontado(sessao, item.codigo_auxiliar)}
-                    destacado={item.codigo_auxiliar === ultimoCodigo}
-                    onQuantidade={(q) => definirQuantidade(item.codigo_auxiliar, q)}
-                    onRemover={() => removerItem(item.codigo_auxiliar)}
-                    onDesfazerRecontagem={() => desfazerRecontagem(item.codigo_auxiliar)}
+              /* Lista inteira por padrão: o item bipado vai para o topo, e com páginas de
+                 10 quem estivesse na página 2 bipava e não via nada acontecer na tela.
+                 Paginar é escolha explícita do painel de filtros — ver `paginar`. */
+              <div className="space-y-4">
+                <ul className="overflow-hidden rounded-xl border border-border/80">
+                  {itensVisiveis.map((item) => (
+                    <LinhaContagem
+                      key={item.codigo_auxiliar}
+                      item={item}
+                      emRevisao={emRevisao}
+                      recontado={jaRecontado(sessao, item.codigo_auxiliar)}
+                      destacado={item.codigo_auxiliar === ultimoCodigo}
+                      onQuantidade={(q) => definirQuantidade(item.codigo_auxiliar, q)}
+                      onRemover={() => removerItem(item.codigo_auxiliar)}
+                      onDesfazerRecontagem={() => desfazerRecontagem(item.codigo_auxiliar)}
+                    />
+                  ))}
+                </ul>
+
+                {paginar && totalPaginas > 1 && (
+                  <Pagination
+                    currentPage={paginaAtual}
+                    totalPages={totalPaginas}
+                    itemsPerPage={porPagina}
+                    totalItems={itensFiltrados.length}
+                    startIndex={inicio}
+                    endIndex={inicio + porPagina}
+                    onPageChange={setPagina}
+                    onItemsPerPageChange={(v) => setPorPagina(Number(v))}
                   />
-                ))}
-              </ul>
+                )}
+              </div>
             )}
           </CardContent>
         </Card>
@@ -1279,7 +1373,13 @@ export default function Inventario() {
               quero mesmo isto?" aparece. "Guardar" é a primeira e a que o dedo acha
               primeiro; "sair sem salvar" é destrutiva e está rotulada como tal. */}
           <AlertDialogFooter className="flex-col gap-2 sm:gap-0">
-            <AlertDialogAction onClick={() => blocker.proceed?.()}>
+            {/* Mesma guarda do `sairSemSalvar`: o diálogo só some no render seguinte, e
+                o segundo toque cairia num bloqueador já liberado. */}
+            <AlertDialogAction
+              onClick={() => {
+                if (blocker.state === 'blocked') blocker.proceed();
+              }}
+            >
               Guardar e sair
             </AlertDialogAction>
             <AlertDialogAction
@@ -1288,7 +1388,11 @@ export default function Inventario() {
             >
               Sair sem salvar
             </AlertDialogAction>
-            <AlertDialogCancel onClick={() => blocker.reset?.()}>
+            <AlertDialogCancel
+              onClick={() => {
+                if (blocker.state === 'blocked') blocker.reset();
+              }}
+            >
               Continuar contando
             </AlertDialogCancel>
           </AlertDialogFooter>

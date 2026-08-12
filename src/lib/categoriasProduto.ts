@@ -74,7 +74,16 @@ export function casaComSelecao(l: ComCategorias, s: SelecaoCategorias): boolean 
 
 export interface OpcaoCategoria {
   valor: string;
+  /** Quantas LINHAS (produtos distintos) caem nesta categoria. */
   total: number;
+  /**
+   * Soma das quantidades das linhas — as unidades contadas de verdade.
+   *
+   * `undefined` onde a tela não tem uma quantidade por linha para somar: o comparativo
+   * e a conferência recortam divergência, não contagem, e ali um segundo número no
+   * seletor seria inventado.
+   */
+  unidades?: number;
 }
 
 /**
@@ -85,23 +94,33 @@ export interface OpcaoCategoria {
  * Marca ficaria com uma opção só depois da primeira escolha, e sair de OBEN exigiria
  * limpar o filtro antes. Honrar os outros é o que impede oferecer um recorte vazio —
  * com Marca OBEN, o seletor de Tipo só mostra os tipos que existem DENTRO de OBEN.
+ *
+ * `quantidadeDa` é opcional porque as três telas que usam isto não concordam sobre o
+ * que é "quantidade": na contagem é o que foi bipado, no comparativo não existe uma só.
+ * Quem sabe responder passa a função; quem não sabe fica só com o número de produtos.
  */
-export function opcoesDoNivel(
-  linhas: readonly ComCategorias[],
+export function opcoesDoNivel<T extends ComCategorias>(
+  linhas: readonly T[],
   selecao: SelecaoCategorias,
-  nivel: NivelCategoria
+  nivel: NivelCategoria,
+  quantidadeDa?: (linha: T) => number
 ): OpcaoCategoria[] {
   const semOProprio: SelecaoCategorias = { ...selecao, [nivel]: null };
-  const contagem = new Map<string, number>();
+  const contagem = new Map<string, { total: number; unidades: number }>();
 
   for (const l of linhas) {
     if (!casaComSelecao(l, semOProprio)) continue;
     const valor = categoriaDa(l, nivel);
-    contagem.set(valor, (contagem.get(valor) ?? 0) + 1);
+    const acumulado = contagem.get(valor) ?? { total: 0, unidades: 0 };
+    acumulado.total += 1;
+    acumulado.unidades += quantidadeDa ? quantidadeDa(l) : 0;
+    contagem.set(valor, acumulado);
   }
 
   return [...contagem.entries()]
-    .map(([valor, total]) => ({ valor, total }))
+    .map(([valor, { total, unidades }]) =>
+      quantidadeDa ? { valor, total, unidades } : { valor, total }
+    )
     // "Sem categoria" por último: é o balde do que falta cadastrar, não uma categoria
     // do negócio, e no meio da lista alfabética compete com as reais.
     .sort((a, b) => {
