@@ -58,11 +58,17 @@ Abra o PowerShell e cole:
 # 1. O gateway está de pé?
 Invoke-RestMethod http://127.0.0.1:8000/saude
 
-# 2. O endereço público responde?
+# 2. O túnel está de pé? (atenção: NÃO testa a entrada pública — veja abaixo)
 Invoke-RestMethod https://desktop-297nu0m.tailecd207.ts.net/saude
 ```
 
 As duas devem responder `ok : True`.
+
+⚠️ **As duas passarem não significa que o app funciona.** Rodados daqui, os dois
+testes ficam dentro do tailnet e dão verde mesmo com a entrada pública da
+Tailscale fora — que é justamente o caminho por onde o app chega. Para testar o
+que o app enxerga, use o celular **com o Wi-Fi desligado** (passo 3 do
+diagnóstico).
 
 Para testar o Ciclone também (precisa do segredo, que está no `.env`):
 
@@ -112,15 +118,30 @@ Test-NetConnection -ComputerName 26.238.137.203 -Port 5432 -InformationLevel Qui
 e confira se está conectado. Se o servidor do Ciclone estiver fora do ar, não há o
 que fazer deste lado — o problema é lá.
 
-### 3. O endereço público responde?
+### 3. O endereço público responde — **de fora**?
 
-```powershell
-Invoke-RestMethod https://desktop-297nu0m.tailecd207.ts.net/saude
+⚠️ **É aqui que o diagnóstico engana, então leia antes de testar.** Rodar o teste
+nesta máquina **não prova nada** sobre o app: de dentro do tailnet o endereço
+resolve direto para a própria máquina e responde normalmente mesmo quando a
+entrada pública da Tailscale está fora. Foi exatamente isso em 12/08/2026 — todos
+os testes daqui passando, `/saude/erp` em 200, e o app fora do ar por 22 minutos.
+
+**O teste que vale:** pegue o celular, **desligue o Wi-Fi** (para sair do tailnet)
+e abra no navegador:
+
 ```
+https://desktop-297nu0m.tailecd207.ts.net/saude
+```
+
+Tem que aparecer `{"ok":true,"servico":"erp-gateway"}`. Essa rota é aberta e não
+devolve nada sensível — pode abrir no celular sem problema.
+
+**Apareceu?** O caminho público está inteiro e o problema não é desta máquina —
+vá ao passo 4.
 
 **Deu erro 502?** O túnel está de pé mas o gateway não — volte ao passo 1.
 
-**Não respondeu nada?** O Tailscale caiu:
+**Não carregou nada?** A entrada pública caiu. Confira o que esta máquina enxerga:
 
 ```powershell
 & "C:\Program Files\Tailscale\tailscale.exe" status
@@ -128,11 +149,17 @@ Invoke-RestMethod https://desktop-297nu0m.tailecd207.ts.net/saude
 ```
 
 O `status` deve mostrar a máquina; o `funnel status` deve dizer `Funnel on`. Se o
-Funnel sumiu:
+Funnel sumiu, religue:
 
 ```powershell
 & "C:\Program Files\Tailscale\tailscale.exe" funnel --bg 8000
 ```
+
+Se o `funnel status` **já dizia `Funnel on`**, não há o que consertar deste lado:
+a máquina está publicando e quem não está entregando é a Tailscale. Espere uns
+minutos e teste de novo pelo celular. Religar o Funnel nesse caso é tentativa, não
+procedimento — em 12/08/2026 não mudou nenhum registro observável e a volta veio
+sem dar para saber se foi o comando ou a própria recuperação.
 
 ### 4. Nada disso resolveu
 
@@ -145,6 +172,7 @@ Reinicie o computador. É o caminho mais rápido — as três peças sobem sozin
 | o que aparece no app | causa provável | onde olhar |
 |---|---|---|
 | "ERP indisponível" | computador desligado, VPN caída ou gateway parado | passos 1 e 2 |
+| "ERP indisponível" **com tudo aqui passando** | a entrada pública da Tailscale não está entregando | passo 3, e teste **pelo celular** |
 | Spinner e depois "tentando novamente (2 de 3)" | instabilidade passageira | espere; ele se resolve sozinho |
 | Erro 502 | gateway parado, túnel de pé | passo 1 |
 | "Apenas gerentes consultam o ERP" | usuário logado é vendedor | não é falha |

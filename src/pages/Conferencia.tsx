@@ -184,7 +184,12 @@ export default function Conferencia() {
   // Filtros da lista
   const [buscaVendedor, setBuscaVendedor] = useState('');
   const [selectedVendedor, setSelectedVendedor] = useState<string>('todos');
-  const [statusFilter, setStatusFilter] = useState<string>('todos');
+  /**
+   * Abre em Pendentes / Revisão: a tela existe para conferir o que ainda falta aprovar.
+   * Em "Todos os status" o histórico de aprovados vai crescendo e empurra os pendentes
+   * para as últimas páginas — o gerente entrava e tinha de filtrar antes de trabalhar.
+   */
+  const [statusFilter, setStatusFilter] = useState<string>('pendentes');
 
   // Revisão dos itens
   const [buscaItem, setBuscaItem] = useState('');
