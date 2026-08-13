@@ -19,23 +19,49 @@ export interface PedidoErp {
   serie_nota: string | null;
   /** ISO-8601. Data do movimento da nota (ou da emissão, conforme `base_data`). */
   nota_movimento: string | null;
+  /** ISO-8601. Emissão do PEDIDO — pode cair em mês diferente da nota. */
+  pedido_emissao: string | null;
   cliente_nome: string | null;
   cliente_estado: string | null;
   vendedor_nome: string | null;
+  resp_cliente_nome: string | null;
+  produto_cod: number | null;
   codigo_auxiliar: string | null;
   produto_desc: string | null;
+  marca: string | null;
+  cor_cod: string | number | null;
+  tamanho_cod: string | number | null;
   quantidade: number;
+  preco_atacado: number;
   valor_liquido: number;
   cfop: string | number | null;
+  cfop_desc: string | null;
+  operacao_cod: number | null;
   operacao_desc: string | null;
+  tipo_pedido_cod: number | null;
+  tipo_pedido_desc: string | null;
+  /** Nome de quem digitou o pedido no ERP. Vazio quando a nota não veio de pedido. */
+  criou_pedido: string | null;
   /** 'VENDA' | 'REMESSA' | outros — derivado do CFOP em `regras.py`. */
   classif_operacao: string | null;
   classif_pedido: string | null;
   situacao_nota: string | null;
+  /**
+   * Código de uma letra da situação da nota — `'C'` é cancelada.
+   *
+   * É por ele que se filtra, nunca pelo `situacao_nota`: aquele é o rótulo legível
+   * ("Cancelada") e existe para ser lido, não comparado. A própria `regras.py` usa o
+   * código ao decidir que nota cancelada não gera divergência.
+   */
+  nota_situacao_cod: string | null;
   situacao_produto: string | null;
+  /** `'A'`/`'I'` do CADASTRO do produto; vazio quando o produto não tem par no cadastro. */
+  produto_situacao_cod: string | null;
   /** Texto do sinal de auditoria (S1/S2) quando há; vazio quando não há. */
   divergencia: string | null;
   papel_vendedor: string | null;
+  /** Texto livre digitado por gente — por isso tem escopo de busca separado. */
+  obs_pedido: string | null;
 }
 
 export interface ParametrosPedidos {

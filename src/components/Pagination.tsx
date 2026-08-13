@@ -18,6 +18,15 @@ interface PaginationProps {
   endIndex: number;
   onPageChange: (page: number) => void;
   onItemsPerPageChange: (value: string) => void;
+  /**
+   * Como se chama o que está sendo paginado. Padrão "itens".
+   *
+   * Existe porque a Consulta ao ERP pagina LINHAS num modo e PEDIDOS no outro — dizer
+   * "20 de 340 itens" quando são pedidos faz o número parecer o outro. Mora no
+   * componente por ser a paginação de todas as telas: escrever a palavra à mão numa
+   * delas criaria duas barras diferentes.
+   */
+  unidade?: string;
 }
 
 /** Opções oferecidas por padrão. O valor em uso entra na lista mesmo fora daqui. */
@@ -32,6 +41,7 @@ export function Pagination({
   endIndex,
   onPageChange,
   onItemsPerPageChange,
+  unidade = 'itens',
 }: PaginationProps) {
   const displayedEnd = Math.min(endIndex, totalItems);
 
@@ -99,7 +109,7 @@ export function Pagination({
       </div>
 
       <div className="text-xs font-medium tabular-nums text-muted-foreground">
-        Mostrando {startIndex + 1} até {displayedEnd} de {totalItems} itens
+        Mostrando {startIndex + 1} até {displayedEnd} de {totalItems} {unidade}
       </div>
 
       {/* Desktop: Botões de página */}
