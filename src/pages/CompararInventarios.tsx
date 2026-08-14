@@ -312,8 +312,7 @@ export default function CompararInventarios() {
   const [vendaAte, setVendaAte] = useState('');
   const [empresa, setEmpresa] = useState<EscolhaEmpresa>('ambas');
   // 'emissao' é o padrão da tela. O `comparativo.py` usa 'movimento', então ao
-  // conferir um relatório contra o outro é preciso igualar os dois lados — junto
-  // do tipo de venda 13, que a tela também desmarca (ver RegrasConciliacaoDialog).
+  // conferir um relatório contra o outro é preciso igualar os dois lados (ver RegrasConciliacaoDialog).
   const [baseData, setBaseData] = useState<'movimento' | 'emissao'>('emissao');
 
   // `null` = não mexeu no modal, e vale o padrão da tela (`selecaoPadrao`). Só
