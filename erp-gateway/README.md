@@ -100,6 +100,8 @@ URL em `ERP_GATEWAY_URL`. Renomear quebra a integração em silêncio.
 | `GET /vendedores` | sim | `[codigo, nome, situacao]` |
 | `GET /pedidos` | sim | linhas de pedido/nota classificadas (45 colunas) |
 | `GET /movimentos` | sim | vendas e remessas agregadas por código auxiliar |
+| `GET /saidas` | sim | saídas **somadas** por categoria ou por produto (Panorama) |
+| `GET /entradas` | sim | entradas **somadas** — compras e retornos (Panorama) |
 
 Auth = header `X-Gateway-Secret`. Não identifica a *pessoa* — quem faz isso é a
 Edge Function, contra `profiles.role`. Aqui só se responde "quem chama é o nosso
@@ -126,6 +128,67 @@ acessórios também (`movimentos.py`).
 Devolve **o fato do ERP e para por aí**. A conta
 `q2_esperado = q1 + remessa − venda` fica no app, junto dos inventários — uma
 cópia só da fórmula.
+
+### `GET /saidas`
+
+`de`, `ate` · `nivel` = `categoria` (padrão) | `produto` · `empresas` ·
+`base_data` · `incluir_canceladas` (padrão `false`) · recortes repetíveis:
+`marcas`, `tipos`, `subtipos`, `grupos` (texto), `tipos_pedido`, `operacoes`
+(inteiros), `cfops` (texto).
+
+**O oposto do `/pedidos`, de propósito.** Lá cada linha de nota atravessa a VPN e
+o browser agrega; aqui o `GROUP BY` é do Postgres e volta uma fração disso — é o
+que faz uma janela de um ano caber sob o teto de linhas.
+
+- `nivel=categoria`: uma linha por **mês × empresa × marca/tipo/subtipo/grupo ×
+  tipo de pedido × operação × CFOP**. É a resposta de entrada do Panorama: a tela
+  pede uma vez e faz drill-down, filtro e série temporal localmente.
+- `nivel=produto`: a **folha**, pedida quando o gestor abre uma categoria. Uma
+  linha por código auxiliar × empresa × tipo de saída, sem o mês.
+
+Medidas: `quantidade`, `valor` e `linhas` (quantas linhas de nota entraram na
+soma — é o que denuncia um agregado inflado). Classificações (`classif_operacao`,
+`classif_pedido`) vêm de `regras.py`, aplicadas ao agregado; ver o cabeçalho de
+`panorama.py` para por que isso é equivalente a aplicá-las linha a linha.
+
+⚠️ Ao contrário do `/pedidos`, aqui **canceladas saem por padrão** — o total do
+Panorama é o número que o gestor confere contra o ERP.
+
+Recorte por categoria usa **string vazia** para "sem categoria": as colunas de
+categoria voltam normalizadas (`TRIM`, vazio no lugar de `NULL`) justamente porque
+`= ANY(array)` nunca casa com `NULL`.
+
+### `GET /entradas`
+
+Mesmos parâmetros do `/saidas`, trocando `tipos_pedido` por `fornecedores` e com um
+a mais: `incluir_sem_movimento` (padrão `false`). Lê `eq_notafiscalentrada` —
+tabela que **nenhuma outra rota alcança**, porque `/pedidos` e `/saidas` só leem
+nota de saída.
+
+Dimensões próprias: `fornecedor_cod`, `fornecedor`, `uf` e `classif_entrada`
+(`COMPRA`, `RETORNO DE REMESSA`, `DEVOLUCAO DE VENDA`, `DEMONSTRACAO`…).
+
+Duas armadilhas do Ciclone que esta rota resolve — e que qualquer consulta nova
+sobre entrada precisa resolver de novo:
+
+⚠️ **A nota de entrada é versionada por cancelamento.** As versões antigas ficam na
+mesma tabela. Sem `eqnfe_sequenciacancelamento = MAX(...)` a mesma nota conta várias
+vezes. A cláusula é a do relatório 6001 do próprio ERP.
+
+⚠️ **Toda compra entra DUAS vezes**, com o mesmo número de nota e séries diferentes:
+uma com código genérico (`ARM DE OCULOS ACET`, `ESTOJO PW`), valor baixo e
+`eqnfp_movimentaestoque = 'N'`; outra com o SKU real, valor cheio e `'S'` — esta é a
+que entra no estoque. Somar as duas **dobra as unidades**. Por isso as linhas `'N'`
+saem por padrão. O teste é *contra* `'N'`, e não *a favor* de `'S'`, porque o campo
+não é um sim/não: retorno de remessa usa `'E'` e `'A'`, demonstração usa `'D'`.
+
+⚠️ **`fornecedor` nem sempre é fornecedor.** Em `RETORNO DE REMESSA` o remetente é o
+próprio representante devolvendo o que sobrou da mala — em 2026, cinco dos treze
+remetentes eram vendedores. Quem separa é `classif_entrada`, nunca o nome.
+
+`classif_entrada` **não** vem de `regras.classificar_operacao`: aquele mapa é de CFOP
+de saída e chamaria a compra (2102) de "VENDA". Ver `CFOP_NATUREZA_ENTRADA` em
+`panorama.py`.
 
 ## Proteções
 

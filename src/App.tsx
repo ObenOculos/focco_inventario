@@ -16,6 +16,7 @@ const Produtos = lazy(() => import('./pages/Produtos'));
 const Conferencia = lazy(() => import('./pages/Conferencia'));
 const CompararInventarios = lazy(() => import('./pages/CompararInventarios'));
 const ConsultaErp = lazy(() => import('./pages/ConsultaErp'));
+const Panorama = lazy(() => import('./pages/Panorama'));
 const ExportarXml = lazy(() => import('./pages/ExportarXml'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 
@@ -128,6 +129,17 @@ const router = createBrowserRouter(
           element: (
             <ProtectedRoute allowedRoles={['gerente']}>
               <ExportarXml />
+            </ProtectedRoute>
+          ),
+        },
+        {
+          // Mesma restrição da Consulta ao ERP, e pelo mesmo motivo: os agregados
+          // somam vendas e valores de todos os vendedores. A Edge Function repete a
+          // checagem no servidor.
+          path: '/panorama',
+          element: (
+            <ProtectedRoute allowedRoles={['gerente']}>
+              <Panorama />
             </ProtectedRoute>
           ),
         },

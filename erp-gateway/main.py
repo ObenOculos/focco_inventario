@@ -84,6 +84,10 @@ import db  # noqa: E402
 import movimentos  # noqa: E402
 import regras  # noqa: E402
 
+# Importado DEPOIS dos módulos do Ciclone: `panorama` importa `db` e `regras`, que
+# só existem no import path depois de `_carregar_modulos_ciclone()`.
+import panorama  # noqa: E402
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s %(levelname)s %(message)s",
@@ -552,6 +556,155 @@ def movimentos_(
     return {"total": len(df), "vendedor": vendedor,
             "de": de.isoformat(), "ate": ate.isoformat(),
             "dados": _para_json(df)}
+
+
+@app.get("/saidas", dependencies=PROTEGIDO)
+def saidas(
+    de: date = Query(..., description="Data inicial (AAAA-MM-DD)"),
+    ate: date = Query(..., description="Data final (AAAA-MM-DD)"),
+    nivel: str = Query("categoria", pattern="^(categoria|produto)$"),
+    empresas: list[int] | None = Query(None, description="Padrão: EMPRESAS_PADRAO"),
+    base_data: str = Query("movimento", pattern="^(movimento|emissao)$"),
+    incluir_canceladas: bool = Query(False, description="Canceladas ficam fora por padrão."),
+    marcas: list[str] | None = Query(None, description="Recorte; '' = sem categoria."),
+    tipos: list[str] | None = Query(None),
+    subtipos: list[str] | None = Query(None),
+    grupos: list[str] | None = Query(None),
+    tipos_pedido: list[int] | None = Query(None),
+    operacoes: list[int] | None = Query(None),
+    cfops: list[str] | None = Query(None),
+):
+    """Saídas agregadas — a lente gerencial, oposta à auditoria do `/pedidos`.
+
+    `/pedidos` devolve LINHA; esta rota devolve SOMA. É a diferença que faz a
+    consulta de um ano caber: a mesma janela que estoura o teto de linhas em
+    `/pedidos` sai daqui com algumas centenas de grupos, porque quem agrega é o
+    Postgres.
+
+    `nivel=categoria` é a resposta de entrada, com o mês na chave — a tela recebe
+    uma vez e faz todo o drill-down e a série temporal localmente.
+    `nivel=produto` é a FOLHA, pedida só quando o gestor abre uma categoria; os
+    recortes chegam nos parâmetros para o produto não voltar por inteiro.
+
+    As classificações continuam vindo de `regras.py`, as mesmas da tela de
+    auditoria — ver o cabeçalho de `panorama.py` para por que aplicá-las depois do
+    GROUP BY dá o mesmo resultado.
+    """
+    if de > ate:
+        raise HTTPException(422, "A data inicial não pode ser posterior à final.")
+
+    recortes = {
+        "marcas": marcas,
+        "tipos": tipos,
+        "subtipos": subtipos,
+        "grupos": grupos,
+        "tipos_pedido": tipos_pedido,
+        "operacoes": operacoes,
+        "cfops": cfops,
+    }
+    consulta = (
+        panorama.saidas_por_produto if nivel == "produto" else panorama.saidas_por_categoria
+    )
+    try:
+        with _fila_erp(f"/saidas[{nivel}]"):
+            df = consulta(
+                str(de),
+                str(ate),
+                empresas=empresas,
+                base_data=base_data,
+                incluir_canceladas=incluir_canceladas,
+                **recortes,
+            )
+        _conferir_limite(df, f"/saidas[{nivel}]")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _erro_erp(exc)
+
+    return {
+        "total": len(df),
+        "nivel": nivel,
+        "de": de.isoformat(),
+        "ate": ate.isoformat(),
+        "base_data": base_data,
+        "dados": _para_json(df),
+    }
+
+
+@app.get("/entradas", dependencies=PROTEGIDO)
+def entradas(
+    de: date = Query(..., description="Data inicial (AAAA-MM-DD)"),
+    ate: date = Query(..., description="Data final (AAAA-MM-DD)"),
+    nivel: str = Query("categoria", pattern="^(categoria|produto)$"),
+    empresas: list[int] | None = Query(None, description="Padrão: EMPRESAS_PADRAO"),
+    base_data: str = Query("movimento", pattern="^(movimento|emissao)$"),
+    incluir_canceladas: bool = Query(False),
+    incluir_sem_movimento: bool = Query(
+        False, description="Liga as notas 'N' — DOBRA a compra. Ver panorama.py."
+    ),
+    marcas: list[str] | None = Query(None, description="Recorte; '' = sem categoria."),
+    tipos: list[str] | None = Query(None),
+    subtipos: list[str] | None = Query(None),
+    grupos: list[str] | None = Query(None),
+    fornecedores: list[int] | None = Query(None),
+    operacoes: list[int] | None = Query(None),
+    cfops: list[str] | None = Query(None),
+):
+    """Entradas agregadas — mercadoria que a Focco Brasil recebeu.
+
+    Espelho do `/saidas`, sobre `eq_notafiscalentrada`. Duas coisas que não têm
+    equivalente do outro lado e que mudam o número na tela:
+
+      1. **A nota é versionada por cancelamento.** Sem ficar só com a última
+         versão, a mesma nota conta várias vezes.
+      2. **`incluir_sem_movimento` vem DESLIGADO, e ligá-lo dobra a compra.** Toda
+         compra entra como duas notas de mesmo número — uma com código genérico que
+         não movimenta estoque, outra com o SKU real que movimenta. Ele existe para
+         conferência fiscal, não para leitura gerencial.
+
+    `fornecedor` não é só fornecedor: em RETORNO DE REMESSA o remetente é o próprio
+    representante devolvendo o que sobrou da mala. Quem separa é `classif_entrada`.
+    """
+    if de > ate:
+        raise HTTPException(422, "A data inicial não pode ser posterior à final.")
+
+    recortes = {
+        "marcas": marcas,
+        "tipos": tipos,
+        "subtipos": subtipos,
+        "grupos": grupos,
+        "fornecedores": fornecedores,
+        "operacoes": operacoes,
+        "cfops": cfops,
+    }
+    consulta = (
+        panorama.entradas_por_produto if nivel == "produto" else panorama.entradas_por_categoria
+    )
+    try:
+        with _fila_erp(f"/entradas[{nivel}]"):
+            df = consulta(
+                str(de),
+                str(ate),
+                empresas=empresas,
+                base_data=base_data,
+                incluir_canceladas=incluir_canceladas,
+                incluir_sem_movimento=incluir_sem_movimento,
+                **recortes,
+            )
+        _conferir_limite(df, f"/entradas[{nivel}]")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _erro_erp(exc)
+
+    return {
+        "total": len(df),
+        "nivel": nivel,
+        "de": de.isoformat(),
+        "ate": ate.isoformat(),
+        "base_data": base_data,
+        "dados": _para_json(df),
+    }
 
 
 if __name__ == "__main__":

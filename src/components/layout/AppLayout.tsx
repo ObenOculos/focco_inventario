@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  ChartColumn,
   LayoutDashboard,
   ClipboardList,
   LogOut,
@@ -91,6 +92,10 @@ const GERENTE_LINKS: NavLink[] = [
   { to: '/conferencia', icon: ClipboardCheck, label: 'Conferência' },
   { to: '/comparar-inventarios', icon: GitCompare, label: 'Comparar Inventários' },
   { to: '/consulta-erp', icon: Database, label: 'Consulta ao ERP' },
+  // Vizinho da Consulta ao ERP porque bebe da mesma fonte, e DEPOIS dela porque a
+  // barra inferior do mobile mostra só os quatro primeiros: entrar antes empurraria
+  // um atalho que já é usado para fora da tela de celular.
+  { to: '/panorama', icon: ChartColumn, label: 'Panorama' },
   { to: '/exportar-xml', icon: FileCode, label: 'Exportar XML' },
   { to: '/vendedores', icon: UserCog, label: 'Vendedores' },
   { to: '/produtos', icon: ShoppingCart, label: 'Produtos & Correções' },

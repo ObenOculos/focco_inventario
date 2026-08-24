@@ -99,6 +99,61 @@ const OPERACOES: Record<string, { caminho: string; montar: (p: Params) => URLSea
       return q;
     },
   },
+  saidas: {
+    caminho: '/saidas',
+    montar: (p) => {
+      const q = new URLSearchParams();
+      q.set('de', exigirData(p.de, 'de'));
+      q.set('ate', exigirData(p.ate, 'ate'));
+      q.set('nivel', nivel(p.nivel));
+      q.set('base_data', baseData(p.base_data));
+      if (p.incluir_canceladas !== undefined) {
+        q.set('incluir_canceladas', String(booleano(p.incluir_canceladas, 'incluir_canceladas')));
+      }
+      for (const e of listaInteiros(p.empresas, 'empresas')) q.append('empresas', e);
+
+      // Recortes do drill-down. Categoria e CFOP viajam como TEXTO porque o cliente
+      // devolve exatamente o valor que o gateway emitiu — e "sem categoria" é a
+      // string VAZIA, que `listaInteiros` rejeitaria e um filtro de vazio descartaria.
+      for (const campo of ['marcas', 'tipos', 'subtipos', 'grupos', 'cfops'] as const) {
+        for (const v of listaTextos(p[campo], campo)) q.append(campo, v);
+      }
+      for (const campo of ['tipos_pedido', 'operacoes'] as const) {
+        for (const v of listaInteiros(p[campo], campo)) q.append(campo, v);
+      }
+      return q;
+    },
+  },
+  entradas: {
+    caminho: '/entradas',
+    montar: (p) => {
+      const q = new URLSearchParams();
+      q.set('de', exigirData(p.de, 'de'));
+      q.set('ate', exigirData(p.ate, 'ate'));
+      q.set('nivel', nivel(p.nivel));
+      q.set('base_data', baseData(p.base_data));
+      if (p.incluir_canceladas !== undefined) {
+        q.set('incluir_canceladas', String(booleano(p.incluir_canceladas, 'incluir_canceladas')));
+      }
+      // Ligar isto DOBRA a compra — a mesma nota entra duas vezes no Ciclone, uma
+      // com código genérico que não movimenta estoque. Passa adiante porque é
+      // escolha legítima para conferência fiscal, mas nunca por omissão.
+      if (p.incluir_sem_movimento !== undefined) {
+        q.set(
+          'incluir_sem_movimento',
+          String(booleano(p.incluir_sem_movimento, 'incluir_sem_movimento'))
+        );
+      }
+      for (const e of listaInteiros(p.empresas, 'empresas')) q.append('empresas', e);
+      for (const campo of ['marcas', 'tipos', 'subtipos', 'grupos', 'cfops'] as const) {
+        for (const v of listaTextos(p[campo], campo)) q.append(campo, v);
+      }
+      for (const campo of ['fornecedores', 'operacoes'] as const) {
+        for (const v of listaInteiros(p[campo], campo)) q.append(campo, v);
+      }
+      return q;
+    },
+  },
 };
 
 type Params = Record<string, unknown>;
@@ -121,6 +176,9 @@ function exigirInteiro(valor: unknown, campo: string): number {
 function listaInteiros(valor: unknown, campo: string): string[] {
   if (valor === undefined || valor === null) return [];
   const bruto = Array.isArray(valor) ? valor : [valor];
+  if (bruto.length > MAX_ITENS_RECORTE) {
+    throw new ErroDeEntrada(`'${campo}' aceita no máximo ${MAX_ITENS_RECORTE} itens.`);
+  }
   return bruto.map((v) => String(exigirInteiro(v, campo)));
 }
 
@@ -130,6 +188,50 @@ function baseData(valor: unknown): string {
     throw new ErroDeEntrada("'base_data' deve ser 'movimento' ou 'emissao'.");
   }
   return valor;
+}
+
+function nivel(valor: unknown): string {
+  if (valor === undefined || valor === null) return 'categoria';
+  if (valor !== 'categoria' && valor !== 'produto') {
+    throw new ErroDeEntrada("'nivel' deve ser 'categoria' ou 'produto'.");
+  }
+  return valor;
+}
+
+function booleano(valor: unknown, campo: string): boolean {
+  if (typeof valor !== 'boolean') throw new ErroDeEntrada(`'${campo}' deve ser true ou false.`);
+  return valor;
+}
+
+/**
+ * Teto de itens por lista de recorte.
+ *
+ * Não é sobre segurança — a allowlist e os parâmetros já cuidam disso. É sobre a
+ * QUERY STRING: cada item vira um par `campo=valor`, e uma seleção acidental de
+ * milhares de CFOPs produziria uma URL que o gateway recusa antes de olhar o
+ * conteúdo, com um erro que não explica nada.
+ */
+const MAX_ITENS_RECORTE = 200;
+
+/**
+ * Lista de textos, preservando a string vazia.
+ *
+ * O vazio é o sentinela de "sem categoria" no `/saidas` — descartá-lo aqui faria
+ * o recorte por categoria ausente virar silenciosamente "sem recorte nenhum", que
+ * devolve o universo inteiro em vez de um subconjunto.
+ */
+function listaTextos(valor: unknown, campo: string): string[] {
+  if (valor === undefined || valor === null) return [];
+  const bruto = Array.isArray(valor) ? valor : [valor];
+  if (bruto.length > MAX_ITENS_RECORTE) {
+    throw new ErroDeEntrada(`'${campo}' aceita no máximo ${MAX_ITENS_RECORTE} itens.`);
+  }
+  return bruto.map((v) => {
+    if (typeof v !== 'string' && typeof v !== 'number') {
+      throw new ErroDeEntrada(`'${campo}' deve conter apenas texto ou número.`);
+    }
+    return String(v);
+  });
 }
 
 function responder(corpo: unknown, status: number): Response {
