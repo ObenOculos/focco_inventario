@@ -2,22 +2,14 @@ import { useMemo, useState } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Segmentado } from '@/components/comparativo/Segmentado';
-import { ChevronRight, CloudOff, Home, Package, Search } from 'lucide-react';
-import { endOfMonth, format, parseISO, startOfMonth, startOfYear, subMonths } from 'date-fns';
-import { empresasDaEscolha, type EscolhaEmpresa } from '@/hooks/useConsultaErpQuery';
+import { ChevronRight, CloudOff, Home, Package } from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
+import { empresasDaEscolha } from '@/hooks/useConsultaErpQuery';
+import { dataCurta, janelaCobertura, JANELAS_COBERTURA, rotuloJanela } from '@/lib/panoramaPeriodo';
+import { usePanoramaEstado } from '@/hooks/usePanoramaEstado';
 import {
   useEntradasProdutoQuery,
   useEntradasQuery,
@@ -26,942 +18,381 @@ import {
   useEstoqueInventariadoQuery,
   useSaidasProdutoQuery,
   useSaidasQuery,
-  type Lente,
-  type LenteEstoque,
   type LinhaPanorama,
-  type ParametrosEstoque,
-  type ParametrosPanorama,
-  type Visao,
 } from '@/hooks/usePanoramaQuery';
+import { eixoDe, filtrarPeloCaminho, recorteDoCaminho, type EixoId } from '@/lib/panorama';
 import {
-  agrupar,
-  agruparPorProduto,
-  comEixoNoTopo,
-  eixoDe,
-  EIXOS_DA_VISAO,
-  filtrarPeloCaminho,
-  MEDIDAS,
-  ORDEM_PADRAO,
-  recorteDoCaminho,
-  serieMensal,
-  somar,
-  type EixoId,
-  type Medida,
-  type NoAgregado,
-} from '@/lib/panorama';
-import {
-  compararPorEixo,
-  ordenarComparativo,
+  chaveDoCaminho,
+  chavesExpansiveis,
+  construirArvore,
+  recortarPorMes,
+  serieComparativa,
   totalComparativo,
+  type FonteDetalhe,
   type FontesComparativo,
-  type NoComparativo,
+  type NoArvore,
 } from '@/lib/panoramaComparativo';
+import { BarraEscopo } from '@/components/panorama/BarraEscopo';
+import { FaixaIndicadores } from '@/components/panorama/FaixaIndicadores';
+import { SerieMensal } from '@/components/panorama/SerieMensal';
+import { ArvoreComparativa } from '@/components/panorama/ArvoreComparativa';
+import { PainelDetalhe } from '@/components/panorama/PainelDetalhe';
 
 /**
- * Panorama — a leitura gerencial da movimentação, ao lado da Consulta ao ERP.
+ * Panorama — uma tela, um escopo, um recorte.
  *
- * As duas telas bebem da mesma fonte e respondem perguntas opostas. A Consulta é
- * AUDITORIA: cada linha de nota, para achar operação emitida errada. Esta é
- * ANÁLISE: quanto entrou, quanto saiu, de quê e por quê — e por isso o que atravessa
- * a rede já vem somado pelo Postgres. Juntar as duas numa tela só pioraria as duas,
- * porque o formato do dado é diferente antes de a interface começar.
+ * Substituiu quatro lentes que funcionavam como silos. O problema não era cada uma
+ * delas; era precisar **saber de antemão qual aba respondia** a pergunta, e perder o
+ * recorte percorrido ao trocar. Agora as cinco fontes convivem na mesma linha da
+ * árvore, e o que antes era uma aba virou o detalhe de um número clicado.
  *
- * Como se lê, de cima para baixo:
+ * Como se lê:
  *
- *   1. **Parâmetros** — a única parte que custa uma ida ao ERP. Dispara no clique.
- *   2. **Indicadores** — os totais do recorte aberto, não do período inteiro: eles
- *      acompanham o drill-down, senão a tela mostraria um número que não é o da
- *      lista logo abaixo.
- *   3. **Série mensal** — quando o volume aconteceu. Só no fluxo; saldo não tem.
- *   4. **Árvore** — um nível por vez, na ordem que o gestor escolher, até o produto.
+ *   1. **Escopo** — período, empresa, medida. Vale para tudo, e a tela já abre
+ *      consultada no padrão (ano corrente) em vez de pedir um formulário primeiro.
+ *   2. **Indicadores** — a equação do recorte ABERTO, nunca do período inteiro.
+ *   3. **Série** — entradas e saídas espelhadas; clicar num mês foca o fluxo nele.
+ *   4. **Árvore** — a hierarquia inteira, expansível no lugar, com fluxo e posição
+ *      lado a lado.
+ *   5. **Detalhe** — abre sob demanda ao clicar num número, com o vocabulário da
+ *      fonte (tipo de saída, fornecedor, quem está com a mercadoria).
  *
- * Quantidade e valor nunca se misturam num mesmo número: a medida ativa é uma só, e
- * trocá-la reordena a lista. É de propósito — a bonificação lidera em unidades e
- * some em valor, e é essa troca de posição que responde "onde está o dinheiro"
- * contra "onde está o volume".
+ * **Duas naturezas convivem na mesma linha e a tela precisa dizê-lo.** Entrou/saiu são
+ * do PERÍODO; interno/mala/contado são de HOJE. Filtrar por mês recorta o fluxo e
+ * deixa o estoque como está — não existe "estoque de março" guardado em lugar nenhum.
  *
- * As três lentes usam a MESMA máquina de `lib/panorama.ts`. O que muda são os eixos
- * e o vocabulário: "tipo de saída" numa, "tipo de entrada" e "origem" na outra,
- * "vendedor" e "situação do cadastro" na terceira.
- *
- * **Estoque é foto, não fluxo**, e a tela muda de forma por causa disso: some o
- * período, some a série mensal, e aparecem os dois avisos que o número exige — o
- * interno só desce até o MODELO (o ERP não guarda saldo por cor) e o externo é a
- * última CONTAGEM de cada vendedor, cada uma de um dia diferente. Nenhum dos dois é
- * detalhe de implementação: são o que separa ler o número de acreditar nele.
+ * Quantidade e valor nunca se misturam num número só: a medida ativa é uma, e trocá-la
+ * reordena a árvore. A bonificação lidera em unidades e some em valor — é essa troca
+ * de posição que responde "onde está o dinheiro" contra "onde está o volume".
  */
 
-const HOJE = new Date();
-const FORMATO_ISO = 'yyyy-MM-dd';
-
-const MOEDA = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' });
-const INTEIRO = new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 0 });
-const PORCENTAGEM = new Intl.NumberFormat('pt-BR', {
-  style: 'percent',
-  maximumFractionDigits: 1,
-});
-
-const LENTES: { valor: Lente; rotulo: string }[] = [
-  { valor: 'saidas', rotulo: 'Saídas' },
-  { valor: 'entradas', rotulo: 'Entradas' },
-  { valor: 'estoque', rotulo: 'Estoque' },
-  { valor: 'comparativo', rotulo: 'Comparativo' },
-];
-
-/**
- * Os três estoques. A ordem conta uma história: sai da empresa, vai para a mala, e a
- * mala tem duas leituras — a que o ERP calcula e a que o representante contou.
- */
-const ONDE_ESTA: { valor: LenteEstoque; rotulo: string }[] = [
-  { valor: 'interno', rotulo: 'Interno' },
-  { valor: 'externo', rotulo: 'Externo' },
-  { valor: 'inventario', rotulo: 'Inventário' },
-];
-
-/**
- * Atalhos de período.
- *
- * O padrão é o ANO CORRENTE até hoje — é o recorte que o gestor pede primeiro em
- * praticamente toda pergunta ("quanto vendemos esse ano"). Antes o padrão eram os
- * seis meses anteriores, que atravessava a virada do ano e misturava dois exercícios
- * sem o usuário pedir.
- *
- * Os atalhos contam para TRÁS a partir do mês corrente e incluem o mês corrente
- * inteiro (por isso `endOfMonth`, limitado a hoje na hora de aplicar): "trimestre" é
- * este mês e os dois anteriores, não os 90 dias corridos. É como se lê um fechamento.
- */
-const ATALHOS = [
-  { id: 'trimestre', rotulo: 'Trimestre', meses: 3 },
-  { id: 'semestre', rotulo: 'Semestre', meses: 6 },
-  { id: 'ano', rotulo: 'Ano', meses: 0 },
-] as const;
-
-type AtalhoId = (typeof ATALHOS)[number]['id'];
-
-/** Intervalo de um atalho. `meses: 0` é o ano corrente, de 1º de janeiro até hoje. */
-function intervaloDoAtalho(meses: number): { de: string; ate: string } {
-  const inicio = meses === 0 ? startOfYear(HOJE) : startOfMonth(subMonths(HOJE, meses - 1));
-  // O fim é hoje, nunca o fim do mês: prometer dados de um dia que não chegou faria a
-  // última coluna da série parecer uma queda de vendas.
-  const fim = HOJE < endOfMonth(HOJE) ? HOJE : endOfMonth(HOJE);
-  return { de: format(inicio, FORMATO_ISO), ate: format(fim, FORMATO_ISO) };
-}
-
-/** Legenda do intervalo escolhido, ao lado dos atalhos. */
-const rotuloPeriodo = (de: string, ate: string) =>
-  `${dataCurta(de)} a ${dataCurta(ate)}`;
-
-/** Formata na medida ativa. É o único lugar que decide como cada grandeza aparece. */
-const formatar = (valor: number, medida: Medida) =>
-  medida === 'valor' ? MOEDA.format(valor) : INTEIRO.format(valor);
-
-const dataCurta = (iso: string) => {
+/** `2026-06-01` -> `jun/26`, para o cabeçalho quando há um mês em foco. */
+const mesPorExtenso = (iso: string) => {
   try {
-    return format(parseISO(iso), 'dd/MM/yy');
+    return format(parseISO(iso), 'MMM/yy', { locale: ptBR });
   } catch {
     return iso;
   }
 };
-
-const mesCurto = (iso: string) => {
-  try {
-    return format(parseISO(iso), 'MMM/yy');
-  } catch {
-    return iso;
-  }
-};
-
-/** Cartão de indicador. Mesmo desenho do resumo do Comparativo — um só vocabulário. */
-function Indicador({ rotulo, valor, apoio }: { rotulo: string; valor: string; apoio: string }) {
-  return (
-    <div className="min-w-[9rem] flex-1 rounded-xl border border-border/80 bg-card px-3.5 py-2.5 shadow-xs">
-      <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-        {rotulo}
-      </p>
-      <p className="text-lg font-bold tabular-nums">{valor}</p>
-      <p className="truncate text-2xs tabular-nums text-muted-foreground">{apoio}</p>
-    </div>
-  );
-}
-
-/**
- * Série mensal — colunas de uma série só.
- *
- * Uma série, uma cor: colorir cada mês de um tom diferente dobraria a codificação da
- * altura na matiz e gastaria o único canal livre com informação que a barra já dá.
- * A escala é a do maior mês do recorte, não a do período inteiro, para o desenho não
- * achatar ao descer na árvore.
- */
-function SerieMensal({
-  pontos,
-  medida,
-}: {
-  pontos: { mes: string; quantidade: number; valor: number }[];
-  medida: Medida;
-}) {
-  const maximo = Math.max(...pontos.map((p) => p[medida]), 0);
-  if (pontos.length === 0 || maximo === 0) return null;
-
-  return (
-    <div className="flex items-end gap-[2px] sm:gap-1" role="img" aria-label="Movimentação por mês">
-      {pontos.map((p) => {
-        const fracao = p[medida] / maximo;
-        return (
-          <div key={p.mes} className="flex min-w-0 flex-1 flex-col items-center gap-1.5">
-            {/* `title` é a camada de hover: o valor exato sem poluir a tela com um
-                número por coluna, que ninguém lê. */}
-            <div
-              className="flex h-24 w-full items-end"
-              title={`${mesCurto(p.mes)}: ${formatar(p[medida], medida)}`}
-            >
-              <div
-                className="w-full rounded-t bg-primary transition-[height]"
-                style={{ height: `${Math.max(fracao * 100, 2)}%` }}
-              />
-            </div>
-            <span className="truncate text-2xs text-muted-foreground">{mesCurto(p.mes)}</span>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-/**
- * Linha da árvore: rótulo, barra de participação e as duas medidas.
- *
- * A barra é a MESMA cor em todas as linhas. Escurecer as maiores seria colorir por
- * ranking — a lista já está ordenada e a barra já mostra o tamanho.
- */
-function LinhaNivel({
-  no,
-  medida,
-  onAbrir,
-}: {
-  no: NoAgregado;
-  medida: Medida;
-  onAbrir?: () => void;
-}) {
-  const conteudo = (
-    <>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="truncate text-sm font-semibold">{no.rotulo}</span>
-          <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
-            {PORCENTAGEM.format(no.participacao)}
-          </span>
-        </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-          <div
-            className="h-full rounded-full bg-primary transition-[width]"
-            style={{ width: `${no.participacao * 100}%` }}
-          />
-        </div>
-      </div>
-      <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-        <div className="text-right">
-          <p className="text-sm font-bold tabular-nums">{formatar(no[medida], medida)}</p>
-          <p className="text-2xs tabular-nums text-muted-foreground">
-            {medida === 'valor' ? `${INTEIRO.format(no.quantidade)} un.` : MOEDA.format(no.valor)}
-          </p>
-        </div>
-        {onAbrir && <ChevronRight size={16} className="shrink-0 text-muted-foreground" />}
-      </div>
-    </>
-  );
-
-  if (!onAbrir) {
-    return <div className="flex items-center gap-4 px-3.5 py-3">{conteudo}</div>;
-  }
-
-  return (
-    <button
-      type="button"
-      onClick={onAbrir}
-      className="flex w-full items-center gap-4 rounded-xl px-3.5 py-3 text-left transition-colors hover:bg-muted/30"
-    >
-      {conteudo}
-    </button>
-  );
-}
-
-/**
- * Linha do comparativo: as quatro fontes de um recorte, lado a lado.
- *
- * A barra mostra a divisão INTERNO × EXTERNO do estoque — as duas partes disjuntas do
- * mesmo saldo. É part-to-whole de dois segmentos, então uma matiz com dois níveis
- * basta; e os dois números aparecem escritos ao lado, de modo que a identidade nunca
- * depende só da cor.
- */
-function LinhaComparativa({
-  no,
-  medida,
-  onAbrir,
-}: {
-  no: NoComparativo;
-  medida: Medida;
-  onAbrir?: () => void;
-}) {
-  const estoqueValor = no.interno.valor + no.externo.valor;
-  const total = medida === 'valor' ? estoqueValor : no.estoqueTotal;
-  const parteInterno = medida === 'valor' ? no.interno.valor : no.interno.quantidade;
-  const fracaoInterno = total > 0 ? parteInterno / total : 0;
-
-  const numero = (t: { quantidade: number; valor: number }) =>
-    medida === 'valor' ? MOEDA.format(t.valor) : INTEIRO.format(t.quantidade);
-
-  const conteudo = (
-    <>
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="truncate text-sm font-semibold">{no.rotulo}</span>
-          <span className="shrink-0 text-2xs tabular-nums text-muted-foreground">
-            {no.cobertura === null ? 'sem saída' : `${no.cobertura.toFixed(1)} meses`}
-          </span>
-        </div>
-        {/* 2px de folga entre os segmentos, e não uma borda: separar com traço soma
-            ruído a uma barra que já é fina. */}
-        <div className="flex h-1.5 w-full gap-[2px] overflow-hidden">
-          <div
-            className="h-full rounded-full bg-primary transition-[width]"
-            style={{ width: `${fracaoInterno * 100}%` }}
-          />
-          <div
-            className="h-full flex-1 rounded-full bg-primary/35 transition-[width]"
-          />
-        </div>
-        <p className="text-2xs tabular-nums text-muted-foreground">
-          Interno {numero(no.interno)} · Externo {numero(no.externo)}
-        </p>
-      </div>
-      <div className="flex shrink-0 items-center gap-3 sm:gap-5">
-        <div className="hidden text-right sm:block">
-          <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-            Entrou / Saiu
-          </p>
-          <p className="text-sm font-semibold tabular-nums">
-            {numero(no.entrou)} / {numero(no.saiu)}
-          </p>
-        </div>
-        <div className="text-right">
-          <p className="text-sm font-bold tabular-nums">
-            {medida === 'valor' ? MOEDA.format(estoqueValor) : INTEIRO.format(no.estoqueTotal)}
-          </p>
-          <p className="text-2xs tabular-nums text-muted-foreground">em estoque</p>
-        </div>
-        {onAbrir && <ChevronRight size={16} className="shrink-0 text-muted-foreground" />}
-      </div>
-    </>
-  );
-
-  if (!onAbrir) return <div className="flex items-center gap-4 px-3.5 py-3">{conteudo}</div>;
-  return (
-    <button
-      type="button"
-      onClick={onAbrir}
-      className="flex w-full items-center gap-4 rounded-xl px-3.5 py-3 text-left transition-colors hover:bg-muted/30"
-    >
-      {conteudo}
-    </button>
-  );
-}
 
 export default function Panorama() {
-  // ── Parâmetros (custam uma ida ao ERP) ────────────────────────────────────
-  const [de, setDe] = useState(intervaloDoAtalho(0).de);
-  const [ate, setAte] = useState(intervaloDoAtalho(0).ate);
-  const [empresa, setEmpresa] = useState<EscolhaEmpresa>('ambas');
-  const [baseData, setBaseData] = useState<'movimento' | 'emissao'>('movimento');
-  const [consulta, setConsulta] = useState<ParametrosPanorama | null>(null);
-  const [consultaEstoque, setConsultaEstoque] = useState<ParametrosEstoque | null>(null);
+  const { escopo, atualizar, ordem, EIXOS_TOPO } = usePanoramaEstado();
 
-  // ── Leitura (instantânea, sobre o que já veio) ────────────────────────────
-  const [lente, setLente] = useState<Lente>('saidas');
-  const [subLente, setSubLente] = useState<LenteEstoque>('interno');
-  const [medida, setMedida] = useState<Medida>('quantidade');
-  const [ordem, setOrdem] = useState<EixoId[]>(ORDEM_PADRAO.saidas);
-  const [caminho, setCaminho] = useState<string[]>([]);
-  const [rotulos, setRotulos] = useState<string[]>([]);
-  const [verProdutos, setVerProdutos] = useState(false);
+  // Navegação, não escopo: fica fora da URL de propósito (ver `usePanoramaEstado`).
+  const [expandidos, setExpandidos] = useState<ReadonlySet<string>>(new Set());
+  const [detalhe, setDetalhe] = useState<{ no: NoArvore; fonte: FonteDetalhe } | null>(null);
+  const [pedirProdutos, setPedirProdutos] = useState(false);
+  // Interface, não escopo: se fosse derivado do período, o botão "Datas" não conseguiria
+  // abrir nada partindo do padrão — ver `BarraEscopo`.
+  const [datasAbertas, setDatasAbertas] = useState(false);
 
-  /** Lente e submodo colapsados: é por esta chave que eixos e ordem são escolhidos. */
-  const visao: Visao = lente === 'estoque' ? `estoque-${subLente}` : lente;
-  const ehEstoque = lente === 'estoque';
-  const ehComparativo = lente === 'comparativo';
+  const empresas = empresasDaEscolha(escopo.empresa);
+  const periodoValido = escopo.de <= escopo.ate;
 
-  // Todas as consultas são declaradas sempre — hook não pode ser condicional. As
-  // inativas recebem `null` e ficam paradas, sem tocar na rede.
-  // O comparativo precisa das QUATRO ao mesmo tempo — é a única visão que cruza fontes.
-  const saidas = useSaidasQuery(lente === 'saidas' || ehComparativo ? consulta : null);
-  const entradas = useEntradasQuery(lente === 'entradas' || ehComparativo ? consulta : null);
-  const interno = useEstoqueInternoQuery(
-    visao === 'estoque-interno' || ehComparativo ? consultaEstoque : null
+  // A tela abre consultando: os parâmetros nascem preenchidos e não há botão barrando o
+  // primeiro número. O `staleTime` de 10 min faz a volta a esta rota sair do cache.
+  const paramsFluxo = periodoValido
+    ? { de: escopo.de, ate: escopo.ate, empresas, base_data: escopo.baseData }
+    : null;
+
+  const saidas = useSaidasQuery(paramsFluxo);
+
+  /**
+   * Saídas da JANELA DE COBERTURA — consulta própria, independente do período exibido.
+   *
+   * É uma ida a mais ao ERP, e vale: sem ela a cobertura era calculada sobre o filtro
+   * da tela, então o mesmo estoque rendia números completamente diferentes conforme um
+   * botão que existe para outra coisa. Com janela própria, o indicador significa a
+   * mesma coisa em toda leitura.
+   *
+   * `empresas` e `base_data` acompanham o escopo: a cobertura da empresa 2 tem de ser
+   * medida com as saídas da empresa 2.
+   */
+  const janela = janelaCobertura(escopo.janela);
+
+  /**
+   * A janela cabe dentro do período exibido? Então a demanda JÁ VEIO.
+   *
+   * Medido em 2026-08-24: a tela dispara cinco consultas ao ERP de uma vez e o gateway
+   * serializa em três (`GATEWAY_MAX_CONCORRENTES`), então as últimas esperavam 7 s na
+   * fila. Uma delas era redundante — no estado padrão (período "Ano", base de 3 meses)
+   * a janela é um subconjunto do que `saidas` já trouxe, e recortá-la por mês no cliente
+   * dá exatamente o mesmo resultado sem custo nenhum.
+   *
+   * A comparação é de string ISO de propósito: `AAAA-MM-DD` ordena lexicograficamente
+   * igual a cronologicamente, e comparar texto evita fuso horário na conta.
+   */
+  const janelaCabeNoPeriodo = periodoValido && escopo.de <= janela.de && escopo.ate >= janela.ate;
+
+  const demanda = useSaidasQuery(
+    janelaCabeNoPeriodo
+      ? null
+      : { de: janela.de, ate: janela.ate, empresas, base_data: escopo.baseData }
   );
-  const externo = useEstoqueExternoQuery(
-    (visao === 'estoque-externo' || ehComparativo) && consultaEstoque
-      ? {
-          ...consultaEstoque,
-          // O comparativo só lê categoria: ele não desce ao produto, porque os grãos
-          // das fontes não batem lá.
-          nivel: !ehComparativo && verProdutos ? 'produto' : 'categoria',
-        }
-      : null
-  );
-  const inventariado = useEstoqueInventariadoQuery(
-    visao === 'estoque-inventario' && consultaEstoque !== null
+  const entradas = useEntradasQuery(paramsFluxo);
+  const interno = useEstoqueInternoQuery({ empresas });
+  const externo = useEstoqueExternoQuery({ empresas, nivel: 'categoria' });
+  const inventariado = useEstoqueInventariadoQuery(true);
+
+  const consultas = useMemo(
+    () => [saidas, entradas, interno, externo, inventariado, demanda],
+    [saidas, entradas, interno, externo, inventariado, demanda]
   );
 
-  const ativa =
-    visao === 'saidas'
-      ? saidas
-      : visao === 'entradas'
-        ? entradas
-        : visao === 'estoque-interno'
-          ? interno
-          : visao === 'estoque-externo'
-            ? externo
-            : inventariado;
+  /**
+   * As saídas da janela de cobertura, venham de onde vierem.
+   *
+   * O recorte por mês só é válido porque a janela está inteiramente dentro do período —
+   * é o que garante que cada mês dela venha COMPLETO. Um mês pela metade no numerador
+   * inflaria a cobertura, que é justamente o defeito que esta janela existe para
+   * corrigir.
+   */
+  const linhasDemanda: LinhaPanorama[] = useMemo(() => {
+    if (!janelaCabeNoPeriodo) return demanda.data ?? [];
+    return (saidas.data ?? []).filter((l) => l.mes >= janela.de && l.mes <= janela.ate);
+  }, [janelaCabeNoPeriodo, demanda.data, saidas.data, janela.de, janela.ate]);
+  const carregando = consultas.some((q) => q.isLoading);
+  const atualizando = consultas.some((q) => q.isFetching);
+  // A primeira falha manda: se o ERP caiu, as cinco falham pelo mesmo motivo, e repetir
+  // a mensagem cinco vezes não ajuda ninguém.
+  const erro = consultas.find((q) => q.error)?.error;
 
-  const linhas: LinhaPanorama[] = useMemo(() => ativa.data ?? [], [ativa.data]);
-
-  const fontes: FontesComparativo = useMemo(
+  const fontesCompletas: FontesComparativo = useMemo(
     () => ({
       saidas: saidas.data ?? [],
       entradas: entradas.data ?? [],
       interno: interno.data ?? [],
       externo: externo.data ?? [],
+      inventario: inventariado.data ?? [],
+      demanda: linhasDemanda,
     }),
-    [saidas.data, entradas.data, interno.data, externo.data]
+    [saidas.data, entradas.data, interno.data, externo.data, inventariado.data, linhasDemanda]
   );
 
-  const quatro = [saidas, entradas, interno, externo];
-  const isLoading = ehComparativo ? quatro.some((q) => q.isLoading) : ativa.isLoading;
-  const isFetching = ehComparativo ? quatro.some((q) => q.isFetching) : ativa.isFetching;
-  // A PRIMEIRA falha manda: se o ERP caiu, as quatro vão falhar pelo mesmo motivo, e
-  // repetir a mensagem quatro vezes não ajuda ninguém.
-  const error = ehComparativo ? quatro.find((q) => q.error)?.error : ativa.error;
-  const consultou = ehComparativo
-    ? consulta !== null && consultaEstoque !== null
-    : ehEstoque
-      ? consultaEstoque !== null
-      : consulta !== null;
-
-  /** Meses do período pedido, para a cobertura. Mínimo 1: um mês parcial é um mês. */
-  const mesesDoPeriodo = useMemo(() => {
-    try {
-      const a = parseISO(de);
-      const b = parseISO(ate);
-      const n = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth()) + 1;
-      return Math.max(n, 1);
-    } catch {
-      return 1;
-    }
-  }, [de, ate]);
-
-  const temDadoComparativo =
-    ehComparativo && quatro.some((q) => (q.data?.length ?? 0) > 0);
-
-  const doRecorte = useMemo(
-    () => filtrarPeloCaminho(linhas, ordem, caminho),
-    [linhas, ordem, caminho]
+  /** O mês em foco recorta o FLUXO; o estoque continua sendo o de hoje. */
+  const fontes = useMemo(
+    () => recortarPorMes(fontesCompletas, escopo.mes),
+    [fontesCompletas, escopo.mes]
   );
 
-  const totais = useMemo(() => somar(doRecorte), [doRecorte]);
-  const serie = useMemo(() => serieMensal(doRecorte), [doRecorte]);
+  /** O recorte do painel de detalhe — vazio quando nada está aberto. */
+  const caminhoDetalhe = useMemo(() => detalhe?.no.caminho ?? [], [detalhe]);
+
+  const total = useMemo(
+    () => totalComparativo(fontes, ordem, caminhoDetalhe, escopo.janela),
+    [fontes, ordem, caminhoDetalhe, escopo.janela]
+  );
+
+  const serie = useMemo(
+    // A série usa as fontes COMPLETAS: recortá-la pelo mês em foco deixaria uma coluna
+    // só, e aí não haveria como escolher outro mês nem ver o contexto que o justifica.
+    () => serieComparativa(fontesCompletas, ordem, caminhoDetalhe, escopo.medida),
+    [fontesCompletas, ordem, caminhoDetalhe, escopo.medida]
+  );
+
+  const arvore = useMemo(
+    () => construirArvore(fontes, ordem, expandidos, escopo.janela, escopo.medida),
+    [fontes, ordem, expandidos, escopo.janela, escopo.medida]
+  );
+
+  // ── Detalhe da célula clicada ─────────────────────────────────────────────
+  const linhasDoDetalhe: LinhaPanorama[] = useMemo(() => {
+    if (!detalhe) return [];
+    const porFonte: Record<FonteDetalhe, readonly LinhaPanorama[]> = {
+      saiu: fontes.saidas,
+      entrou: fontes.entradas,
+      interno: fontes.interno,
+      externo: fontes.externo,
+      inventario: fontes.inventario,
+    };
+    return filtrarPeloCaminho(porFonte[detalhe.fonte], ordem, detalhe.no.caminho);
+  }, [detalhe, fontes, ordem]);
+
+  const recorte = useMemo(
+    () => (detalhe ? recorteDoCaminho(linhasDoDetalhe, 'comparativo') : null),
+    [detalhe, linhasDoDetalhe]
+  );
+
+  const pedindo = (fonte: FonteDetalhe) =>
+    pedirProdutos && detalhe?.fonte === fonte && recorte !== null;
+
+  const produtosSaida = useSaidasProdutoQuery(
+    pedindo('saiu') && paramsFluxo ? { ...paramsFluxo, ...recorte } : null
+  );
+  const produtosEntrada = useEntradasProdutoQuery(
+    pedindo('entrou') && paramsFluxo ? { ...paramsFluxo, ...recorte } : null
+  );
+  const produtosMala = useEstoqueExternoQuery(
+    pedindo('externo') ? { empresas, nivel: 'produto', ...recorte } : null
+  );
+
+  const consultaProdutos =
+    detalhe?.fonte === 'saiu'
+      ? produtosSaida
+      : detalhe?.fonte === 'entrou'
+        ? produtosEntrada
+        : detalhe?.fonte === 'externo'
+          ? produtosMala
+          : null;
 
   /**
-   * Custo do estoque, quando o ERP o informa.
+   * Os produtos da fonte aberta.
    *
-   * Só o interno tem: o custo mora em `eq_produtoespecifico`, e o externo vem dos
-   * inventários, onde não existe custo nenhum. Fica fora de `somar` de propósito —
-   * é medida de uma lente só, e promovê-la a comum faria as outras carregarem um
-   * zero que parece informação.
+   * ⚠️ Reaplicar o caminho é obrigatório nas fontes que vêm do servidor: o recorte
+   * enviado ao gateway é um SUPERCONJUNTO (as dimensões viajam como listas
+   * independentes e o servidor cruza todas) — ver `recorteDoCaminho`. Nas que já
+   * chegaram inteiras, filtrar de novo é inofensivo.
    */
-  const custoTotal = useMemo(
-    () => doRecorte.reduce((s, l) => s + (Number(l.custo) || 0), 0),
-    [doRecorte]
-  );
+  const produtos: LinhaPanorama[] | null = useMemo(() => {
+    if (!detalhe) return null;
+    // Inventário e interno já chegam no grão de produto — não há segunda ida à rede.
+    if (detalhe.fonte === 'inventario' || detalhe.fonte === 'interno') return linhasDoDetalhe;
+    if (!consultaProdutos?.data) return null;
+    return filtrarPeloCaminho(
+      consultaProdutos.data as LinhaPanorama[],
+      ordem,
+      detalhe.no.caminho
+    );
+  }, [detalhe, linhasDoDetalhe, consultaProdutos?.data, ordem]);
 
-  const eixoAtual: EixoId | undefined = ordem[caminho.length];
-
-  const nosComparativo = useMemo(
-    () =>
-      ehComparativo && eixoAtual
-        ? ordenarComparativo(
-            compararPorEixo(fontes, eixoAtual, ordem, caminho, mesesDoPeriodo),
-            medida
-          )
-        : [],
-    [ehComparativo, fontes, eixoAtual, ordem, caminho, mesesDoPeriodo, medida]
-  );
-
-  const totalCompar = useMemo(
-    () => (ehComparativo ? totalComparativo(fontes, ordem, caminho, mesesDoPeriodo) : null),
-    [ehComparativo, fontes, ordem, caminho, mesesDoPeriodo]
-  );
-  const nos = useMemo(
-    () => (eixoAtual ? agrupar(doRecorte, eixoAtual, medida) : []),
-    [doRecorte, eixoAtual, medida]
-  );
-
-  // A folha só é pedida quando há recorte: no topo, o "recorte" é o período inteiro e
-  // a consulta voltaria com todos os produtos — a listagem imensa que este módulo
-  // existe para evitar.
-  //
-  // No ESTOQUE ela nunca é pedida: aquelas consultas já vêm no grão de produto (são
-  // ~1.800 linhas), então a folha é um agrupamento local e sai de graça.
-  const parametrosProduto: ParametrosPanorama | null =
-    !ehEstoque && verProdutos && consulta && caminho.length > 0
-      ? { ...consulta, ...recorteDoCaminho(doRecorte, visao) }
-      : null;
-
-  const produtosSaida = useSaidasProdutoQuery(lente === 'saidas' ? parametrosProduto : null);
-  const produtosEntrada = useEntradasProdutoQuery(lente === 'entradas' ? parametrosProduto : null);
-  const folha = lente === 'saidas' ? produtosSaida : produtosEntrada;
-
-  const nosProdutos = useMemo(() => {
-    // Anotado como `LinhaPanorama[]` para colapsar a união dos quatro tipos de linha:
-    // sem isso o genérico de `filtrarPeloCaminho` se prende ao primeiro membro.
-    //
-    // ⚠️ Reaplicar o caminho é OBRIGATÓRIO no fluxo: o recorte enviado ao gateway é um
-    // SUPERCONJUNTO (as dimensões vão como listas independentes e o servidor cruza
-    // todas) — ver `recorteDoCaminho`. No estoque é inofensivo: as linhas já são as
-    // do recorte, e filtrar de novo não muda nada.
-    // O externo é a exceção entre os estoques: a folha dele vem do servidor (o nível
-    // de produto tem 16.500 linhas e não cabe na resposta de entrada), então `linhas`
-    // já É a folha quando `verProdutos` está ligado.
-    const linhasFolha: LinhaPanorama[] = ehEstoque ? doRecorte : (folha.data ?? []);
-    return agruparPorProduto(filtrarPeloCaminho(linhasFolha, ordem, caminho), medida);
-  }, [ehEstoque, doRecorte, folha.data, ordem, caminho, medida]);
-
-  /**
-   * Janela das contagens do estoque externo.
-   *
-   * É o aviso que a tela não pode omitir: cada vendedor tem uma data própria, então
-   * o total mistura fotos de momentos diferentes e nunca existiu num único instante.
-   */
-  const janelaContagens = useMemo(() => {
-    if (visao !== 'estoque-externo') return null;
-    const datas = doRecorte.map((l) => l.data_inventario).filter((d): d is string => !!d).sort();
-    return datas.length ? { de: datas[0], ate: datas[datas.length - 1] } : null;
-  }, [visao, doRecorte]);
-
-  /** Volta a árvore para a raiz. Toda troca de lente, eixo ou consulta passa por aqui. */
-  const recomecar = () => {
-    setCaminho([]);
-    setRotulos([]);
-    setVerProdutos(false);
-  };
-
-  const consultar = () => {
-    recomecar();
-    if (ehComparativo) {
-      setConsulta({ de, ate, empresas: empresasDaEscolha(empresa), base_data: baseData });
-      setConsultaEstoque({ empresas: empresasDaEscolha(empresa) });
-      return;
-    }
-    if (ehEstoque) {
-      // Estoque não tem período — é foto, não fluxo. E o externo não passa nem pela
-      // empresa: ele sai dos inventários, que são por vendedor.
-      setConsultaEstoque({ empresas: empresasDaEscolha(empresa) });
-      return;
-    }
-    setConsulta({
-      de,
-      ate,
-      empresas: empresasDaEscolha(empresa),
-      base_data: baseData,
+  // ── Ações ─────────────────────────────────────────────────────────────────
+  const alternar = (chave: string) =>
+    setExpandidos((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(chave)) proximo.delete(chave);
+      else proximo.add(chave);
+      return proximo;
     });
-  };
 
-  /** Aplica a ordem padrão da visão e volta a árvore para a raiz. */
-  const irPara = (novaVisao: Visao) => {
-    // A ordem volta ao padrão DA VISÃO: os eixos não são os mesmos, e manter a ordem
-    // anterior deixaria "Tipo de saída" no topo de uma árvore de entradas, onde ele
-    // agrupa tudo em "Sem classificação".
-    setOrdem(ORDEM_PADRAO[novaVisao]);
-    recomecar();
-  };
-
-  const trocarLente = (nova: Lente) => {
-    setLente(nova);
-    irPara(nova === 'estoque' ? `estoque-${subLente}` : nova);
-  };
-
-  const trocarSubLente = (nova: LenteEstoque) => {
-    setSubLente(nova);
-    irPara(`estoque-${nova}`);
-  };
-
-  const descer = (no: NoAgregado) => {
-    setCaminho((c) => [...c, no.chave]);
-    // O rótulo viaja junto porque a chave nem sempre é legível: em "Origem" ela é o
-    // código do cadastro, e a trilha mostraria um número.
-    setRotulos((r) => [...r, no.rotulo]);
-    setVerProdutos(false);
-  };
-
-  const voltarPara = (n: number) => {
-    setCaminho((c) => c.slice(0, n));
-    setRotulos((r) => r.slice(0, n));
-    setVerProdutos(false);
+  const abrirDetalhe = (no: NoArvore, fonte: FonteDetalhe) => {
+    setDetalhe({ no, fonte });
+    setPedirProdutos(false);
   };
 
   const trocarTopo = (eixo: EixoId) => {
-    setOrdem(comEixoNoTopo(ordem, eixo));
-    recomecar();
+    atualizar({ abrirPor: eixo });
+    // Expansões e detalhe são caminhos da árvore ANTIGA: mantê-los apontaria para nós
+    // que deixaram de existir na nova ordem.
+    setExpandidos(new Set());
+    setDetalhe(null);
   };
 
-  const periodoInvalido = de > ate;
-  const rotuloMovimento = lente === 'saidas' ? 'saíram' : 'entraram';
+  const tudoExpandido = () => {
+    const chaves = chavesExpansiveis(fontes, ordem, escopo.janela);
+    setExpandidos((atual) => (atual.size > 0 ? new Set() : new Set(chaves)));
+  };
+
+  const temDado = arvore.length > 0;
 
   return (
     <AppLayout>
-      <div className="space-y-6">
+      <div className="space-y-5">
         <PageHeader
           title="Panorama"
-          description="Movimentação somada no ERP: o que entrou, o que saiu, de quê e por qual motivo."
-          isFetching={isFetching && !isLoading}
-          action={
-            <Segmentado
-              nome="Lente"
-              opcoes={LENTES}
-              valor={lente}
-              onValor={(v) => trocarLente(v)}
-            />
-          }
+          description="O que entrou, o que saiu e onde o estoque está — no mesmo lugar."
+          isFetching={atualizando && !carregando}
         />
 
-        {/* 1. Parâmetros — a parte cara */}
-        <Card className="rounded-2xl border border-border/80 shadow-xs">
-          <CardHeader className="pb-3">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <CardTitle className="text-base font-semibold tracking-tight">
-                {ehEstoque ? 'Onde está o estoque' : 'Período'}
-              </CardTitle>
-              {ehEstoque && (
-                <Segmentado
-                  nome="Estoque interno ou externo"
-                  opcoes={ONDE_ESTA}
-                  valor={subLente}
-                  onValor={(v) => trocarSubLente(v)}
-                  tamanho="sm"
-                />
-              )}
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Atalhos antes dos campos: é por eles que se escolhe o período em quase
-                toda consulta, e as datas soltas ficam para o recorte incomum. */}
-            {!ehEstoque && (
-              <div className="flex flex-wrap items-center gap-2">
-                {ATALHOS.map((a) => {
-                  const alvo = intervaloDoAtalho(a.meses);
-                  const ativo = de === alvo.de && ate === alvo.ate;
-                  return (
-                    <button
-                      key={a.id}
-                      type="button"
-                      aria-pressed={ativo}
-                      onClick={() => {
-                        setDe(alvo.de);
-                        setAte(alvo.ate);
-                      }}
-                      className={`rounded-lg px-2.5 py-1 text-2xs font-semibold transition-colors ${
-                        ativo
-                          ? 'bg-primary text-primary-foreground'
-                          : 'bg-muted/60 text-muted-foreground hover:text-foreground'
-                      }`}
-                    >
-                      {a.rotulo}
-                    </button>
-                  );
-                })}
-                <span className="text-2xs text-muted-foreground">
-                  {rotuloPeriodo(de, ate)}
-                </span>
-              </div>
-            )}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-              {/* Estoque não tem período: é foto, não fluxo. Campos de data aqui
-                  prometeriam um histórico de saldo que o ERP não guarda. */}
-              {!ehEstoque && (
-                <>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="panorama-de">De</Label>
-                    <Input
-                      id="panorama-de"
-                      type="date"
-                      value={de}
-                      onChange={(e) => setDe(e.target.value)}
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="panorama-ate">Até</Label>
-                    <Input
-                      id="panorama-ate"
-                      type="date"
-                      value={ate}
-                      onChange={(e) => setAte(e.target.value)}
-                    />
-                  </div>
-                </>
-              )}
-              {/* O INVENTÁRIO sai das contagens, que são por vendedor e não por
-                  empresa — oferecer o seletor ali seria um filtro que não filtra. */}
-              {visao !== 'estoque-inventario' && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="panorama-empresa">Empresa</Label>
-                  <Select value={empresa} onValueChange={(v) => setEmpresa(v as EscolhaEmpresa)}>
-                    <SelectTrigger id="panorama-empresa">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ambas">Ambas</SelectItem>
-                      <SelectItem value="1">Empresa 1</SelectItem>
-                      <SelectItem value="2">Empresa 2</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              {!ehEstoque && (
-                <div className="space-y-1.5">
-                  <Label htmlFor="panorama-base">Data base</Label>
-                  <Select
-                    value={baseData}
-                    onValueChange={(v) => setBaseData(v as 'movimento' | 'emissao')}
-                  >
-                    <SelectTrigger id="panorama-base">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="movimento">Movimento da nota</SelectItem>
-                      <SelectItem value="emissao">Emissão</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-              <div className="flex items-end">
-                <Button
-                  className="w-full"
-                  onClick={consultar}
-                  disabled={(!ehEstoque && periodoInvalido) || isLoading}
-                >
-                  <Search className="h-4 w-4" />
-                  {isLoading ? 'Consultando' : 'Consultar'}
-                </Button>
-              </div>
-            </div>
-            {!ehEstoque && periodoInvalido && (
-              <p className="mt-3 text-sm text-destructive-strong">
-                A data inicial não pode ser posterior à final.
-              </p>
-            )}
-            {visao === 'estoque-interno' && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                Saldo do Ciclone na empresa. Desce até o <strong>modelo</strong> — o ERP não
-                guarda saldo por cor.
-              </p>
-            )}
-            {visao === 'estoque-externo' && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                A mala pelo <strong>saldo que o ERP calcula</strong>: mercadoria nossa em poder
-                de terceiros. Compare com o Inventário — é a mesma mercadoria contada de outro
-                jeito.
-              </p>
-            )}
-            {visao === 'estoque-inventario' && (
-              <p className="mt-3 text-sm text-muted-foreground">
-                A mala pelo que o representante <strong>contou</strong> (último inventário
-                aprovado). Não é saldo ao vivo: cada um tem uma data de contagem, e a última
-                pode ser parcial.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        <BarraEscopo
+          de={escopo.de}
+          ate={escopo.ate}
+          empresa={escopo.empresa}
+          baseData={escopo.baseData}
+          medida={escopo.medida}
+          datasAbertas={datasAbertas}
+          carregando={carregando}
+          onPeriodo={(de, ate) => atualizar({ de, ate, mes: null })}
+          onEmpresa={(empresa) => atualizar({ empresa })}
+          onBaseData={(baseData) => atualizar({ baseData })}
+          onMedida={(medida) => atualizar({ medida })}
+          onDatasAbertas={setDatasAbertas}
+          onAtualizar={() => consultas.forEach((q) => void q.refetch())}
+        />
 
-        {error && (
+        {erro && (
           <Alert variant="destructive">
             <CloudOff className="h-4 w-4" />
-            <AlertDescription>{error.message}</AlertDescription>
+            <AlertDescription>{erro.message}</AlertDescription>
           </Alert>
         )}
 
-        {isLoading && (
+        {carregando && (
           <div className="space-y-4">
             <div className="flex flex-wrap gap-3">
-              {[0, 1, 2].map((i) => (
-                <Skeleton key={i} className="h-[4.5rem] min-w-[9rem] flex-1 rounded-xl" />
+              {[0, 1, 2, 3, 4].map((i) => (
+                <Skeleton key={i} className="h-[4.5rem] min-w-[8.5rem] flex-1 rounded-xl" />
               ))}
             </div>
-            <Skeleton className="h-64 w-full rounded-2xl" />
+            <Skeleton className="h-40 w-full rounded-2xl" />
+            <Skeleton className="h-72 w-full rounded-2xl" />
           </div>
         )}
 
-        {consultou && !isLoading && !error && linhas.length === 0 && !temDadoComparativo && (
+        {!carregando && !erro && !temDado && (
           <Card className="rounded-2xl border border-border/80 shadow-xs">
             <CardContent className="flex flex-col items-center py-12 text-center">
               <Package className="mb-2.5 h-11 w-11 text-muted-foreground/50" />
-              <p className="text-sm font-medium">
-                {ehEstoque
-                  ? 'Nenhum produto com saldo.'
-                  : `Nenhuma movimentação de ${lente === 'saidas' ? 'saída' : 'entrada'} no período.`}
-              </p>
+              <p className="text-sm font-medium">Nada no período escolhido.</p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {ehEstoque
-                  ? 'Troque a empresa ou confira se há inventário aprovado.'
-                  : 'Amplie o intervalo ou troque a empresa.'}
+                Amplie o intervalo ou troque a empresa.
               </p>
             </CardContent>
           </Card>
         )}
 
-        {!consultou && !isLoading && (
-          <Card className="rounded-2xl border border-border/80 shadow-xs">
-            <CardContent className="flex flex-col items-center py-12 text-center">
-              <Search className="mb-2.5 h-11 w-11 text-muted-foreground/50" />
-              <p className="text-sm font-medium">Escolha o período e consulte.</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                A consulta atravessa a VPN até o Ciclone — por isso ela só roda no clique.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {(linhas.length > 0 || temDadoComparativo) && !isLoading && (
+        {!carregando && temDado && (
           <>
-            {/* 2. Indicadores — do recorte aberto, não do período inteiro */}
-            {totalCompar ? (
-              <div className="flex flex-wrap gap-3">
-                <Indicador
-                  rotulo="Entrou"
-                  valor={INTEIRO.format(totalCompar.entrou.quantidade)}
-                  apoio={MOEDA.format(totalCompar.entrou.valor)}
-                />
-                <Indicador
-                  rotulo="Saiu"
-                  valor={INTEIRO.format(totalCompar.saiu.quantidade)}
-                  apoio={MOEDA.format(totalCompar.saiu.valor)}
-                />
-                <Indicador
-                  rotulo="Saldo do período"
-                  valor={`${totalCompar.saldoPeriodo >= 0 ? '+' : ''}${INTEIRO.format(totalCompar.saldoPeriodo)}`}
-                  apoio={`${INTEIRO.format(totalCompar.paraMala)} enviados à mala`}
-                />
-                <Indicador
-                  rotulo="Estoque hoje"
-                  valor={INTEIRO.format(totalCompar.estoqueTotal)}
-                  apoio={`${INTEIRO.format(totalCompar.interno.quantidade)} interno · ${INTEIRO.format(totalCompar.externo.quantidade)} externo`}
-                />
-                <Indicador
-                  rotulo="Cobertura"
-                  valor={
-                    totalCompar.cobertura === null
-                      ? '—'
-                      : `${totalCompar.cobertura.toFixed(1)} meses`
-                  }
-                  apoio={`no ritmo de ${mesesDoPeriodo} ${mesesDoPeriodo === 1 ? 'mês' : 'meses'}`}
-                />
-              </div>
-            ) : (
-            <div className="flex flex-wrap gap-3">
-              <Indicador
-                rotulo="Unidades"
-                valor={INTEIRO.format(totais.quantidade)}
-                apoio={`${INTEIRO.format(totais.linhas)} ${ehEstoque ? 'produtos' : 'linhas de nota'}`}
-              />
-              <Indicador
-                rotulo="Valor"
-                valor={MOEDA.format(totais.valor)}
-                apoio={
-                  totais.quantidade > 0
-                    ? `${MOEDA.format(totais.valor / totais.quantidade)} por unidade`
-                    : '—'
-                }
-              />
-              {janelaContagens ? (
-                <Indicador
-                  rotulo="Contagens"
-                  valor={
-                    janelaContagens.de === janelaContagens.ate
-                      ? dataCurta(janelaContagens.de)
-                      : `${dataCurta(janelaContagens.de)} – ${dataCurta(janelaContagens.ate)}`
-                  }
-                  apoio="Datas diferentes por vendedor"
-                />
-              ) : ehEstoque ? (
-                <Indicador
-                  rotulo="Custo"
-                  valor={MOEDA.format(custoTotal)}
-                  apoio={custoTotal !== 0 ? `${MOEDA.format(totais.valor - custoTotal)} de margem` : '—'}
-                />
-              ) : (
-                <Indicador
-                  rotulo="Meses"
-                  valor={INTEIRO.format(serie.length)}
-                  apoio={
-                    serie.length > 0
-                      ? `${mesCurto(serie[0].mes)} a ${mesCurto(serie[serie.length - 1].mes)}`
-                      : '—'
-                  }
-                />
-              )}
-            </div>
-            )}
+            <FaixaIndicadores
+              total={total}
+              medida={escopo.medida}
+              baseCobertura={rotuloJanela(escopo.janela)}
+            />
 
-            {/* 3. Quando */}
-            {serie.length > 1 && !ehComparativo && (
+            {serie.length > 1 && (
               <Card className="rounded-2xl border border-border/80 shadow-xs">
-                <CardHeader className="pb-3">
-                  <CardTitle className="text-base font-semibold tracking-tight">
-                    Quanto {rotuloMovimento} por mês · {medida === 'valor' ? 'valor' : 'unidades'}
-                  </CardTitle>
+                <CardHeader className="pb-2">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <CardTitle className="text-base font-semibold tracking-tight">
+                      Movimentação por mês
+                    </CardTitle>
+                    {escopo.mes && (
+                      <button
+                        type="button"
+                        onClick={() => atualizar({ mes: null })}
+                        className="rounded-lg bg-muted/60 px-2.5 py-1 text-2xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                      >
+                        Mês em foco · limpar
+                      </button>
+                    )}
+                  </div>
                 </CardHeader>
                 <CardContent>
-                  <SerieMensal pontos={serie} medida={medida} />
+                  <SerieMensal
+                    pontos={serie}
+                    medida={escopo.medida}
+                    mesEmFoco={escopo.mes}
+                    onMes={(mes) => atualizar({ mes })}
+                  />
                 </CardContent>
               </Card>
             )}
 
-            {/* 4. Árvore */}
             <Card className="rounded-2xl border border-border/80 shadow-xs">
-              <CardHeader className="pb-3">
+              <CardHeader className="pb-2">
                 <div className="flex flex-wrap items-center justify-between gap-3">
-                  <CardTitle className="text-base font-semibold tracking-tight">
-                    {verProdutos || !eixoAtual
-                      ? 'Produtos'
-                      : `Por ${eixoDe(eixoAtual).rotulo.toLowerCase()}`}
-                  </CardTitle>
-                  <Segmentado
-                    nome="Medida"
-                    opcoes={MEDIDAS}
-                    valor={medida}
-                    // Arrow, e não `setMedida` direto: passar o setter faz o
-                    // `SetStateAction<Medida>` disputar a inferência de `T` com as
-                    // opções, e o TypeScript alarga os dois para `string`.
-                    onValor={(v) => setMedida(v)}
-                    tamanho="sm"
-                  />
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                {/* Ordem de leitura: trocar o primeiro eixo é o que transforma a mesma
-                    consulta em "por onde saiu cada marca" ou "que marcas cada tipo de
-                    saída levou". Só faz sentido na raiz — no meio do caminho, mudaria
-                    o significado dos passos já dados. */}
-                {caminho.length === 0 && (
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Abrir por
+                      Ver por
                     </span>
-                    {EIXOS_DA_VISAO[visao].map((id) => (
+                    {EIXOS_TOPO.map((id) => (
                       <button
                         key={id}
                         type="button"
-                        aria-pressed={ordem[0] === id}
+                        aria-pressed={escopo.abrirPor === id}
                         onClick={() => trocarTopo(id)}
+                        title={eixoDe(id).exemplos}
                         className={`rounded-lg px-2.5 py-1 text-2xs font-semibold transition-colors ${
-                          ordem[0] === id
+                          escopo.abrirPor === id
                             ? 'bg-primary text-primary-foreground'
                             : 'bg-muted/60 text-muted-foreground hover:text-foreground'
                         }`}
@@ -970,130 +401,86 @@ export default function Panorama() {
                       </button>
                     ))}
                   </div>
-                )}
-
-                {/* Trilha — só navegação. O total do recorte tem um lugar só, os
-                    indicadores acima. */}
-                {caminho.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-1 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => voltarPara(0)}
-                      aria-label="Voltar ao início"
-                      className="flex items-center gap-1 rounded-lg px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className="cursor-help text-2xs font-semibold uppercase tracking-wider text-muted-foreground"
+                      title="Quantos meses completos servem de base para a cobertura. O mês corrente fica de fora por ser parcial."
                     >
-                      <Home size={14} />
-                      Tudo
-                    </button>
-                    {caminho.map((chave, i) => {
-                      const ultimo = i === caminho.length - 1;
-                      return (
-                        <span key={`${i}-${chave}`} className="flex items-center gap-1">
-                          <ChevronRight size={14} className="text-muted-foreground" />
-                          {ultimo ? (
-                            <span className="rounded-lg px-2 py-1 font-semibold">
-                              {rotulos[i] ?? chave}
-                            </span>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => voltarPara(i + 1)}
-                              className="rounded-lg px-2 py-1 font-medium text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
-                            >
-                              {rotulos[i] ?? chave}
-                            </button>
-                          )}
-                        </span>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* Níveis de categoria */}
-                {eixoAtual && !verProdutos && !ehComparativo && (
-                  <div className="divide-y divide-border/60">
-                    {nos.map((no) => (
-                      <LinhaNivel
-                        key={no.chave}
-                        no={no}
-                        medida={medida}
-                        onAbrir={() => descer(no)}
-                      />
+                      Cobertura ⓘ
+                    </span>
+                    {JANELAS_COBERTURA.map((n) => (
+                      <button
+                        key={n}
+                        type="button"
+                        aria-pressed={escopo.janela === n}
+                        onClick={() => atualizar({ janela: n })}
+                        title={`Base: ${rotuloJanela(n)}`}
+                        className={`rounded-lg px-2.5 py-1 text-2xs font-semibold transition-colors ${
+                          escopo.janela === n
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted/60 text-muted-foreground hover:text-foreground'
+                        }`}
+                      >
+                        {n}m
+                      </button>
                     ))}
                   </div>
-                )}
-
-                {ehComparativo && eixoAtual && (
-                  <div className="divide-y divide-border/60">
-                    {nosComparativo.map((no) => (
-                      <LinhaComparativa
-                        key={no.chave}
-                        no={no}
-                        medida={medida}
-                        onAbrir={
-                          caminho.length + 1 < ordem.length
-                            ? () => descer({ ...no, quantidade: 0, valor: 0, linhas: 0, participacao: 0 })
-                            : undefined
-                        }
-                      />
-                    ))}
-                  </div>
-                )}
-
-                {/* A folha. No fluxo é uma ida a mais ao ERP, e por isso é pedida e
-                    nunca automática; no estoque o dado já está no cliente, e o botão
-                    continua existindo só para a lista de produtos não abrir sozinha
-                    por cima da leitura por categoria. */}
-                {ehComparativo && (
-                  <p className="text-2xs text-muted-foreground">
-                    O comparativo para na categoria: o estoque interno do ERP é por modelo e as
-                    demais fontes descem à cor — confrontá-las no produto seria somar medidas
-                    diferentes.
-                  </p>
-                )}
-
-                {caminho.length > 0 && !verProdutos && !ehComparativo && (
-                  <Button variant="outline" size="sm" onClick={() => setVerProdutos(true)}>
-                    <Package className="h-4 w-4" />
-                    Ver produtos deste recorte
-                  </Button>
-                )}
-
-                {verProdutos && (
-                  <>
-                    {folha.isLoading && (
-                      <div className="space-y-2">
-                        {[0, 1, 2, 3].map((i) => (
-                          <Skeleton key={i} className="h-12 w-full rounded-xl" />
-                        ))}
-                      </div>
-                    )}
-                    {folha.error && (
-                      <Alert variant="destructive">
-                        <CloudOff className="h-4 w-4" />
-                        <AlertDescription>{folha.error.message}</AlertDescription>
-                      </Alert>
-                    )}
-                    {!folha.isLoading && !folha.error && (
-                      <div className="divide-y divide-border/60">
-                        {nosProdutos.length === 0 ? (
-                          <p className="py-6 text-center text-sm text-muted-foreground">
-                            Nenhum produto neste recorte.
-                          </p>
-                        ) : (
-                          nosProdutos.map((no) => (
-                            <LinhaNivel key={no.chave} no={no} medida={medida} />
-                          ))
-                        )}
-                      </div>
-                    )}
-                    <Button variant="ghost" size="sm" onClick={() => setVerProdutos(false)}>
-                      Voltar às categorias
-                    </Button>
-                  </>
-                )}
+                  <button
+                    type="button"
+                    onClick={tudoExpandido}
+                    className="rounded-lg bg-muted/60 px-2.5 py-1 text-2xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                  >
+                    {expandidos.size > 0 ? 'Recolher tudo' : 'Expandir tudo'}
+                  </button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* A dica existe porque a afordância sozinha não basta para quem nunca
+                    viu a tela: os números abrem detalhe, e ninguém tenta clicar num
+                    número por conta própria. */}
+                <p className="pb-2 text-2xs text-muted-foreground">
+                  Clique num número para ver o detalhe · no ícone{' '}
+                  <Package size={11} className="inline" aria-hidden /> para os produtos.
+                </p>
+                <ArvoreComparativa
+                  nos={arvore}
+                  medida={escopo.medida}
+                  baseCobertura={rotuloJanela(escopo.janela)}
+                  caminhoAberto={detalhe ? chaveDoCaminho(detalhe.no.caminho) : undefined}
+                  renderDetalhe={
+                    detalhe
+                      ? () => (
+                          <PainelDetalhe
+                            titulo={detalhe.no.rotulo}
+                            fonte={detalhe.fonte}
+                            linhas={linhasDoDetalhe}
+                            medida={escopo.medida}
+                            produtos={produtos}
+                            carregandoProdutos={consultaProdutos?.isLoading ?? false}
+                            erroProdutos={consultaProdutos?.error?.message ?? null}
+                            onProdutos={() => setPedirProdutos(true)}
+                            onFechar={() => {
+                              setDetalhe(null);
+                              setPedirProdutos(false);
+                            }}
+                          />
+                        )
+                      : undefined
+                  }
+                  rotuloPeriodo={
+                    escopo.mes ? mesPorExtenso(escopo.mes) : `${dataCurta(escopo.de)} a ${dataCurta(escopo.ate)}`
+                  }
+                  expandidos={expandidos}
+                  onAlternar={alternar}
+                  onDetalhe={abrirDetalhe}
+                  onProdutos={(no) => {
+                    abrirDetalhe(no, 'saiu');
+                    setPedirProdutos(true);
+                  }}
+                />
               </CardContent>
             </Card>
+
           </>
         )}
       </div>

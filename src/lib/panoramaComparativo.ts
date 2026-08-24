@@ -32,6 +32,32 @@ import type { LinhaPanorama } from '@/hooks/usePanoramaQuery';
  *     total; explica a divisão entre estoque interno e externo.
  */
 
+/**
+ * As cinco fontes que uma linha do comparativo carrega.
+ *
+ * Vive aqui, e não no componente que desenha a linha, porque é vocabulário do domínio:
+ * a lib sabe quais fontes existem, e a árvore, o painel de detalhe e a página precisam
+ * concordar sobre isso sem uma delas ser dona das outras.
+ */
+export type FonteDetalhe = 'entrou' | 'saiu' | 'interno' | 'externo' | 'inventario';
+
+/** Eixos que fazem sentido para cada fonte — o vocabulário próprio de cada uma. */
+export const EIXOS_DA_FONTE: Record<FonteDetalhe, EixoId[]> = {
+  saiu: ['classificacao', 'tipoPedido'],
+  entrou: ['classifEntrada', 'fornecedor', 'uf'],
+  externo: ['terceiro', 'uf'],
+  inventario: ['vendedor'],
+  interno: ['situacao'],
+};
+
+export const TITULO_DA_FONTE: Record<FonteDetalhe, string> = {
+  saiu: 'Saídas',
+  entrou: 'Entradas',
+  externo: 'Na mala (ERP)',
+  inventario: 'Contado pelo representante',
+  interno: 'Na empresa',
+};
+
 /** Classificação de SAÍDA que é transferência para a mala, não venda. */
 const SAIDA_TRANSFERENCIA = 'REMESSA';
 
@@ -53,6 +79,16 @@ export interface FontesComparativo {
   interno: readonly LinhaPanorama[];
   /** Saldo da mala pelo ERP — nunca a contagem. */
   externo: readonly LinhaPanorama[];
+  /** A mesma mala CONTADA. Entra na linha para ser confrontada, nunca somada. */
+  inventario: readonly LinhaPanorama[];
+  /**
+   * Saídas da JANELA DE COBERTURA — os últimos N meses completos.
+   *
+   * Separada de `saidas` de propósito. `saidas` responde "quanto saiu no período que
+   * você escolheu"; esta responde "qual é o ritmo de saída do negócio", e as duas
+   * perguntas não podem compartilhar a base. Ver `janelaCobertura`.
+   */
+  demanda: readonly LinhaPanorama[];
 }
 
 const ZERO: Totais = { quantidade: 0, valor: 0, linhas: 0 };
@@ -74,13 +110,28 @@ export interface NoComparativo {
   paraMala: number;
   interno: Totais;
   externo: Totais;
+  /** A mala contada. Fora de `estoqueTotal` de propósito — ver `FontesComparativo`. */
+  inventario: Totais;
+  /**
+   * `inventario − externo`, em unidades. O número mais valioso da linha: mede a
+   * distância entre o que o ERP acha que está na mala e o que foi contado nela.
+   *
+   * `null` quando o vendedor daquele recorte não tem inventário aprovado — aí não há
+   * divergência, há ausência de contagem, e mostrar "−1.200" acusaria um sumiço que
+   * não aconteceu.
+   */
+  divergencia: number | null;
   /** `entrou − saiu`. O quanto o estoque total deveria ter mudado no período. */
   saldoPeriodo: number;
   estoqueTotal: number;
+  /** Saída média por mês na janela de cobertura. É o denominador, exposto para a tela. */
+  porMes: number;
   /**
-   * Meses de estoque no ritmo de saída do período. `null` quando não houve saída —
-   * dividir por zero daria infinito, e "infinitos meses de cobertura" é ruído, não
-   * informação. A tela mostra um traço.
+   * Meses que o estoque de hoje dura no ritmo da JANELA DE COBERTURA — nunca no ritmo
+   * do período exibido.
+   *
+   * `null` quando não houve saída na janela: dividir por zero daria infinito, e
+   * "cobertura infinita" é ruído, não informação. A tela mostra um traço.
    */
   cobertura: number | null;
 }
@@ -91,18 +142,20 @@ export const EIXOS_COMPARATIVO: EixoId[] = ['marca', 'tipo', 'subtipo', 'grupo']
 /**
  * Agrupa as quatro fontes por um eixo e cruza os totais.
  *
- * `meses` é o tamanho do período em meses, usado só na cobertura. Vem de fora porque
- * quem sabe o intervalo pedido é a tela — deduzi-lo dos meses PRESENTES nas saídas
- * daria um número maior em categorias que ficaram paradas parte do período.
+ * `mesesJanela` é o tamanho da janela de COBERTURA (3, 6 ou 12 meses completos), não do
+ * período exibido. Vem de fora porque deduzi-lo dos meses PRESENTES nas saídas daria um
+ * número maior em categorias que ficaram paradas parte da janela — uma marca que vendeu
+ * só em julho teria a cobertura calculada como se vendesse todo mês.
  */
 export function compararPorEixo(
   fontes: FontesComparativo,
   eixo: EixoId,
   ordem: readonly EixoId[],
   caminho: readonly string[],
-  meses: number
+  mesesJanela: number
 ): NoComparativo[] {
   const e = eixoDe(eixo);
+  const saiuNaJanela = new Map<string, number>();
   const nos = new Map<string, NoComparativo>();
 
   const vazio = (chave: string, rotulo: string): NoComparativo => ({
@@ -113,8 +166,11 @@ export function compararPorEixo(
     paraMala: 0,
     interno: { ...ZERO },
     externo: { ...ZERO },
+    inventario: { ...ZERO },
+    divergencia: null,
     saldoPeriodo: 0,
     estoqueTotal: 0,
+    porMes: 0,
     cobertura: null,
   });
 
@@ -147,11 +203,31 @@ export function compararPorEixo(
     no.externo = acumular(no.externo, l);
   }
 
+  const comInventario = new Set<string>();
+  for (const l of filtrarPeloCaminho(fontes.inventario, ordem, caminho)) {
+    const no = pegar(l);
+    no.inventario = acumular(no.inventario, l);
+    comInventario.add(no.chave);
+  }
+
+  // A demanda NÃO cria nós: uma categoria que vendeu na janela mas sumiu do período e
+  // do estoque não deve aparecer como linha — ela não tem nada a mostrar hoje.
+  for (const l of filtrarPeloCaminho(fontes.demanda, ordem, caminho)) {
+    if (l.classif_operacao === SAIDA_TRANSFERENCIA) continue;
+    const chave = e.chaveDe(l);
+    saiuNaJanela.set(chave, (saiuNaJanela.get(chave) ?? 0) + (Number(l.quantidade) || 0));
+  }
+
   for (const no of nos.values()) {
+    // Só há divergência onde houve contagem. Sem inventário, `0 − externo` acusaria um
+    // sumiço que ninguém mediu.
+    no.divergencia = comInventario.has(no.chave)
+      ? no.inventario.quantidade - no.externo.quantidade
+      : null;
     no.saldoPeriodo = no.entrou.quantidade - no.saiu.quantidade;
     no.estoqueTotal = no.interno.quantidade + no.externo.quantidade;
-    const porMes = meses > 0 ? no.saiu.quantidade / meses : 0;
-    no.cobertura = porMes > 0 ? no.estoqueTotal / porMes : null;
+    no.porMes = mesesJanela > 0 ? (saiuNaJanela.get(no.chave) ?? 0) / mesesJanela : 0;
+    no.cobertura = no.porMes > 0 ? no.estoqueTotal / no.porMes : null;
   }
 
   return [...nos.values()];
@@ -162,12 +238,12 @@ export function totalComparativo(
   fontes: FontesComparativo,
   ordem: readonly EixoId[],
   caminho: readonly string[],
-  meses: number
+  mesesJanela: number
 ): NoComparativo {
   // Reusa `compararPorEixo` com um eixo qualquer e soma os nós: garante que o total da
   // faixa e a soma da lista venham da MESMA conta. Calculá-lo à parte é como duas
   // somas do mesmo número acabam divergindo por um filtro esquecido de um lado.
-  const nos = compararPorEixo(fontes, 'marca', ordem, caminho, meses);
+  const nos = compararPorEixo(fontes, 'marca', ordem, caminho, mesesJanela);
   const total: NoComparativo = {
     chave: '',
     rotulo: 'Total',
@@ -176,13 +252,18 @@ export function totalComparativo(
     paraMala: 0,
     interno: { ...ZERO },
     externo: { ...ZERO },
+    inventario: { ...ZERO },
+    divergencia: null,
     saldoPeriodo: 0,
     estoqueTotal: 0,
+    porMes: 0,
     cobertura: null,
   };
 
+  let algumInventario = false;
   for (const no of nos) {
-    for (const campo of ['entrou', 'saiu', 'interno', 'externo'] as const) {
+    if (no.divergencia !== null) algumInventario = true;
+    for (const campo of ['entrou', 'saiu', 'interno', 'externo', 'inventario'] as const) {
       total[campo] = {
         quantidade: total[campo].quantidade + no[campo].quantidade,
         valor: total[campo].valor + no[campo].valor,
@@ -190,13 +271,150 @@ export function totalComparativo(
       };
     }
     total.paraMala += no.paraMala;
+    total.porMes += no.porMes;
   }
 
+  total.divergencia = algumInventario
+    ? total.inventario.quantidade - total.externo.quantidade
+    : null;
   total.saldoPeriodo = total.entrou.quantidade - total.saiu.quantidade;
   total.estoqueTotal = total.interno.quantidade + total.externo.quantidade;
-  const porMes = meses > 0 ? total.saiu.quantidade / meses : 0;
-  total.cobertura = porMes > 0 ? total.estoqueTotal / porMes : null;
+  total.cobertura = total.porMes > 0 ? total.estoqueTotal / total.porMes : null;
   return total;
+}
+
+export interface PontoMensalComparativo {
+  mes: string;
+  entrou: number;
+  saiu: number;
+}
+
+/**
+ * Entradas e saídas do recorte, mês a mês, na medida ativa.
+ *
+ * As duas juntas respondem o que nenhuma sozinha responde: se a empresa está comprando
+ * no ritmo em que vende. Só o FLUXO tem série — estoque é saldo de agora e não existe
+ * "estoque de março" no ERP.
+ */
+export function serieComparativa(
+  fontes: FontesComparativo,
+  ordem: readonly EixoId[],
+  caminho: readonly string[],
+  medida: Medida
+): PontoMensalComparativo[] {
+  const meses = new Map<string, PontoMensalComparativo>();
+  const pegar = (mes: string) => {
+    const atual = meses.get(mes) ?? { mes, entrou: 0, saiu: 0 };
+    meses.set(mes, atual);
+    return atual;
+  };
+
+  for (const l of filtrarPeloCaminho(fontes.saidas, ordem, caminho)) {
+    if (!l.mes || l.classif_operacao === SAIDA_TRANSFERENCIA) continue;
+    pegar(l.mes).saiu += Number(l[medida]) || 0;
+  }
+  for (const l of filtrarPeloCaminho(fontes.entradas, ordem, caminho)) {
+    if (!l.mes || l.classif_entrada === ENTRADA_TRANSFERENCIA) continue;
+    pegar(l.mes).entrou += Number(l[medida]) || 0;
+  }
+
+  return [...meses.values()].sort((a, b) => a.mes.localeCompare(b.mes));
+}
+
+/**
+ * Recorta o FLUXO a um mês, deixando o estoque intacto.
+ *
+ * ⚠️ E o estoque fica intacto de propósito, não por esquecimento: saldo é foto de
+ * agora e não existe "estoque em março". Filtrar por mês responde "o que entrou e saiu
+ * naquele mês", enquanto as colunas de estoque continuam dizendo "quanto temos hoje" —
+ * a tela precisa rotulá-las assim para a leitura não sugerir um saldo histórico que
+ * ninguém guardou.
+ */
+export function recortarPorMes(fontes: FontesComparativo, mes: string | null): FontesComparativo {
+  if (!mes) return fontes;
+  return {
+    ...fontes,
+    saidas: fontes.saidas.filter((l) => l.mes === mes),
+    entradas: fontes.entradas.filter((l) => l.mes === mes),
+  };
+}
+
+/** Separador de chaves no caminho. Caractere que não existe nos dados nem no teclado. */
+const SEP = '\x1f';
+
+export const chaveDoCaminho = (caminho: readonly string[]) => caminho.join(SEP);
+
+export interface NoArvore extends NoComparativo {
+  /** Profundidade, 0 na raiz. Vira indentação. */
+  nivel: number;
+  /** Chaves da raiz até aqui, inclusive — é o identificador de expansão. */
+  caminho: string[];
+  temFilhos: boolean;
+}
+
+/**
+ * A hierarquia inteira num scroll só, com os nós abertos já resolvidos.
+ *
+ * **Por que árvore expansível e não um nível por vez.** Navegar substituindo a tela a
+ * cada clique é visão de túnel: para comparar OBEN com POWER dentro de RECEITUARIO o
+ * gestor precisava subir e descer duas vezes, guardando o primeiro número de cabeça.
+ * Expandindo no lugar, os dois ficam visíveis juntos. O `PainelGestor` já tinha
+ * aprendido isso — foi reescrito assim depois da queixa "vou clicando e vai abrindo as
+ * camadas".
+ *
+ * O custo é recalcular os filhos de cada nó aberto a cada render. É aceitável porque
+ * tudo aqui é soma sobre arrays já em memória, e só os nós ABERTOS são calculados —
+ * uma árvore fechada custa uma passada, igual à lista antiga.
+ */
+export function construirArvore(
+  fontes: FontesComparativo,
+  ordem: readonly EixoId[],
+  expandidos: ReadonlySet<string>,
+  mesesJanela: number,
+  medida: Medida
+): NoArvore[] {
+  const saida: NoArvore[] = [];
+
+  const descer = (caminho: string[], nivel: number) => {
+    const eixo = ordem[nivel];
+    if (!eixo) return;
+    const nos = ordenarComparativo(
+      compararPorEixo(fontes, eixo, ordem, caminho, mesesJanela),
+      medida
+    );
+
+    for (const no of nos) {
+      const caminhoDoNo = [...caminho, no.chave];
+      const temFilhos = nivel + 1 < ordem.length;
+      saida.push({ ...no, nivel, caminho: caminhoDoNo, temFilhos });
+      if (temFilhos && expandidos.has(chaveDoCaminho(caminhoDoNo))) {
+        descer(caminhoDoNo, nivel + 1);
+      }
+    }
+  };
+
+  descer([], 0);
+  return saida;
+}
+
+/** Todas as chaves expansíveis da árvore — alimenta o "expandir tudo". */
+export function chavesExpansiveis(
+  fontes: FontesComparativo,
+  ordem: readonly EixoId[],
+  mesesJanela: number
+): string[] {
+  const chaves: string[] = [];
+  const descer = (caminho: string[], nivel: number) => {
+    const eixo = ordem[nivel];
+    if (!eixo || nivel + 1 >= ordem.length) return;
+    for (const no of compararPorEixo(fontes, eixo, ordem, caminho, mesesJanela)) {
+      const c = [...caminho, no.chave];
+      chaves.push(chaveDoCaminho(c));
+      descer(c, nivel + 1);
+    }
+  };
+  descer([], 0);
+  return chaves;
 }
 
 /**

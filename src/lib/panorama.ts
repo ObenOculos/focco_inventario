@@ -30,6 +30,7 @@ export const MEDIDAS: { valor: Medida; rotulo: string }[] = [
 ];
 
 export type EixoId =
+  | 'tudo'
   | 'classificacao'
   | 'tipoPedido'
   | 'classifEntrada'
@@ -56,6 +57,16 @@ export const SEM_CLASSIFICACAO = 'Sem classificação';
 interface Eixo {
   id: EixoId;
   rotulo: string;
+  /**
+   * Exemplos do que o eixo contém, para o `title` do botão.
+   *
+   * "Subtipo" e "Grupo" são os nomes dos NÍVEIS no Ciclone, não do que eles guardam —
+   * quem não conhece o cadastro não tem como saber que um é público e o outro é
+   * material. Renomear seria pior: o gestor confere esta tela contra os relatórios do
+   * ERP, e dois vocabulários para a mesma coisa quebrariam essa conferência. Então o
+   * nome fica e o exemplo explica.
+   */
+  exemplos?: string;
   /** Chave estável do grupo — é ela que entra no caminho do drill-down. */
   chaveDe: (l: LinhaPanorama) => string;
   /** Como o grupo aparece na tela. Pode ser mais rico que a chave. */
@@ -72,14 +83,35 @@ const codigo = (v: unknown): string => {
 const comDescricao = (valor: string, descricao: string | null | undefined) =>
   descricao ? `${valor} - ${descricao}` : valor;
 
-const eixoDeCategoria = (id: 'marca' | 'tipo' | 'subtipo' | 'grupo', rotulo: string): Eixo => ({
+const eixoDeCategoria = (
+  id: 'marca' | 'tipo' | 'subtipo' | 'grupo',
+  rotulo: string,
+  exemplos?: string
+): Eixo => ({
   id,
   rotulo,
+  exemplos,
   chaveDe: (l) => categoriaDa(l, id),
   rotuloDe: (l) => categoriaDa(l, id),
 });
 
 export const EIXOS: Eixo[] = [
+  {
+    // A RAIZ da árvore: um nó só, que abre em tudo o mais.
+    //
+    // Existe porque a árvore não tinha topo — ela começava em Marca, e não havia
+    // nenhuma linha representando "a empresa inteira" para expandir. Não é caso
+    // especial na máquina: é um eixo cuja chave é constante, então `agrupar` devolve
+    // exatamente um grupo e o drill-down segue igual.
+    //
+    // NÃO é o padrão: abrir numa linha só obrigaria um clique antes de ver qualquer
+    // número, e o padrão de um painel é mostrar, não pedir.
+    id: 'tudo',
+    rotulo: 'Tudo',
+    exemplos: 'Uma linha só, com a empresa inteira',
+    chaveDe: () => 'tudo',
+    rotuloDe: () => 'Tudo',
+  },
   {
     id: 'classificacao',
     rotulo: 'Tipo de saída',
@@ -140,10 +172,10 @@ export const EIXOS: Eixo[] = [
     rotuloDe: (l) =>
       l.situacao === 'A' ? 'Ativo' : l.situacao === 'I' ? 'Inativo' : 'Sem cadastro',
   },
-  eixoDeCategoria('marca', 'Marca'),
-  eixoDeCategoria('tipo', 'Tipo'),
-  eixoDeCategoria('subtipo', 'Subtipo'),
-  eixoDeCategoria('grupo', 'Grupo'),
+  eixoDeCategoria('marca', 'Marca', 'Oben, Power, Core Eyes'),
+  eixoDeCategoria('tipo', 'Tipo', 'Receituário, Solar, Estojo'),
+  eixoDeCategoria('subtipo', 'Subtipo', 'Público: masculino, feminino'),
+  eixoDeCategoria('grupo', 'Grupo', 'Material: acetato, metal'),
 ];
 
 const EIXO_POR_ID = new Map(EIXOS.map((e) => [e.id, e]));
