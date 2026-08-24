@@ -1,5 +1,5 @@
 import { categoriaDa, SEM_CATEGORIA } from '@/lib/categoriasProduto';
-import type { Lente, LinhaPanorama, RecortePanorama } from '@/hooks/usePanoramaQuery';
+import type { LinhaPanorama, RecortePanorama, Visao } from '@/hooks/usePanoramaQuery';
 
 /**
  * Panorama — o pivô local sobre o agregado que veio do Ciclone.
@@ -35,6 +35,9 @@ export type EixoId =
   | 'classifEntrada'
   | 'fornecedor'
   | 'uf'
+  | 'vendedor'
+  | 'terceiro'
+  | 'situacao'
   | 'marca'
   | 'tipo'
   | 'subtipo'
@@ -113,6 +116,30 @@ export const EIXOS: Eixo[] = [
     chaveDe: (l) => l.uf || '',
     rotuloDe: (l) => l.uf || 'Sem UF',
   },
+  {
+    id: 'terceiro',
+    rotulo: 'Quem está com',
+    // Chave pelo código: dois cadastros repetem nome, e o código é o que o Ciclone
+    // garante único. O rótulo não é "Vendedor" porque nem todo terceiro é um: há
+    // óticas e a própria matriz na lista.
+    chaveDe: (l) => codigo(l.terceiro_cod),
+    rotuloDe: (l) => l.terceiro || `Terceiro ${codigo(l.terceiro_cod)}`,
+  },
+  {
+    id: 'vendedor',
+    rotulo: 'Vendedor',
+    chaveDe: (l) => l.codigo_vendedor ?? '',
+    rotuloDe: (l) => l.nome_vendedor || `Vendedor ${l.codigo_vendedor ?? '?'}`,
+  },
+  {
+    id: 'situacao',
+    rotulo: 'Situação do cadastro',
+    // Produto INATIVO com saldo é achado gerencial, não erro de leitura: é estoque
+    // parado de algo que a empresa decidiu não vender mais.
+    chaveDe: (l) => l.situacao ?? '',
+    rotuloDe: (l) =>
+      l.situacao === 'A' ? 'Ativo' : l.situacao === 'I' ? 'Inativo' : 'Sem cadastro',
+  },
   eixoDeCategoria('marca', 'Marca'),
   eixoDeCategoria('tipo', 'Tipo'),
   eixoDeCategoria('subtipo', 'Subtipo'),
@@ -138,15 +165,31 @@ export const eixoDe = (id: EixoId): Eixo => {
  * `subtipo` e `grupo` ficam no fim nas duas: respondem uma pergunta mais fina
  * (público e material) que só interessa depois de escolher marca e tipo.
  */
-export const ORDEM_PADRAO: Record<Lente, EixoId[]> = {
+export const ORDEM_PADRAO: Record<Visao, EixoId[]> = {
   saidas: ['classificacao', 'marca', 'tipo', 'subtipo', 'grupo'],
   entradas: ['classifEntrada', 'fornecedor', 'marca', 'tipo', 'subtipo', 'grupo'],
+  // O estoque começa pela composição, que é a pergunta dele: "como está distribuído
+  // entre as marcas e tipos". Não há eixo de documento para vir antes.
+  'estoque-interno': ['marca', 'tipo', 'subtipo', 'grupo'],
+  // O externo começa por VENDEDOR porque cada um tem uma data de contagem diferente:
+  // olhar o total sem ver de quem ele é esconde justamente o que o torna frágil.
+  // Os dois lados da mala abrem por QUEM ESTÁ COM ELA, e não por categoria: o total
+  // sozinho esconde que ele é a soma de dezenas de posições independentes.
+  'estoque-externo': ['terceiro', 'marca', 'tipo', 'subtipo', 'grupo'],
+  'estoque-inventario': ['vendedor', 'marca', 'tipo', 'subtipo', 'grupo'],
+  // O comparativo só tem categoria: é o único vocabulário em que as quatro fontes
+  // concordam. Ver `panoramaComparativo.ts`.
+  comparativo: ['marca', 'tipo', 'subtipo', 'grupo'],
 };
 
-/** Eixos que a lente aceita — o que a barra "Abrir por" oferece. */
-export const EIXOS_DA_LENTE: Record<Lente, EixoId[]> = {
+/** Eixos que a visão aceita — o que a barra "Abrir por" oferece. */
+export const EIXOS_DA_VISAO: Record<Visao, EixoId[]> = {
   saidas: ['classificacao', 'tipoPedido', 'marca', 'tipo', 'subtipo', 'grupo'],
   entradas: ['classifEntrada', 'fornecedor', 'uf', 'marca', 'tipo', 'subtipo', 'grupo'],
+  'estoque-interno': ['marca', 'tipo', 'subtipo', 'grupo', 'situacao'],
+  'estoque-externo': ['terceiro', 'uf', 'marca', 'tipo', 'subtipo', 'grupo'],
+  'estoque-inventario': ['vendedor', 'marca', 'tipo', 'subtipo', 'grupo'],
+  comparativo: ['marca', 'tipo', 'subtipo', 'grupo'],
 };
 
 export interface Totais {
@@ -233,7 +276,10 @@ export function agruparPorProduto(
   const grupos = new Map<string, { chave: string; rotulo: string; totais: Totais }>();
 
   for (const l of linhas) {
-    const chave = l.codigo_auxiliar ?? '';
+    // O estoque INTERNO não tem código auxiliar — o grão dele é o modelo. A queda
+    // para `codigo_produto` é o que faz a folha funcionar nas duas medidas de
+    // produto sem a máquina precisar saber qual lente está aberta.
+    const chave = l.codigo_auxiliar ?? l.codigo_produto?.toString() ?? '';
     const atual = grupos.get(chave) ?? {
       chave,
       rotulo: l.nome_produto ? `${chave} · ${l.nome_produto}` : chave,
@@ -309,7 +355,7 @@ export function serieMensal(linhas: readonly LinhaPanorama[]): PontoMensal[] {
  */
 export function recorteDoCaminho(
   linhas: readonly LinhaPanorama[],
-  lente: Lente
+  visao: Visao
 ): RecortePanorama {
   const distintos = <T>(valores: T[]): T[] => [...new Set(valores)];
   const inteiros = (valores: (number | null | undefined)[]) =>
@@ -323,7 +369,7 @@ export function recorteDoCaminho(
     cfops: distintos(linhas.map((l) => codigo(l.cfop)).filter((c) => c !== '')),
   };
 
-  return lente === 'entradas'
+  return visao === 'entradas'
     ? { ...comum, fornecedores: inteiros(linhas.map((l) => l.fornecedor_cod)) }
     : { ...comum, tipos_pedido: inteiros(linhas.map((l) => l.tipo_pedido_cod)) };
 }

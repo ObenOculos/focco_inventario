@@ -707,6 +707,95 @@ def entradas(
     }
 
 
+@app.get("/estoque", dependencies=PROTEGIDO)
+def estoque(
+    empresas: list[int] | None = Query(None, description="Padrão: EMPRESAS_PADRAO"),
+    incluir_zerados: bool = Query(False, description="Cadastros sem saldo. Dobra a resposta."),
+    marcas: list[str] | None = Query(None, description="Recorte; '' = sem categoria."),
+    tipos: list[str] | None = Query(None),
+    subtipos: list[str] | None = Query(None),
+    grupos: list[str] | None = Query(None),
+):
+    """Saldo atual da empresa — o estoque INTERNO.
+
+    **Sem período, de propósito.** É foto, não fluxo: o saldo é o de agora, e uma
+    data aqui prometeria um histórico que a tabela não guarda.
+
+    ⚠️ **O grão é o MODELO, não o código auxiliar.** `eq_produtoespecifico` é por
+    empresa + filial + produto genérico — não por cor. Quem consome tem que dizer
+    isso na tela, porque o estoque EXTERNO (dos inventários) desce até a cor, e
+    somar os dois como se fossem a mesma medida está errado. Ver `panorama.py`.
+
+    Vem tudo no grão mais fino numa viagem só — são ~1.800 produtos com saldo — e o
+    cliente agrega os níveis localmente. Não há rota de folha separada.
+
+    Saldo NEGATIVO não é filtrado: é condição real do ERP (618 dos 1.784 produtos) e
+    esconder faria o total não fechar com o do Ciclone.
+    """
+    try:
+        with _fila_erp("/estoque"):
+            df = panorama.estoque_interno(
+                empresas=empresas,
+                incluir_zerados=incluir_zerados,
+                marcas=marcas,
+                tipos=tipos,
+                subtipos=subtipos,
+                grupos=grupos,
+            )
+        _conferir_limite(df, "/estoque")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _erro_erp(exc)
+
+    return {"total": len(df), "dados": _para_json(df)}
+
+
+@app.get("/estoque-externo", dependencies=PROTEGIDO)
+def estoque_externo(
+    nivel: str = Query("categoria", pattern="^(categoria|produto)$"),
+    empresas: list[int] | None = Query(None, description="Padrão: EMPRESAS_PADRAO"),
+    marcas: list[str] | None = Query(None, description="Recorte; '' = sem categoria."),
+    tipos: list[str] | None = Query(None),
+    subtipos: list[str] | None = Query(None),
+    grupos: list[str] | None = Query(None),
+    terceiros: list[int] | None = Query(None),
+):
+    """Estoque da MALA pelo saldo do ERP — mercadoria nossa em poder de terceiros.
+
+    Também sem período: é foto, como o `/estoque`.
+
+    O par desta rota é a RPC `estoque_inventariado` no Supabase, que traz a mesma
+    mercadoria pela CONTAGEM do representante. Saldo calculado de um lado, contagem
+    física do outro — a divergência entre os dois é informação, não erro.
+
+    Grão melhor que o do `/estoque`: aqui há terceiro E cor, porque
+    `eq_produtoespecifestoqterceiro` guarda as duas. Por isso existem dois níveis,
+    como nas lentes de fluxo: terceiro × SKU são 16.500 linhas.
+
+    Saldo negativo não é filtrado — significa que saiu mais do que o ERP registrou
+    como enviado, e é o tipo de linha que precisa ser vista.
+    """
+    try:
+        with _fila_erp(f"/estoque-externo[{nivel}]"):
+            df = panorama.estoque_terceiros(
+                empresas=empresas,
+                nivel=nivel,
+                marcas=marcas,
+                tipos=tipos,
+                subtipos=subtipos,
+                grupos=grupos,
+                terceiros=terceiros,
+            )
+        _conferir_limite(df, f"/estoque-externo[{nivel}]")
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise _erro_erp(exc)
+
+    return {"total": len(df), "nivel": nivel, "dados": _para_json(df)}
+
+
 if __name__ == "__main__":
     import uvicorn
 

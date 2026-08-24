@@ -335,6 +335,25 @@ export type Database = {
         Args: { p_produtos: Json; p_sincronizacao_id: string }
         Returns: number
       }
+      estoque_inventariado: {
+        Args: never
+        Returns: {
+          codigo_auxiliar: string
+          codigo_produto: string
+          codigo_vendedor: string
+          cor: string
+          data_inventario: string
+          grupo: string
+          inventario_id: string
+          marca: string
+          nome_produto: string
+          nome_vendedor: string
+          quantidade: number
+          subtipo: string
+          tipo: string
+          valor: number
+        }[]
+      }
       get_user_codigo_vendedor: { Args: { user_id: string }; Returns: string }
       get_user_role: {
         Args: { user_id: string }

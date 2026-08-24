@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   chamarErp,
   esperaEntreTentativas,
@@ -29,7 +30,33 @@ import {
  *     por milhares de SKUs para uma pergunta que quase nunca é feita.
  */
 
-export type Lente = 'saidas' | 'entradas';
+export type Lente = 'saidas' | 'entradas' | 'estoque' | 'comparativo';
+
+/**
+ * Os três estoques, e a distinção entre os dois últimos é o ponto:
+ *
+ *   - `interno`    — na empresa.
+ *   - `externo`    — a MALA, pelo saldo que o ERP calcula.
+ *   - `inventario` — a MESMA mala, pelo que o representante contou.
+ *
+ * Externo e inventário descrevem a mesma mercadoria por dois caminhos. A divergência
+ * entre eles é informação — é o que a lente comparativa existe para mostrar.
+ */
+export type LenteEstoque = 'interno' | 'externo' | 'inventario';
+
+/**
+ * A visão efetiva — lente e, quando é estoque, qual dos dois.
+ *
+ * Existe porque os EIXOS e a ordem de leitura dependem dos dois juntos: "Vendedor"
+ * só faz sentido no externo, "Situação do cadastro" só no interno.
+ */
+export type Visao =
+  | 'saidas'
+  | 'entradas'
+  | 'estoque-interno'
+  | 'estoque-externo'
+  | 'estoque-inventario'
+  | 'comparativo';
 
 /**
  * O que as duas lentes têm em comum.
@@ -39,19 +66,32 @@ export type Lente = 'saidas' | 'entradas';
  * `categoriasProduto.ts`, que já é a definição única disso no app.
  */
 interface BasePanorama {
-  empresa: number;
   marca: string;
   tipo: string;
   subtipo: string;
   grupo: string;
+  quantidade: number;
+  valor: number;
+  /**
+   * Quantas linhas de origem entraram na soma. No fluxo são linhas de nota — é o que
+   * denuncia um agregado inflado; no estoque são produtos. O nome é o mesmo para a
+   * máquina de agregação continuar valendo; quem rotula é a tela.
+   */
+  linhas: number;
+}
+
+/**
+ * O que só existe em documento fiscal.
+ *
+ * Saiu do comum quando o estoque entrou: saldo não tem CFOP nem operação, e exigir
+ * esses campos obrigaria a inventar `null`s que nada consome.
+ */
+interface DimensoesFiscais {
+  empresa: number;
   operacao_cod: number | null;
   operacao_desc: string | null;
   cfop: string | number | null;
   cfop_desc: string | null;
-  quantidade: number;
-  valor: number;
-  /** Linhas de nota que entraram na soma. É o que denuncia um agregado inflado. */
-  linhas: number;
 }
 
 /** Onde a saída foi parar, na linguagem de `regras.py`. */
@@ -92,10 +132,77 @@ interface ComMes {
   mes: string;
 }
 
-export type SaidaCategoria = BasePanorama & DimensoesSaida & ComMes;
-export type SaidaProduto = BasePanorama & DimensoesSaida & DimensoesProduto;
-export type EntradaCategoria = BasePanorama & DimensoesEntrada & ComMes;
-export type EntradaProduto = BasePanorama & DimensoesEntrada & DimensoesProduto;
+export type SaidaCategoria = BasePanorama & DimensoesFiscais & DimensoesSaida & ComMes;
+export type SaidaProduto = BasePanorama & DimensoesFiscais & DimensoesSaida & DimensoesProduto;
+export type EntradaCategoria = BasePanorama & DimensoesFiscais & DimensoesEntrada & ComMes;
+export type EntradaProduto = BasePanorama & DimensoesFiscais & DimensoesEntrada & DimensoesProduto;
+
+/**
+ * Saldo da empresa no Ciclone.
+ *
+ * ⚠️ **O grão é o MODELO, não o código auxiliar** — `eq_produtoespecifico` é por
+ * empresa + filial + produto genérico, sem cor. O saldo por grade existe no ERP mas
+ * como macro do aplicativo dele, não como coluna. Consequência: este lado desce até
+ * `codigo_produto` e o externo desce até `codigo_auxiliar`; somar os dois como se
+ * fossem a mesma medida está errado, e a tela diz isso.
+ */
+export interface EstoqueInterno extends BasePanorama {
+  empresa: number;
+  filial: number;
+  // Mesmo tipo do `codigo_produto` das lentes de fluxo: `eqpdg_codigo` é texto no
+  // Ciclone ('ESTOJO PW'), mas o pandas promove a coluna a número quando todos os
+  // valores do recorte são numéricos. Declarar os dois igual é o que deixa a folha
+  // tratar produto sem saber de qual lente ele veio.
+  codigo_produto: string | number | null;
+  nome_produto: string | null;
+  /** `'A'` / `'I'` do cadastro genérico. Produto inativo COM saldo é achado, não erro. */
+  situacao: string | null;
+  disponivel: number;
+  saida_pendente: number;
+  /** Custo direto + indireto do ERP. `valor` é a preço de tabela. */
+  custo: number;
+}
+
+/**
+ * A mala pelo saldo do ERP — mercadoria nossa em poder de terceiros.
+ *
+ * Grão melhor que o do interno: tem terceiro E cor, porque
+ * `eq_produtoespecifestoqterceiro` guarda as duas. É o par do `EstoqueInventariado`.
+ */
+export interface EstoqueExterno extends BasePanorama {
+  empresa: number;
+  terceiro_cod: number | null;
+  terceiro: string;
+  uf: string;
+  /** Só no nível de produto. */
+  codigo_auxiliar?: string;
+  codigo_produto?: string | number | null;
+  cor?: string | number | null;
+  nome_produto?: string | null;
+}
+
+/**
+ * A MESMA mala, pelo que o representante CONTOU — último inventário aprovado.
+ *
+ * ⚠️ **Não é saldo ao vivo.** Cada vendedor tem uma data de contagem diferente, então
+ * o total mistura fotos de momentos distintos; e a última contagem pode ser um
+ * fragmento, porque inventários do mesmo dia são parciais. `data_inventario` viaja em
+ * toda linha justamente para a tela poder dizer isso.
+ */
+export interface EstoqueInventariado extends BasePanorama {
+  codigo_vendedor: string;
+  nome_vendedor: string | null;
+  inventario_id: string;
+  /** ISO-8601 da contagem que originou esta linha. */
+  data_inventario: string;
+  codigo_auxiliar: string;
+  codigo_produto: string | number | null;
+  nome_produto: string | null;
+  // `string | number` como nas lentes de fluxo: a cor é texto ('A02'), mas há
+  // cadastros puramente numéricos, e os tipos precisam coincidir para `LinhaPanorama`
+  // conseguir intersectar as quatro origens.
+  cor: string | number | null;
+}
 
 /**
  * A linha como a MAQUINARIA de drill-down a enxerga.
@@ -107,7 +214,16 @@ export type EntradaProduto = BasePanorama & DimensoesEntrada & DimensoesProduto;
  * tipos exatos (`SaidaCategoria`, `EntradaProduto`…) das consultas.
  */
 export type LinhaPanorama = BasePanorama &
-  Partial<DimensoesSaida & DimensoesEntrada & DimensoesProduto & ComMes>;
+  Partial<
+    DimensoesFiscais &
+      DimensoesSaida &
+      DimensoesEntrada &
+      DimensoesProduto &
+      ComMes &
+      Omit<EstoqueInterno, keyof BasePanorama> &
+      Omit<EstoqueExterno, keyof BasePanorama> &
+      Omit<EstoqueInventariado, keyof BasePanorama>
+  >;
 
 /** Recorte do drill-down, repassado ao gateway quando se pede a folha. */
 export interface RecortePanorama {
@@ -183,3 +299,82 @@ export const useEntradasQuery = (p: ParametrosPanorama | null) =>
 
 export const useEntradasProdutoQuery = (p: ParametrosPanorama | null) =>
   usePanoramaLente<EntradaProduto>('entradas', 'produto', p);
+
+export interface ParametrosEstoque {
+  empresas?: number[];
+  /** Cadastros sem saldo. Dobram a resposta e não dizem nada sobre o estoque de hoje. */
+  incluir_zerados?: boolean;
+}
+
+/**
+ * Saldo interno, do Ciclone. **Sem período** — é foto, não fluxo.
+ *
+ * Vem tudo no grão de produto numa viagem só (~1.800 linhas, meio megabyte) e o
+ * cliente agrega os níveis localmente. Não há consulta de folha separada como nas
+ * lentes de fluxo: com esta cardinalidade, uma segunda ida ao ERP seria cerimônia.
+ */
+export function useEstoqueInternoQuery(parametros: ParametrosEstoque | null) {
+  return useQuery<EstoqueInterno[], ErroErp>({
+    queryKey: ['erp', 'panorama', 'estoque-interno', parametros],
+    queryFn: async () => {
+      const r = await chamarErp<RespostaErp<EstoqueInterno>>('estoque', { ...parametros });
+      return r.dados;
+    },
+    enabled: parametros !== null,
+    staleTime: TEMPO_FRESCO,
+    retry: repetirSeTransitorio,
+    retryDelay: esperaEntreTentativas,
+  });
+}
+
+/**
+ * Estoque inventariado — não passa pelo ERP: sai da RPC `estoque_inventariado` no
+ * Supabase, sobre os inventários que os vendedores contaram.
+ *
+ * Por isso não usa `chamarErp` nem a política de repetição do gateway: aqui não há
+ * VPN nem túnel no caminho, e um 503 significaria outra coisa.
+ */
+export function useEstoqueInventariadoQuery(habilitado: boolean) {
+  return useQuery<EstoqueInventariado[], Error>({
+    queryKey: ['panorama', 'estoque-inventariado'],
+    queryFn: async () => {
+      const { data, error } = await supabase.rpc('estoque_inventariado');
+      if (error) throw new Error(error.message);
+      // `linhas` não vem da RPC: lá cada linha JÁ é um produto. O 1 existe para a
+      // máquina de agregação, que soma este campo para dizer "N produtos".
+      return (data ?? []).map((l) => ({ ...l, linhas: 1 }) as EstoqueInventariado);
+    },
+    enabled: habilitado,
+    staleTime: TEMPO_FRESCO,
+  });
+}
+
+export interface ParametrosEstoqueExterno extends ParametrosEstoque {
+  nivel?: 'categoria' | 'produto';
+  marcas?: string[];
+  tipos?: string[];
+  subtipos?: string[];
+  grupos?: string[];
+  terceiros?: number[];
+}
+
+/**
+ * A mala pelo ERP. Dois níveis, como as lentes de fluxo — terceiro × SKU são 16.500
+ * linhas (5 MB), grande demais para uma resposta de entrada; por categoria são 399.
+ */
+export function useEstoqueExternoQuery(parametros: ParametrosEstoqueExterno | null) {
+  return useQuery<EstoqueExterno[], ErroErp>({
+    queryKey: ['erp', 'panorama', 'estoque-externo', parametros],
+    queryFn: async () => {
+      const r = await chamarErp<RespostaErp<EstoqueExterno>>('estoque-externo', {
+        ...parametros,
+        nivel: parametros?.nivel ?? 'categoria',
+      });
+      return r.dados;
+    },
+    enabled: parametros !== null,
+    staleTime: TEMPO_FRESCO,
+    retry: repetirSeTransitorio,
+    retryDelay: esperaEntreTentativas,
+  });
+}

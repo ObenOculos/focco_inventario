@@ -154,6 +154,36 @@ const OPERACOES: Record<string, { caminho: string; montar: (p: Params) => URLSea
       return q;
     },
   },
+  'estoque-externo': {
+    caminho: '/estoque-externo',
+    // Também sem data: o saldo em poder de terceiros é foto, igual ao interno.
+    montar: (p) => {
+      const q = new URLSearchParams();
+      q.set('nivel', nivel(p.nivel));
+      for (const e of listaInteiros(p.empresas, 'empresas')) q.append('empresas', e);
+      for (const campo of ['marcas', 'tipos', 'subtipos', 'grupos'] as const) {
+        for (const v of listaTextos(p[campo], campo)) q.append(campo, v);
+      }
+      for (const t of listaInteiros(p.terceiros, 'terceiros')) q.append('terceiros', t);
+      return q;
+    },
+  },
+  estoque: {
+    caminho: '/estoque',
+    // Sem data: é foto, não fluxo. Um período aqui prometeria um histórico de saldo
+    // que `eq_produtoespecifico` não guarda.
+    montar: (p) => {
+      const q = new URLSearchParams();
+      if (p.incluir_zerados !== undefined) {
+        q.set('incluir_zerados', String(booleano(p.incluir_zerados, 'incluir_zerados')));
+      }
+      for (const e of listaInteiros(p.empresas, 'empresas')) q.append('empresas', e);
+      for (const campo of ['marcas', 'tipos', 'subtipos', 'grupos'] as const) {
+        for (const v of listaTextos(p[campo], campo)) q.append(campo, v);
+      }
+      return q;
+    },
+  },
 };
 
 type Params = Record<string, unknown>;

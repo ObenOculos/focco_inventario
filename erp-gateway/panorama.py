@@ -600,3 +600,256 @@ GROUP BY 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 ORDER BY quantidade DESC
 """
     return _classificar_entrada(_consultar(sql, params))
+
+
+# ===========================================================================
+# ESTOQUE INTERNO — o saldo da empresa no Ciclone
+# ===========================================================================
+#
+# Fonte: `eq_produtoespecifico`, a mesma do relatorio "Analise de Estoque por
+# Colecao Marca" do proprio ERP. `eqpde_estoque` e COLUNA de verdade, somavel.
+#
+# DUAS DIFERENCAS DE NATUREZA em relacao as outras duas lentes, e as duas mudam a
+# tela:
+#
+#   1. E FOTO, NAO FLUXO. O saldo e o de agora; nao existe periodo, nao existe
+#      serie mensal e nao faz sentido perguntar "quanto de estoque em marco".
+#      Por isso esta funcao nao recebe data nenhuma.
+#
+#   2. O GRAO E O MODELO, NAO O CODIGO AUXILIAR. `eq_produtoespecifico` e por
+#      empresa + filial + produto GENERICO — nao por cor. O saldo por grade existe
+#      em `eq_produtoespecificoestoque.eqpee_estoque`, mas ali NAO e coluna: e
+#      `cast(( 0 /*#_estoque#*/ ) ...)`, um macro que so o cliente Ciclone expande
+#      — fora dele devolve zero. Consequencia: o estoque INTERNO desce ate o
+#      modelo (OB1190) enquanto o EXTERNO, que vem dos inventarios, desce ate o
+#      codigo auxiliar (OB1190 A02). Comparar os dois exige subir o externo para
+#      modelo, e a tela precisa DIZER isso em vez de somar os dois calada.
+#
+# Nao ha nivel de folha separado aqui: sao ~1.800 produtos com saldo (medido em
+# 2026-08-24), entao a resposta ja vem no grao mais fino e o cliente agrega todos
+# os niveis localmente. Uma segunda rota para a folha seria cerimonia sem ganho.
+
+# Preco de tabela, na MESMA expressao do `SQL_CATALOGO` que alimenta o catalogo do
+# app. Duas formas diferentes de dizer "quanto vale" produziriam dois valores para
+# o mesmo produto entre a tela de estoque e a de produtos.
+_PRECO_TABELA = "COALESCE(pe.eqpde_valorvendaatacado, pe.eqpde_valorvendavarejo, 0)"
+_CUSTO_UNITARIO = (
+    "(COALESCE(pe.eqpde_valorcustoindireto, 0) + COALESCE(pe.eqpde_valorcustodireto, 0))"
+)
+
+
+def estoque_interno(empresas=None, incluir_zerados=False, **recortes) -> pd.DataFrame:
+    """Saldo atual da empresa, por empresa x filial x modelo.
+
+    `incluir_zerados` desligado por padrao: o catalogo tem 3.778 cadastros e so
+    1.784 tem saldo diferente de zero. Trazer os zerados dobraria a resposta com
+    linhas que nao dizem nada sobre o estoque de hoje.
+
+    SALDO NEGATIVO NAO E FILTRADO, e isso e deliberado: 618 dos 1.784 estao
+    negativos: mais saiu do que o cadastro registrava. Esconder faria o total do
+    Panorama nao fechar com o do ERP e apagaria justamente a linha que precisa de
+    conserto.
+    """
+    if empresas is None:
+        empresas = db.EMPRESAS_PADRAO
+
+    condicoes = ["pe.pgemp_codigo = ANY(%(empresas)s)"]
+    params: dict[str, Any] = {"empresas": list(empresas)}
+
+    if not incluir_zerados:
+        condicoes.append("COALESCE(pe.eqpde_estoque, 0) <> 0")
+
+    for nome, coluna in CATEGORIAS.items():
+        chave = f"{nome}s"
+        valores = recortes.get(chave)
+        if valores:
+            condicoes.append(f"{_categoria(coluna)} = ANY(%({chave})s)")
+            params[chave] = [str(v) for v in valores]
+
+    categorias = ",\n".join(
+        f"    {_categoria(coluna)} AS {nome}" for nome, coluna in CATEGORIAS.items()
+    )
+    # `linhas` aqui conta PRODUTOS, nao linhas de nota — e o que faz a maquina de
+    # agregacao do cliente continuar valendo sem um campo so para esta lente.
+    sql = f"""
+SELECT
+    pe.pgemp_codigo                       AS empresa,
+    pe.pgfll_codigo                       AS filial,
+    pe.eqpdg_codigo                       AS codigo_produto,
+    MIN(gen.eqpdg_nome)                   AS nome_produto,
+    MIN(gen.eqpdg_situacao)               AS situacao,
+{categorias},
+    SUM(COALESCE(pe.eqpde_estoque, 0))              AS quantidade,
+    SUM(COALESCE(pe.eqpde_estoquedisponivel, 0))    AS disponivel,
+    SUM(COALESCE(pe.eqpde_estoquesaidapendente, 0)) AS saida_pendente,
+    SUM(COALESCE(pe.eqpde_estoque, 0) * {_PRECO_TABELA}) AS valor,
+    SUM(COALESCE(pe.eqpde_estoque, 0) * {_CUSTO_UNITARIO}) AS custo,
+    COUNT(*)                                        AS linhas
+FROM eq_produtoespecifico pe
+JOIN eq_produtogenerico gen
+      ON  gen.pgemp_codigo = pe.pgemp_codigo
+      AND gen.eqpdg_codigo = pe.eqpdg_codigo
+LEFT JOIN eq_colecao         col ON col.eqcol_codigo = gen.eqcol_codigo
+LEFT JOIN eq_tipoproduto     tpr ON tpr.eqtpr_codigo = gen.eqtpr_codigo
+LEFT JOIN eq_grupoespecifico gru ON gru.eqgru_codigo = gen.eqgru_codigo
+LEFT JOIN eq_grupogenerico   grg ON grg.eqgrg_codigo = gru.eqgrg_codigo
+WHERE {" AND ".join(condicoes)}
+GROUP BY 1, 2, 3, 6, 7, 8, 9
+ORDER BY quantidade DESC
+"""
+    df = _consultar(sql, params)
+    if df.empty:
+        return df
+    for col in ("quantidade", "valor", "custo", "disponivel", "saida_pendente"):
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    return df
+
+
+# ===========================================================================
+# ESTOQUE EXTERNO — o que esta em poder de TERCEIROS
+# ===========================================================================
+#
+# Fonte: `eq_produtoespecifestoqterceiro.eqpet_estoqueemterceiro`. Coluna real, e o
+# grao e MELHOR que o do estoque interno: alem de empresa e filial, ela quebra por
+# TERCEIRO e por COR. Medido em 2026-08-24: 21.248 unidades, 33 terceiros, 16.500
+# linhas com saldo, 16.453 delas com cor de verdade.
+#
+# ATENCAO AO VOCABULARIO, porque ha tres estoques e dois deles vivem sendo
+# confundidos:
+#
+#   - INTERNO    = na empresa (`eqpde_estoque`).
+#   - EXTERNO    = nosso, mas em poder de terceiros: representantes e oticas. E ESTE
+#                  modulo. Continua sendo estoque da casa; so nao esta nela.
+#   - INVENTARIO = o que o representante CONTOU e o gerente aprovou (mora no
+#                  Supabase, na RPC `estoque_externo`).
+#
+# Externo e Inventario descrevem A MESMA mercadoria por dois caminhos: o saldo que o
+# ERP calcula (remessa menos venda menos retorno) e a contagem fisica. Confronta-los
+# e a razao de existir a lente comparativa — e a divergencia entre eles e informacao,
+# nao erro de leitura.
+#
+# `eqpet_estoquedeterceiro` e o inverso (mercadoria de outros em nosso poder) e NAO
+# entra aqui: somar os dois misturaria o que e nosso com o que nao e.
+
+_SQL_FROM_TERCEIRO = """
+FROM eq_produtoespecifestoqterceiro t
+JOIN eq_produtogenerico gen
+      ON  gen.pgemp_codigo = t.pgemp_codigo
+      AND gen.eqpdg_codigo = t.eqpdg_codigo
+-- O preco mora no cadastro por FILIAL, nao na linha de terceiro. O join casa
+-- empresa+filial+produto, que e a chave de `eq_produtoespecifico`, entao e 1:1 e nao
+-- multiplica as quantidades.
+LEFT JOIN eq_produtoespecifico pe
+      ON  pe.pgemp_codigo = t.pgemp_codigo
+      AND pe.pgfll_codigo = t.pgfll_codigo
+      AND pe.eqpdg_codigo = t.eqpdg_codigo
+LEFT JOIN eq_colecao         col ON col.eqcol_codigo = gen.eqcol_codigo
+LEFT JOIN eq_tipoproduto     tpr ON tpr.eqtpr_codigo = gen.eqtpr_codigo
+LEFT JOIN eq_grupoespecifico gru ON gru.eqgru_codigo = gen.eqgru_codigo
+LEFT JOIN eq_grupogenerico   grg ON grg.eqgrg_codigo = gru.eqgrg_codigo
+LEFT JOIN pg_view_relacionaclnforfun forn ON forn.pgview_codigo = t.pgfor_codigo
+"""
+
+# Codigo auxiliar da grade, versao TERCEIRO.
+#
+# Nao da para reaproveitar `_SQL_CODIGO_AUXILIAR`: la os aliases sao `prod`/`n`, aqui
+# e `t`. E o CASE do fallback importa mais aqui — `eqpee_cor` vale a sentinela 'COR'
+# nos itens sem cor (estojo, flanela), e o CONCAT cru produzia "ESTOJO PW COR". A
+# regra e a mesma do `SQL_CATALOGO`.
+_SQL_CODIGO_AUXILIAR_TERCEIRO = """
+    TRIM(COALESCE(
+        (SELECT est.eqpee_referenciaauxiliargrade
+         FROM eq_produtoespecificoestoque est
+         WHERE est.eqpdg_codigo = t.eqpdg_codigo
+           AND est.eqpee_cor    = t.eqpee_cor
+           AND est.pgemp_codigo = t.pgemp_codigo
+         LIMIT 1),
+        CASE WHEN COALESCE(t.eqpee_cor, '') NOT IN ('', 'COR')
+             THEN CONCAT(t.eqpdg_codigo, ' ', t.eqpee_cor)
+             ELSE t.eqpdg_codigo END
+    ))
+"""
+
+_DIMENSOES_TERCEIRO = """
+    t.pgfor_codigo                        AS terceiro_cod,
+    COALESCE(NULLIF(TRIM(forn.pgview_nome), ''), '')   AS terceiro,
+    COALESCE(NULLIF(TRIM(forn.pgview_estado), ''), '') AS uf
+"""
+
+_MEDIDAS_TERCEIRO = f"""
+    SUM(COALESCE(t.eqpet_estoqueemterceiro, 0)) AS quantidade,
+    SUM(COALESCE(t.eqpet_estoqueemterceiro, 0) * {_PRECO_TABELA}) AS valor,
+    COUNT(*)                                    AS linhas
+"""
+
+
+def estoque_terceiros(empresas=None, nivel="categoria", **recortes) -> pd.DataFrame:
+    """Saldo em poder de terceiros, por terceiro.
+
+    Dois niveis como nas lentes de fluxo, e pelo mesmo motivo: terceiro x SKU sao
+    16.500 linhas, grande demais para uma resposta de entrada. `categoria` agrupa por
+    terceiro x categoria; `produto` desce ao codigo auxiliar dentro do recorte.
+
+    Saldo NEGATIVO nao e filtrado — ele existe (medido: seis terceiros com saldo
+    negativo) e significa que saiu mais do que o ERP registrou como enviado. E
+    exatamente o tipo de linha que o gestor precisa ver.
+    """
+    if empresas is None:
+        empresas = db.EMPRESAS_PADRAO
+
+    condicoes = [
+        "t.pgemp_codigo = ANY(%(empresas)s)",
+        "COALESCE(t.eqpet_estoqueemterceiro, 0) <> 0",
+    ]
+    params: dict[str, Any] = {"empresas": list(empresas)}
+
+    for nome, coluna in CATEGORIAS.items():
+        chave = f"{nome}s"
+        valores = recortes.get(chave)
+        if valores:
+            condicoes.append(f"{_categoria(coluna)} = ANY(%({chave})s)")
+            params[chave] = [str(v) for v in valores]
+
+    if recortes.get("terceiros"):
+        condicoes.append("t.pgfor_codigo = ANY(%(terceiros)s)")
+        params["terceiros"] = [int(v) for v in recortes["terceiros"]]
+
+    categorias = ",\n".join(
+        f"    {_categoria(coluna)} AS {nome}" for nome, coluna in CATEGORIAS.items()
+    )
+
+    if nivel == "produto":
+        sql = f"""
+SELECT
+    {_SQL_CODIGO_AUXILIAR_TERCEIRO.strip()} AS codigo_auxiliar,
+    t.pgemp_codigo                        AS empresa,
+    t.eqpdg_codigo                        AS codigo_produto,
+    COALESCE(t.eqpee_cor, '')             AS cor,
+    MIN(gen.eqpdg_nome)                   AS nome_produto,
+{categorias},
+    {_DIMENSOES_TERCEIRO.strip()},
+    {_MEDIDAS_TERCEIRO.strip()}
+{_SQL_FROM_TERCEIRO.strip()}
+WHERE {" AND ".join(condicoes)}
+GROUP BY 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12
+ORDER BY quantidade DESC
+"""
+    else:
+        sql = f"""
+SELECT
+    t.pgemp_codigo                        AS empresa,
+{categorias},
+    {_DIMENSOES_TERCEIRO.strip()},
+    {_MEDIDAS_TERCEIRO.strip()}
+{_SQL_FROM_TERCEIRO.strip()}
+WHERE {" AND ".join(condicoes)}
+GROUP BY 1, 2, 3, 4, 5, 6, 7, 8
+ORDER BY quantidade DESC
+"""
+
+    df = _consultar(sql, params)
+    if df.empty:
+        return df
+    for col in ("quantidade", "valor"):
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    return df

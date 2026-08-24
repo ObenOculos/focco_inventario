@@ -102,6 +102,7 @@ URL em `ERP_GATEWAY_URL`. Renomear quebra a integração em silêncio.
 | `GET /movimentos` | sim | vendas e remessas agregadas por código auxiliar |
 | `GET /saidas` | sim | saídas **somadas** por categoria ou por produto (Panorama) |
 | `GET /entradas` | sim | entradas **somadas** — compras e retornos (Panorama) |
+| `GET /estoque` | sim | saldo atual da empresa, por modelo (Panorama) |
 
 Auth = header `X-Gateway-Secret`. Não identifica a *pessoa* — quem faz isso é a
 Edge Function, contra `profiles.role`. Aqui só se responde "quem chama é o nosso
@@ -189,6 +190,30 @@ remetentes eram vendedores. Quem separa é `classif_entrada`, nunca o nome.
 `classif_entrada` **não** vem de `regras.classificar_operacao`: aquele mapa é de CFOP
 de saída e chamaria a compra (2102) de "VENDA". Ver `CFOP_NATUREZA_ENTRADA` em
 `panorama.py`.
+
+### `GET /estoque`
+
+`empresas` · `incluir_zerados` (padrão `false`) · recortes de categoria.
+
+**Sem período, de propósito** — é foto, não fluxo. `eq_produtoespecifico` guarda o
+saldo de agora e nada mais; uma data aqui prometeria um histórico que não existe.
+
+⚠️ **O grão é o MODELO, não o código auxiliar.** `eqpde_estoque` é por empresa +
+filial + produto genérico. O saldo por grade (`eqpee_estoque`) **não é coluna**: na
+"Listagem dos Produtos com Estoque Detalhado" ele aparece como
+`cast(( 0 /*#_estoque#*/ ) …)`, um macro que só o cliente Ciclone expande — fora dele
+devolve zero. Como o estoque externo (dos inventários) desce até a cor, somar os dois
+como se fossem a mesma medida está errado, e quem consome tem que dizer isso.
+
+Vem tudo no grão de produto numa viagem só (~1.800 linhas com saldo, meio megabyte);
+não há rota de folha separada. Saldo **negativo** não é filtrado — 618 dos 1.784
+produtos estão negativos, e esconder faria o total não fechar com o do ERP.
+
+`valor` é a preço de tabela, na mesma expressão do `/produtos`; `custo` é
+`eqpde_valorcustodireto + eqpde_valorcustoindireto`.
+
+O contrapeso deste endpoint é a RPC `estoque_externo()` no Supabase — o que está na
+mão dos representantes. Ver a migration `20260824130000_estoque_externo.sql`.
 
 ## Proteções
 
