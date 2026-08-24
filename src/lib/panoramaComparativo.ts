@@ -58,8 +58,15 @@ export const TITULO_DA_FONTE: Record<FonteDetalhe, string> = {
   interno: 'Na empresa',
 };
 
-/** Classificação de SAÍDA que é transferência para a mala, não venda. */
-const SAIDA_TRANSFERENCIA = 'REMESSA';
+/**
+ * Classificação de SAÍDA que é transferência para a mala, não venda.
+ *
+ * Exportada porque o painel de detalhe precisa da mesma definição: medido em 2026, a
+ * remessa sai com R$ 54 mil de valor nominal e R$ 247 mil de custo, o que dá uma
+ * "margem" de −356%. O número está certo e a leitura é falsa — não houve prejuízo,
+ * houve mercadoria mudando de lugar. Quem não conhece a operação lê alarme.
+ */
+export const SAIDA_TRANSFERENCIA = 'REMESSA';
 
 /** Classificação de ENTRADA que é retorno da mala, não compra. */
 const ENTRADA_TRANSFERENCIA = 'RETORNO DE REMESSA';
@@ -86,32 +93,50 @@ export interface FontesComparativo {
    *
    * Separada de `saidas` de propósito. `saidas` responde "quanto saiu no período que
    * você escolheu"; esta responde "qual é o ritmo de saída do negócio", e as duas
-   * perguntas não podem compartilhar a base. Ver `janelaCobertura`.
+   * perguntas não podem compartilhar a base. Ver `janelaFixa` / `janelaPorData`.
    */
   demanda: readonly LinhaPanorama[];
 }
 
-const ZERO: Totais = { quantidade: 0, valor: 0, linhas: 0 };
+/**
+ * `Totais` mais o custo — e só aqui, não em `panorama.ts`.
+ *
+ * Custo não é medida universal do Panorama: entradas já vêm pelo valor de aquisição e
+ * inventário é contagem, sem dinheiro nenhum atrás. Empurrá-lo para `Totais` obrigaria
+ * `agrupar`, `agruparPorProduto` e `serieMensal` — que servem a todas as lentes — a
+ * carregar um campo que quase sempre valeria zero. Ele mora onde é usado.
+ */
+export interface TotaisComCusto extends Totais {
+  /** `quantidade × custo unitário de HOJE`. Nas saídas é o CMV; no estoque, o parado. */
+  custo: number;
+  /** Unidades sem custo cadastrado. É o que mede a confiança na margem — ver abaixo. */
+  semCusto: number;
+}
 
-const acumular = (acc: Totais, l: LinhaPanorama): Totais => ({
+const ZERO: TotaisComCusto = { quantidade: 0, valor: 0, linhas: 0, custo: 0, semCusto: 0 };
+
+const acumular = (acc: TotaisComCusto, l: LinhaPanorama): TotaisComCusto => ({
   quantidade: acc.quantidade + (Number(l.quantidade) || 0),
   valor: acc.valor + (Number(l.valor) || 0),
   linhas: acc.linhas + (Number(l.linhas) || 0),
+  // Ausente nas fontes que não têm custo (entradas, inventário) — vira zero e some.
+  custo: acc.custo + (Number(l.custo) || 0),
+  semCusto: acc.semCusto + (Number(l.quantidade_sem_custo) || 0),
 });
 
 export interface NoComparativo {
   chave: string;
   rotulo: string;
-  /** Compras e devoluções — o que entrou vindo de fora. */
-  entrou: Totais;
-  /** Vendas e bonificações — o que saiu para fora. */
-  saiu: Totais;
+  /** Compras e devoluções — o que entrou vindo de fora. `custo` é sempre 0 aqui. */
+  entrou: TotaisComCusto;
+  /** Vendas e bonificações — o que saiu para fora. Aqui `custo` é o CMV. */
+  saiu: TotaisComCusto;
   /** Remessa menos retorno, em unidades. Positivo = foi para a mala no período. */
   paraMala: number;
-  interno: Totais;
-  externo: Totais;
+  interno: TotaisComCusto;
+  externo: TotaisComCusto;
   /** A mala contada. Fora de `estoqueTotal` de propósito — ver `FontesComparativo`. */
-  inventario: Totais;
+  inventario: TotaisComCusto;
   /**
    * `inventario − externo`, em unidades. O número mais valioso da linha: mede a
    * distância entre o que o ERP acha que está na mala e o que foi contado nela.
@@ -134,6 +159,27 @@ export interface NoComparativo {
    * "cobertura infinita" é ruído, não informação. A tela mostra um traço.
    */
   cobertura: number | null;
+
+  // ── Rentabilidade ────────────────────────────────────────────────────────
+  //
+  // Tudo aqui é BRUTO: receita menos custo de mercadoria, sem imposto, frete nem
+  // comissão. E o custo é o do cadastro de HOJE, porque é o único que existe — ver
+  // `MedidasCusto`. As duas ressalvas precisam aparecer na tela, não só aqui.
+
+  /** `saiu.valor − saiu.custo`. Receita do período menos o CMV. */
+  lucroBruto: number;
+  /**
+   * `lucroBruto / saiu.valor`. Fração, não porcentagem — quem formata é a tela.
+   *
+   * `null` quando não houve receita. E "sem receita" não quer dizer "sem saída": a
+   * BONIFICAÇÃO sai com `valorliquidoreal` perto de zero e custo real, então ela é o
+   * caso em que este número mais importa e o que mais engana. Com receita zero e custo
+   * positivo a margem é −∞, não 0 — por isso `null`, e a tela mostra o prejuízo pelo
+   * `lucroBruto` em reais, que não tem esse problema.
+   */
+  margemBruta: number | null;
+  /** `interno.custo + externo.custo`. O dinheiro imobilizado — não o preço de tabela. */
+  estoqueCusto: number;
 }
 
 /** Eixos em que as quatro fontes concordam. É o que a lente comparativa oferece. */
@@ -172,6 +218,9 @@ export function compararPorEixo(
     estoqueTotal: 0,
     porMes: 0,
     cobertura: null,
+    lucroBruto: 0,
+    margemBruta: null,
+    estoqueCusto: 0,
   });
 
   const pegar = (l: LinhaPanorama): NoComparativo => {
@@ -228,9 +277,25 @@ export function compararPorEixo(
     no.estoqueTotal = no.interno.quantidade + no.externo.quantidade;
     no.porMes = mesesJanela > 0 ? (saiuNaJanela.get(no.chave) ?? 0) / mesesJanela : 0;
     no.cobertura = no.porMes > 0 ? no.estoqueTotal / no.porMes : null;
+    rentabilizar(no);
   }
 
   return [...nos.values()];
+}
+
+/**
+ * Preenche os três derivados de rentabilidade a partir das somas.
+ *
+ * Uma função só, usada pelo nó e pelo total, pelo mesmo motivo que `totalComparativo`
+ * reusa `compararPorEixo`: duas contas separadas do mesmo número são como o cartão da
+ * faixa e a linha da árvore acabam divergindo por um sinal esquecido de um lado.
+ */
+function rentabilizar(no: NoComparativo): void {
+  no.lucroBruto = no.saiu.valor - no.saiu.custo;
+  // `> 0` e não `!== 0`: receita negativa (devolução dominando o recorte) daria uma
+  // margem de sinal invertido que ninguém consegue ler.
+  no.margemBruta = no.saiu.valor > 0 ? no.lucroBruto / no.saiu.valor : null;
+  no.estoqueCusto = no.interno.custo + no.externo.custo;
 }
 
 /** O total de tudo, para a faixa de indicadores. Mesma conta, sem agrupar. */
@@ -258,6 +323,9 @@ export function totalComparativo(
     estoqueTotal: 0,
     porMes: 0,
     cobertura: null,
+    lucroBruto: 0,
+    margemBruta: null,
+    estoqueCusto: 0,
   };
 
   let algumInventario = false;
@@ -268,6 +336,8 @@ export function totalComparativo(
         quantidade: total[campo].quantidade + no[campo].quantidade,
         valor: total[campo].valor + no[campo].valor,
         linhas: total[campo].linhas + no[campo].linhas,
+        custo: total[campo].custo + no[campo].custo,
+        semCusto: total[campo].semCusto + no[campo].semCusto,
       };
     }
     total.paraMala += no.paraMala;
@@ -280,6 +350,10 @@ export function totalComparativo(
   total.saldoPeriodo = total.entrou.quantidade - total.saiu.quantidade;
   total.estoqueTotal = total.interno.quantidade + total.externo.quantidade;
   total.cobertura = total.porMes > 0 ? total.estoqueTotal / total.porMes : null;
+  // A margem do total NÃO é a média das margens dos nós: é o lucro somado sobre a
+  // receita somada. Media de razão pesaria igual uma marca de R$ 2 mil e uma de R$ 2
+  // milhões — e por isso `rentabilizar` recebe o total já somado, nunca as frações.
+  rentabilizar(total);
   return total;
 }
 
@@ -336,6 +410,41 @@ export function recortarPorMes(fontes: FontesComparativo, mes: string | null): F
     ...fontes,
     saidas: fontes.saidas.filter((l) => l.mes === mes),
     entradas: fontes.entradas.filter((l) => l.mes === mes),
+  };
+}
+
+/**
+ * O balde de sobras do cadastro. Vem do Ciclone em CAIXA ALTA, como toda categoria.
+ *
+ * ⚠️ **Casa em QUALQUER dos quatro eixos de categoria, não só na marca.** No Ciclone
+ * `DIVERSOS` está documentado como uma coleção (= marca) ao lado de OBEN e POWER, mas
+ * "diversos" é o nome que todo ERP dá ao balde de sobras e nada impede que exista
+ * também como grupo. Como a intenção de quem desliga isto é "tira o balde de sobras da
+ * análise", casar nos quatro eixos serve essa intenção nos dois casos; casar só na
+ * marca deixaria a caixa marcada sem efeito nenhum se o balde morasse noutro eixo — e
+ * uma caixa que não faz nada é pior que uma caixa que faz demais.
+ */
+const DIVERSOS = 'DIVERSOS';
+
+const ehDiversos = (l: LinhaPanorama) =>
+  l.marca === DIVERSOS || l.tipo === DIVERSOS || l.subtipo === DIVERSOS || l.grupo === DIVERSOS;
+
+/**
+ * Tira `DIVERSOS` das SEIS fontes de uma vez.
+ *
+ * `demanda` entra na lista e isso não é zelo excessivo: ela é o DENOMINADOR da
+ * cobertura. Filtrar o estoque sem filtrar a demanda mediria "quantos meses o estoque
+ * sem Diversos dura no ritmo de saída COM Diversos" — cobertura menor que a verdadeira,
+ * e errada de um jeito que ninguém perceberia olhando a tela.
+ */
+export function ocultarDiversos(fontes: FontesComparativo): FontesComparativo {
+  return {
+    saidas: fontes.saidas.filter((l) => !ehDiversos(l)),
+    entradas: fontes.entradas.filter((l) => !ehDiversos(l)),
+    interno: fontes.interno.filter((l) => !ehDiversos(l)),
+    externo: fontes.externo.filter((l) => !ehDiversos(l)),
+    inventario: fontes.inventario.filter((l) => !ehDiversos(l)),
+    demanda: fontes.demanda.filter((l) => !ehDiversos(l)),
   };
 }
 

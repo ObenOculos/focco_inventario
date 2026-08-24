@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight, Package } from 'lucide-react';
 import { chaveDoCaminho, type FonteDetalhe, type NoArvore } from '@/lib/panoramaComparativo';
 import type { Medida } from '@/lib/panorama';
-import { curto, exato, inteiro } from '@/lib/panoramaFormato';
+import { curto, exato, inteiro, moedaCurta, percentual } from '@/lib/panoramaFormato';
 
 /**
  * A árvore do Panorama: a hierarquia inteira num scroll, com as fontes na mesma linha.
@@ -11,8 +11,10 @@ import { curto, exato, inteiro } from '@/lib/panoramaFormato';
  * OBEN com POWER dentro de RECEITUARIO era preciso subir e descer duas vezes,
  * guardando o primeiro número de cabeça. Aqui os dois ficam abertos lado a lado.
  *
- * **Cada linha tem as cinco fontes**, e é isso que acaba com a segmentação: fluxo
- * (entrou/saiu) e posição (interno/mala/contado) do MESMO recorte, sem trocar de tela.
+ * **Cada linha tem as fontes do ERP na mesma linha**, e é isso que acaba com a
+ * segmentação: fluxo (entrou/saiu) e posição (interno/mala) do MESMO recorte, sem
+ * trocar de tela. A contagem do representante é a sexta coluna e entra só quando pedida
+ * — ver `mostrarInventario`.
  *
  * ## Três decisões que vieram de uma revisão pensando em quem não conhece a tela
  *
@@ -60,6 +62,25 @@ interface Props {
   rotuloPeriodo?: string;
   /** Ex.: `mai–jul/26`. A base da cobertura, que NÃO é o período exibido. */
   baseCobertura?: string;
+  /**
+   * Acrescentar a coluna "Contado" e a diferença contra o ERP.
+   *
+   * Desligado, a tabela é só ERP e fica **mais estreita** — some uma coluna de 7rem, o
+   * que é a diferença entre caber e não caber num notebook. Não basta esconder o
+   * conteúdo: a largura mínima tem de encolher junto, senão a rolagem horizontal
+   * continua lá pagando por uma coluna que não existe.
+   */
+  mostrarInventario: boolean;
+  /**
+   * Acrescentar margem e custo às células que já existem.
+   *
+   * **Sem coluna nova, de propósito.** A tabela já disputa largura a 52rem; três
+   * colunas a mais forçariam rolagem horizontal justamente na leitura em que se
+   * compara uma linha com a outra. Custo e margem viram SUBLINHA da célula de que
+   * falam — o mesmo recurso que "Contado / vs sistema" já usa, e que custa altura em
+   * vez de largura.
+   */
+  mostrarCusto: boolean;
   expandidos: ReadonlySet<string>;
   /** Caminho do nó com o detalhe aberto — é onde o painel é ancorado. */
   caminhoAberto?: string;
@@ -75,6 +96,8 @@ export function ArvoreComparativa({
   medida,
   rotuloPeriodo,
   baseCobertura,
+  mostrarInventario,
+  mostrarCusto,
   expandidos,
   caminhoAberto,
   onAlternar,
@@ -84,7 +107,7 @@ export function ArvoreComparativa({
 }: Props) {
   const numero = (t: { quantidade: number; valor: number }) => curto(t, medida);
 
-  /** As cinco células de uma linha, na ordem em que a história se conta. */
+  /** As células de uma linha, na ordem em que a história se conta. */
   const celulas = (no: NoArvore) => [
     {
       id: 'entrou' as const,
@@ -114,20 +137,43 @@ export function ArvoreComparativa({
       titulo: `Na mala, pelo sistema — ${exato(no.externo)}`,
       abre: no.externo.quantidade !== 0,
     },
-    {
-      id: 'inventario' as const,
-      rotulo: 'Contado',
-      valor: no.divergencia === null ? '—' : numero(no.inventario),
-      titulo:
-        no.divergencia === null
-          ? 'Sem inventário aprovado neste recorte'
-          : `Contagem do representante — ${exato(no.inventario)}`,
-      abre: no.divergencia !== null,
-    },
+    ...(mostrarInventario
+      ? [
+          {
+            id: 'inventario' as const,
+            rotulo: 'Contado',
+            valor: no.divergencia === null ? '—' : numero(no.inventario),
+            titulo:
+              no.divergencia === null
+                ? 'Sem inventário aprovado neste recorte'
+                : `Contagem do representante — ${exato(no.inventario)}`,
+            abre: no.divergencia !== null,
+          },
+        ]
+      : []),
   ];
 
+  /**
+   * A sublinha de uma célula: o que a camada de custo acrescenta sem pedir largura.
+   *
+   * Sob "Saiu" vai a MARGEM, porque é dela que a receita fala. Sob "Interno" e "Mala"
+   * vai o custo em reais — o dinheiro parado ali. Sob "Entrou" não vai nada: entrada já
+   * chega pelo valor de aquisição, e repetir "custo" ali seria o mesmo número com
+   * outro nome.
+   *
+   * Margem `null` vira traço em vez de sumir: a linha existir e estar vazia significa
+   * "saiu sem receita" (leia-se bonificação), que é informação, não ausência dela.
+   */
+  const subCusto = (no: NoArvore, id: string): string | null => {
+    if (!mostrarCusto) return null;
+    if (id === 'saiu') return no.saiu.quantidade === 0 ? null : `${percentual(no.margemBruta)} margem`;
+    if (id === 'interno') return no.interno.quantidade === 0 ? null : `${moedaCurta(no.interno.custo)} custo`;
+    if (id === 'externo') return no.externo.quantidade === 0 ? null : `${moedaCurta(no.externo.custo)} custo`;
+    return null;
+  };
+
   const diferenca = (no: NoArvore) =>
-    no.divergencia === null
+    !mostrarInventario || no.divergencia === null
       ? null
       : `${no.divergencia >= 0 ? '+' : '−'}${inteiro(Math.abs(no.divergencia))} vs sistema`;
 
@@ -150,9 +196,12 @@ export function ArvoreComparativa({
     <>
       {/* ── Tabela (md+) ──────────────────────────────────────────────────── */}
       <div className="hidden overflow-x-auto md:block">
-        <div className="min-w-[52rem]">
+        {/* As larguras andam juntas: cada coluna é `w-28` (7rem) e o `gap-2` entre elas
+            é 0,5rem. Ligar "Contado" acrescenta 7,5rem à faixa "Hoje" e à largura
+            mínima da tabela — mexer numa sem a outra desalinha o andar de cima. */}
+        <div className={mostrarInventario ? 'min-w-[52rem]' : 'min-w-[44.5rem]'}>
           {/*
-            Cabeçalho em DOIS ANDARES, e isso não é enfeite: as cinco colunas têm duas
+            Cabeçalho em DOIS ANDARES, e isso não é enfeite: as colunas têm duas
             naturezas, e lê-las como se fossem do mesmo intervalo é o erro mais fácil
             de cometer aqui. Fluxo é do PERÍODO; posição é de HOJE, sempre — trocar o
             período para "Mês" não muda uma unidade de estoque, porque saldo é foto.
@@ -162,7 +211,11 @@ export function ArvoreComparativa({
             <span className="w-[14.5rem] rounded-t-lg bg-muted/50 px-2 py-1 text-center text-muted-foreground">
               No período{rotuloPeriodo ? ` · ${rotuloPeriodo}` : ''}
             </span>
-            <span className="w-[22rem] rounded-t-lg bg-primary/10 px-2 py-1 text-center text-primary">
+            <span
+              className={`${
+                mostrarInventario ? 'w-[22rem]' : 'w-[14.5rem]'
+              } rounded-t-lg bg-primary/10 px-2 py-1 text-center text-primary`}
+            >
               Hoje
             </span>
             <span className="w-16" />
@@ -174,7 +227,7 @@ export function ArvoreComparativa({
             <span className="w-28 text-right">Saiu</span>
             <span className="w-28 text-right">Interno</span>
             <span className="w-28 text-right">Mala</span>
-            <span className="w-28 text-right">Contado</span>
+            {mostrarInventario && <span className="w-28 text-right">Contado</span>}
             <span
               className="w-16 text-right"
               title={`Meses que o estoque de hoje dura no ritmo de saída${baseCobertura ? ` de ${baseCobertura}` : ''}. A base é fixa e não muda com o período exibido.`}
@@ -206,31 +259,32 @@ export function ArvoreComparativa({
                       <span className="truncate text-sm font-semibold">{no.rotulo}</span>
                     </div>
 
-                    {celulas(no).map((c) => (
-                      <span key={c.id} className="w-28">
-                        {c.id === 'inventario' && no.divergencia !== null ? (
-                          <span className="block">
-                            <Celula
-                              valor={c.valor}
-                              titulo={c.titulo}
-                              onAbrir={() => onDetalhe(no, c.id)}
-                            />
-                            {/* A diferença mora sob o número contado porque é dele que
-                                ela fala. Cor semântica seria exagero: nem toda variação
-                                é erro, e vermelho transformaria oscilação em alarme. */}
-                            <span className="block px-1 text-right text-2xs tabular-nums text-muted-foreground">
-                              {diferenca(no)}
-                            </span>
-                          </span>
-                        ) : (
+                    {celulas(no).map((c) => {
+                      /* Uma sublinha por célula, venha de onde vier. A diferença da
+                         contagem e a margem nunca disputam o mesmo lugar — são de
+                         colunas diferentes —, então um campo só basta e o layout
+                         continua o mesmo com uma camada ou com as duas.
+
+                         Sem cor semântica em nenhuma das duas: nem toda variação de
+                         contagem é erro e nem toda margem baixa é problema (bonificação
+                         é margem negativa por definição). Vermelho aqui transformaria
+                         rotina em alarme. */
+                      const sub = c.id === 'inventario' ? diferenca(no) : subCusto(no, c.id);
+                      return (
+                        <span key={c.id} className="w-28">
                           <Celula
                             valor={c.valor}
                             titulo={c.titulo}
                             onAbrir={c.abre ? () => onDetalhe(no, c.id) : undefined}
                           />
-                        )}
-                      </span>
-                    ))}
+                          {sub && (
+                            <span className="block truncate px-1 text-right text-2xs tabular-nums text-muted-foreground">
+                              {sub}
+                            </span>
+                          )}
+                        </span>
+                      );
+                    })}
 
                     <span className="w-16 text-right text-2xs tabular-nums text-muted-foreground">
                       <span
@@ -312,6 +366,11 @@ export function ArvoreComparativa({
                       <span className="block truncate text-sm font-semibold tabular-nums">
                         {c.valor}
                       </span>
+                      {subCusto(no, c.id) && (
+                        <span className="block truncate text-2xs tabular-nums text-muted-foreground">
+                          {subCusto(no, c.id)}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>
@@ -319,7 +378,11 @@ export function ArvoreComparativa({
                 <p className="mt-2.5 text-2xs font-semibold uppercase tracking-wider text-primary">
                   Hoje
                 </p>
-                <div className="mt-1 grid grid-cols-3 gap-2">
+                <div
+                  className={`mt-1 grid gap-2 ${
+                    mostrarInventario ? 'grid-cols-3' : 'grid-cols-2'
+                  }`}
+                >
                   {posicao.map((c) => (
                     <button
                       key={c.id}
@@ -332,6 +395,11 @@ export function ArvoreComparativa({
                       <span className="block truncate text-sm font-semibold tabular-nums">
                         {c.valor}
                       </span>
+                      {subCusto(no, c.id) && (
+                        <span className="block truncate text-2xs tabular-nums text-muted-foreground">
+                          {subCusto(no, c.id)}
+                        </span>
+                      )}
                     </button>
                   ))}
                 </div>

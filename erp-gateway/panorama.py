@@ -58,6 +58,26 @@ def _categoria(coluna: str) -> str:
     return f"COALESCE(NULLIF(TRIM({coluna}), ''), '')"
 
 
+# ===========================================================================
+# PRECO E CUSTO — as duas expressoes que valorizam uma unidade
+# ===========================================================================
+#
+# Vivem no topo porque QUATRO consultas as usam: estoque interno, estoque em
+# terceiro e as duas de saida (para o CMV). Duas formas diferentes de dizer "quanto
+# vale" produziriam dois valores para o mesmo produto entre telas.
+#
+# `_PRECO_TABELA` e a MESMA expressao do `SQL_CATALOGO` que alimenta o catalogo do
+# app.
+#
+# ATENCAO: AS DUAS DEPENDEM DO ALIAS `pe` = `eq_produtoespecifico`. Quem as usar precisa
+# ter esse join, casado por empresa+filial+produto — que e a chave da tabela, entao
+# e 1:1 e nao multiplica quantidade.
+_PRECO_TABELA = "COALESCE(pe.eqpde_valorvendaatacado, pe.eqpde_valorvendavarejo, 0)"
+_CUSTO_UNITARIO = (
+    "(COALESCE(pe.eqpde_valorcustoindireto, 0) + COALESCE(pe.eqpde_valorcustodireto, 0))"
+)
+
+
 # Blocos de JOIN compartilhados pelos dois niveis.
 #
 # Sao os mesmos de `SQL_PEDIDOS` mais os tres joins de categoria que o catalogo usa.
@@ -80,6 +100,14 @@ LEFT JOIN vd_pedidovenda p
 LEFT JOIN eq_produtogenerico gen
       ON  gen.pgemp_codigo = n.pgemp_codigo
       AND gen.eqpdg_codigo = prod.eqpdg_codigo
+-- Cadastro por FILIAL, so pelo CUSTO. A chave de `eq_produtoespecifico` e
+-- empresa+filial+produto e a nota traz as tres, entao e 1:1 e nao multiplica
+-- quantidade nem valor. LEFT porque produto sem cadastro na filial existe: ele
+-- entra com custo zero e e contado em `quantidade_sem_custo` (ver `_MEDIDAS`).
+LEFT JOIN eq_produtoespecifico pe
+      ON  pe.pgemp_codigo = n.pgemp_codigo
+      AND pe.pgfll_codigo = n.pgfll_codigo
+      AND pe.eqpdg_codigo = prod.eqpdg_codigo
 LEFT JOIN eq_colecao         col ON col.eqcol_codigo = gen.eqcol_codigo
 LEFT JOIN eq_tipoproduto     tpr ON tpr.eqtpr_codigo = gen.eqtpr_codigo
 LEFT JOIN eq_grupoespecifico gru ON gru.eqgru_codigo = gen.eqgru_codigo
@@ -122,14 +150,30 @@ _SQL_CODIGO_AUXILIAR = """
     ))
 """
 
-# As duas medidas, sempre juntas e sempre separadas.
+# As medidas, sempre juntas e sempre separadas.
 #
 # `linhas` viaja junto de proposito: e o unico jeito de a tela dizer "este numero
 # saiu de 3 notas" sem uma segunda consulta, e e o que denuncia um agregado inflado
 # por join errado.
-_MEDIDAS = """
+#
+# ## `custo` e o CMV, e ele NAO e o custo da epoca
+#
+# O Ciclone nao guarda custo na linha da nota. O unico custo que existe e o do
+# CADASTRO DE HOJE (`eqpde_valorcusto*`), entao o custo da mercadoria vendida sai de
+# `quantidade vendida x custo de hoje`. Se um produto foi reprecificado, a margem de
+# um mes antigo se move junto — a tela precisa DIZER isso, e nao so este comentario.
+#
+# `quantidade_sem_custo` existe por causa da direcao do erro. Produto sem cadastro na
+# filial entra com custo zero, e custo faltando nao derruba a margem: ela INFLA. Sem
+# esta coluna a tela informaria 80% de margem com ar de certeza absoluta quando o que
+# houve foi um cadastro faltando. Com ela, o cliente sabe dizer sobre quantas unidades
+# a conta realmente se apoia.
+_MEDIDAS = f"""
     SUM(COALESCE(prod.vdnfp_quantidade, 0))        AS quantidade,
     SUM(COALESCE(prod.vdnfp_valorliquidoreal, 0))  AS valor,
+    SUM(COALESCE(prod.vdnfp_quantidade, 0) * {_CUSTO_UNITARIO}) AS custo,
+    SUM(CASE WHEN {_CUSTO_UNITARIO} = 0
+             THEN COALESCE(prod.vdnfp_quantidade, 0) ELSE 0 END) AS quantidade_sem_custo,
     COUNT(*)                                       AS linhas
 """
 
@@ -211,7 +255,7 @@ def _classificar(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
     df["classif_operacao"] = df["cfop"].apply(regras.classificar_operacao)
     df["classif_pedido"] = df["tipo_pedido_cod"].apply(regras.classificar_pedido)
-    for col in ("quantidade", "valor"):
+    for col in ("quantidade", "valor", "custo", "quantidade_sem_custo"):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     return df
 
@@ -629,15 +673,6 @@ ORDER BY quantidade DESC
 # 2026-08-24), entao a resposta ja vem no grao mais fino e o cliente agrega todos
 # os niveis localmente. Uma segunda rota para a folha seria cerimonia sem ganho.
 
-# Preco de tabela, na MESMA expressao do `SQL_CATALOGO` que alimenta o catalogo do
-# app. Duas formas diferentes de dizer "quanto vale" produziriam dois valores para
-# o mesmo produto entre a tela de estoque e a de produtos.
-_PRECO_TABELA = "COALESCE(pe.eqpde_valorvendaatacado, pe.eqpde_valorvendavarejo, 0)"
-_CUSTO_UNITARIO = (
-    "(COALESCE(pe.eqpde_valorcustoindireto, 0) + COALESCE(pe.eqpde_valorcustodireto, 0))"
-)
-
-
 def estoque_interno(empresas=None, incluir_zerados=False, **recortes) -> pd.DataFrame:
     """Saldo atual da empresa, por empresa x filial x modelo.
 
@@ -776,9 +811,13 @@ _DIMENSOES_TERCEIRO = """
     COALESCE(NULLIF(TRIM(forn.pgview_estado), ''), '') AS uf
 """
 
+# Mesmas medidas do estoque interno, e por isso `custo` esta aqui: os dois lados do
+# estoque precisam ser somaveis a custo, senao "quanto tenho parado" so responderia
+# pela metade que esta na empresa.
 _MEDIDAS_TERCEIRO = f"""
     SUM(COALESCE(t.eqpet_estoqueemterceiro, 0)) AS quantidade,
     SUM(COALESCE(t.eqpet_estoqueemterceiro, 0) * {_PRECO_TABELA}) AS valor,
+    SUM(COALESCE(t.eqpet_estoqueemterceiro, 0) * {_CUSTO_UNITARIO}) AS custo,
     COUNT(*)                                    AS linhas
 """
 
@@ -850,6 +889,6 @@ ORDER BY quantidade DESC
     df = _consultar(sql, params)
     if df.empty:
         return df
-    for col in ("quantidade", "valor"):
+    for col in ("quantidade", "valor", "custo"):
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     return df

@@ -1,10 +1,13 @@
 import { useCallback, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
+  janelaFixa,
+  janelaPorData,
   JANELA_PADRAO,
   JANELAS_COBERTURA,
   PERIODO_PADRAO,
   type JanelaCobertura,
+  type JanelaEfetiva,
 } from '@/lib/panoramaPeriodo';
 import { ORDEM_PADRAO, type EixoId, type Medida } from '@/lib/panorama';
 import type { EscolhaEmpresa } from '@/hooks/useConsultaErpQuery';
@@ -43,6 +46,48 @@ export interface EscopoPanorama {
    * recebe o link precisa receber a base junto.
    */
   janela: JanelaCobertura;
+  /**
+   * Como a base da cobertura é definida: por janela fixa ou por intervalo próprio.
+   *
+   * **Explícito, e não derivado da presença das datas.** Derivar parecia mais enxuto e
+   * tinha um defeito de uso: limpar um dos campos para redigitá-lo apagaria o modo
+   * junto, e o switch pularia sozinho para "Fixo" no meio da edição. Guardar o modo
+   * deixa o campo vazio ser o que ele é — um campo vazio, com o aviso correspondente —
+   * em vez de virar uma mudança de modo que ninguém pediu.
+   */
+  janelaModo: 'fixo' | 'data';
+  /** Intervalo do modo `data`. Trocar para ele os preenche — ver `alternarModoJanela`. */
+  janelaDe: string | null;
+  janelaAte: string | null;
+  /**
+   * Trazer os dados de INVENTÁRIO para junto dos do ERP.
+   *
+   * Desligado por padrão, e essa é a hierarquia da tela: o Panorama é uma leitura do
+   * ERP. A contagem do representante enriquece a análise, mas responde outra pergunta —
+   * "o que foi contado bate?" — e deixá-la sempre à vista fazia a contagem disputar
+   * espaço com os números que a pessoa veio ver.
+   *
+   * Vai na URL porque muda O QUE A TELA MOSTRA, não só o que está aberto: quem recebe
+   * o link com a contagem ligada precisa ver a contagem.
+   */
+  inventario: boolean;
+  /**
+   * Trazer custo, lucro bruto e margem bruta para junto do faturamento.
+   *
+   * Desligado por padrão pela MESMA razão do inventário, e com uma a mais: margem é
+   * número aproximado — o Ciclone não guarda custo histórico, então ela sai do custo
+   * de HOJE aplicado à quantidade vendida. Um número com ressalva não pode chegar sem
+   * ser pedido; pedido, ele vem com a ressalva junto.
+   */
+  custo: boolean;
+  /**
+   * Tirar o balde `DIVERSOS` da análise inteira.
+   *
+   * Ligado é um recorte, não uma camada: ele SUBTRAI linhas em vez de acrescentar
+   * colunas, então muda todo número da tela — inclusive a cobertura, cujo denominador
+   * é filtrado junto. Por isso mora no filtro principal e não entre as camadas extras.
+   */
+  ocultarDiversos: boolean;
 }
 
 const EMPRESAS: EscolhaEmpresa[] = ['ambas', '1', '2'];
@@ -81,6 +126,12 @@ export function usePanoramaEstado() {
       abrirPor: umDe(params.get('abrir'), EIXOS_TOPO, 'marca'),
       mes: params.get('mes') && DATA_ISO.test(params.get('mes') ?? '') ? params.get('mes') : null,
       janela: janelaValida(params.get('janela')),
+      janelaModo: umDe(params.get('jm'), ['fixo', 'data'] as const, 'fixo'),
+      janelaDe: data(params.get('jde'), '') || null,
+      janelaAte: data(params.get('jate'), '') || null,
+      inventario: params.get('inv') === '1',
+      custo: params.get('cst') === '1',
+      ocultarDiversos: params.get('sd') === '1',
     };
   }, [params]);
 
@@ -101,6 +152,15 @@ export function usePanoramaEstado() {
           if ('abrirPor' in mudanca) por('abrir', mudanca.abrirPor, 'marca');
           if ('mes' in mudanca) por('mes', mudanca.mes);
           if ('janela' in mudanca) por('janela', String(mudanca.janela), String(JANELA_PADRAO));
+          if ('janelaModo' in mudanca) por('jm', mudanca.janelaModo, 'fixo');
+          if ('janelaDe' in mudanca) por('jde', mudanca.janelaDe);
+          if ('janelaAte' in mudanca) por('jate', mudanca.janelaAte);
+          // `'0'` como padrão e não `undefined`: assim desligar APAGA o parâmetro em vez
+          // de gravar `inv=0`, e a URL do estado padrão continua sendo a URL limpa.
+          if ('inventario' in mudanca) por('inv', mudanca.inventario ? '1' : '0', '0');
+          if ('custo' in mudanca) por('cst', mudanca.custo ? '1' : '0', '0');
+          if ('ocultarDiversos' in mudanca)
+            por('sd', mudanca.ocultarDiversos ? '1' : '0', '0');
           return proximo;
         },
         { replace: true }
@@ -109,11 +169,30 @@ export function usePanoramaEstado() {
     [setParams]
   );
 
+  /**
+   * A base da cobertura já resolvida — intervalo, divisor e rótulo.
+   *
+   * Sai daqui, e não de cada componente, porque a página, a faixa de indicadores e a
+   * árvore precisam da MESMA janela. Cada uma recalculando a sua é como o rótulo
+   * ("base mai–jul/26") e o número acabam falando de intervalos diferentes.
+   */
+  const janelaEfetiva: JanelaEfetiva = useMemo(
+    () =>
+      escopo.janelaModo === 'data'
+        ? // `?? ''` chega como data inválida e sai com zero meses, que é o que a tela
+          // desenha como "sem mês completo" — nunca uma exceção no meio da digitação.
+          janelaPorData(escopo.janelaDe ?? '', escopo.janelaAte ?? '')
+        : janelaFixa(escopo.janela),
+    [escopo.janelaModo, escopo.janelaDe, escopo.janelaAte, escopo.janela]
+  );
+
+  const modoJanela = escopo.janelaModo;
+
   /** A ordem completa da árvore a partir do eixo escolhido para o topo. */
   const ordem: EixoId[] = useMemo(
     () => [escopo.abrirPor, ...ORDEM_PADRAO.comparativo.filter((e) => e !== escopo.abrirPor)],
     [escopo.abrirPor]
   );
 
-  return { escopo, atualizar, ordem, EIXOS_TOPO };
+  return { escopo, atualizar, ordem, EIXOS_TOPO, janelaEfetiva, modoJanela };
 }

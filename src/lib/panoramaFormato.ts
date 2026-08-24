@@ -71,3 +71,16 @@ export const exato = (t: { quantidade: number; valor: number }) =>
 
 /** Sinal explícito em números que podem ser negativos (saldo, divergência). */
 export const comSinal = (v: number) => `${v >= 0 ? '+' : ''}${INTEIRO.format(v)}`;
+
+const PORCENTAGEM = new Intl.NumberFormat('pt-BR', {
+  style: 'percent',
+  maximumFractionDigits: 1,
+});
+
+/**
+ * Fração para porcentagem. `null` vira traço.
+ *
+ * Recebe FRAÇÃO (0,38), não 38 — é o que `Intl` espera e o que a lib produz, e
+ * converter num lugar só evita o clássico erro de multiplicar por 100 duas vezes.
+ */
+export const percentual = (v: number | null) => (v === null ? '—' : PORCENTAGEM.format(v));

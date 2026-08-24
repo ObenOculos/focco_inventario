@@ -119,6 +119,27 @@ interface DimensoesEntrada {
   classif_entrada: string | null;
 }
 
+/**
+ * Custo, e o quanto se pode confiar nele.
+ *
+ * ⚠️ **Não existe custo histórico no Ciclone.** A nota fiscal não guarda o custo da
+ * mercadoria; o único custo que existe é o do CADASTRO DE HOJE (custo direto +
+ * indireto, por empresa + filial + modelo). Então o custo de uma saída de março é
+ * `quantidade de março × custo de hoje` — se o produto foi reprecificado desde então,
+ * a margem daquele mês se move junto. A tela precisa dizer isso ao gestor.
+ *
+ * `quantidade_sem_custo` existe por causa da DIREÇÃO do erro. Produto sem cadastro na
+ * filial entra com custo zero, e custo faltando não derruba a margem: ela **infla**.
+ * Sem este campo a tela exibiria "82% de margem" com a mesma cara de certeza de um
+ * número correto. Com ele, dá para dizer sobre quantas unidades a conta se apoia.
+ */
+interface MedidasCusto {
+  /** `quantidade × custo unitário`. Nas saídas é o CMV; no estoque, o imobilizado. */
+  custo: number;
+  /** Unidades cujo produto não tem custo cadastrado. Só nas saídas. */
+  quantidade_sem_custo: number;
+}
+
 /** Identidade do produto, presente só no nível de folha. */
 interface DimensoesProduto {
   codigo_auxiliar: string;
@@ -132,8 +153,16 @@ interface ComMes {
   mes: string;
 }
 
-export type SaidaCategoria = BasePanorama & DimensoesFiscais & DimensoesSaida & ComMes;
-export type SaidaProduto = BasePanorama & DimensoesFiscais & DimensoesSaida & DimensoesProduto;
+export type SaidaCategoria = BasePanorama &
+  DimensoesFiscais &
+  DimensoesSaida &
+  MedidasCusto &
+  ComMes;
+export type SaidaProduto = BasePanorama &
+  DimensoesFiscais &
+  DimensoesSaida &
+  MedidasCusto &
+  DimensoesProduto;
 export type EntradaCategoria = BasePanorama & DimensoesFiscais & DimensoesEntrada & ComMes;
 export type EntradaProduto = BasePanorama & DimensoesFiscais & DimensoesEntrada & DimensoesProduto;
 
@@ -174,6 +203,8 @@ export interface EstoqueExterno extends BasePanorama {
   terceiro_cod: number | null;
   terceiro: string;
   uf: string;
+  /** Custo direto + indireto do ERP, do mesmo cadastro que dá o preço de tabela. */
+  custo: number;
   /** Só no nível de produto. */
   codigo_auxiliar?: string;
   codigo_produto?: string | number | null;
@@ -222,6 +253,7 @@ export type LinhaPanorama = BasePanorama &
       ComMes &
       Omit<EstoqueInterno, keyof BasePanorama> &
       Omit<EstoqueExterno, keyof BasePanorama> &
+      MedidasCusto &
       Omit<EstoqueInventariado, keyof BasePanorama>
   >;
 

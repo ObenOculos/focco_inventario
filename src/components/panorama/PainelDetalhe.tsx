@@ -8,6 +8,7 @@ import { agrupar, eixoDe, type EixoId, type Medida } from '@/lib/panorama';
 import type { LinhaPanorama } from '@/hooks/usePanoramaQuery';
 import {
   EIXOS_DA_FONTE,
+  SAIDA_TRANSFERENCIA,
   TITULO_DA_FONTE,
   type FonteDetalhe,
 } from '@/lib/panoramaComparativo';
@@ -30,6 +31,17 @@ const PORCENTAGEM = new Intl.NumberFormat('pt-BR', {
   style: 'percent',
   maximumFractionDigits: 1,
 });
+
+/**
+ * A margem de um grupo, pronta para virar texto de apoio.
+ *
+ * `null` quando não houve receita — e aqui isso acontece de verdade: a BONIFICAÇÃO sai
+ * com valor perto de zero e custo real. É justamente a linha que este painel existe
+ * para revelar, e "—" com o valor em reais ao lado conta a história melhor que um
+ * "−12.400%" que ninguém consegue ler.
+ */
+const margemDe = (t: { valor: number; custo: number }) =>
+  t.valor > 0 ? `${PORCENTAGEM.format((t.valor - t.custo) / t.valor)} margem` : null;
 
 function Linha({
   rotulo,
@@ -74,6 +86,11 @@ interface Props {
   medida: Medida;
   /** Produtos do recorte, quando pedidos. `null` = ainda não foram pedidos. */
   produtos: readonly LinhaPanorama[] | null;
+  /**
+   * Anexar margem ao apoio de cada linha. Só faz sentido em SAÍDA: é a única fonte
+   * com receita e custo do mesmo movimento.
+   */
+  mostrarCusto: boolean;
   carregandoProdutos: boolean;
   erroProdutos: string | null;
   onProdutos: () => void;
@@ -86,6 +103,7 @@ export function PainelDetalhe({
   linhas,
   medida,
   produtos,
+  mostrarCusto,
   carregandoProdutos,
   erroProdutos,
   onProdutos,
@@ -97,19 +115,52 @@ export function PainelDetalhe({
 
   const nos = useMemo(() => agrupar(linhas, eixo, medida), [linhas, eixo, medida]);
 
+  /**
+   * Receita e custo por grupo do eixo aberto — calculado aqui, não em `agrupar`.
+   *
+   * `agrupar` serve a todas as lentes do Panorama e a maioria não tem custo nenhum;
+   * carregar o campo lá obrigaria entrada, inventário e série mensal a somar zeros.
+   * A passada extra é sobre um array que já está em memória e já foi recortado pelo
+   * caminho da árvore.
+   */
+  const custoPorChave = useMemo(() => {
+    if (!mostrarCusto || fonte !== 'saiu') return null;
+    const e = eixoDe(eixo);
+    const mapa = new Map<string, { valor: number; custo: number }>();
+    for (const l of linhas) {
+      // Remessa fica de fora e o grupo dela acaba com receita zero — que é como
+      // `margemDe` devolve `null` e a linha simplesmente não ganha margem nenhuma.
+      // Sem invenção de caso especial no lugar que desenha.
+      if (l.classif_operacao === SAIDA_TRANSFERENCIA) continue;
+      const chave = e.chaveDe(l);
+      const atual = mapa.get(chave) ?? { valor: 0, custo: 0 };
+      atual.valor += Number(l.valor) || 0;
+      atual.custo += Number(l.custo) || 0;
+      mapa.set(chave, atual);
+    }
+    return mapa;
+  }, [mostrarCusto, fonte, linhas, eixo]);
+
   const produtosFiltrados = useMemo(() => {
     if (!produtos) return [];
     const alvo = busca.trim().toLowerCase();
-    const porSku = new Map<string, { rotulo: string; quantidade: number; valor: number }>();
+    const porSku = new Map<
+      string,
+      { rotulo: string; quantidade: number; valor: number; custo: number }
+    >();
     for (const p of produtos) {
       const chave = p.codigo_auxiliar ?? String(p.codigo_produto ?? '');
       const atual = porSku.get(chave) ?? {
         rotulo: p.nome_produto ? `${chave} · ${p.nome_produto}` : chave,
         quantidade: 0,
         valor: 0,
+        custo: 0,
       };
       atual.quantidade += Number(p.quantidade) || 0;
       atual.valor += Number(p.valor) || 0;
+      // Zero nas fontes sem custo — a margem por SKU só aparece em saída, de qualquer
+      // forma, e ali o gateway manda o campo.
+      atual.custo += Number(p.custo) || 0;
       porSku.set(chave, atual);
     }
     const lista = [...porSku.values()];
@@ -121,6 +172,19 @@ export function PainelDetalhe({
 
   const numero = (t: { quantidade: number; valor: number }) =>
     medida === 'valor' ? MOEDA.format(t.valor) : INTEIRO.format(t.quantidade);
+
+  /**
+   * O texto de apoio: a OUTRA grandeza, mais a margem quando ela existe.
+   *
+   * "A outra" porque repetir a medida ativa embaixo dela não diz nada — em valor o
+   * apoio traz as unidades, em unidades traz os reais. A margem entra no fim porque é
+   * a camada opcional, e some junto com ela.
+   */
+  const apoio = (t: { quantidade: number; valor: number }, comCusto?: { valor: number; custo: number }) => {
+    const base = medida === 'valor' ? `${INTEIRO.format(t.quantidade)} un.` : MOEDA.format(t.valor);
+    const margem = comCusto ? margemDe(comCusto) : null;
+    return margem ? `${base} · ${margem}` : base;
+  };
 
   const totalProdutos = produtosFiltrados.reduce((s, p) => s + p[medida], 0);
 
@@ -168,7 +232,7 @@ export function PainelDetalhe({
               key={no.chave}
               rotulo={no.rotulo}
               valor={numero(no)}
-              apoio={medida === 'valor' ? `${INTEIRO.format(no.quantidade)} un.` : MOEDA.format(no.valor)}
+              apoio={apoio(no, custoPorChave?.get(no.chave))}
               participacao={no.participacao}
             />
           ))
@@ -224,7 +288,7 @@ export function PainelDetalhe({
                     key={p.rotulo}
                     rotulo={p.rotulo}
                     valor={numero(p)}
-                    apoio={medida === 'valor' ? `${INTEIRO.format(p.quantidade)} un.` : MOEDA.format(p.valor)}
+                    apoio={apoio(p, mostrarCusto && fonte === 'saiu' ? p : undefined)}
                     participacao={totalProdutos > 0 ? p[medida] / totalProdutos : 0}
                   />
                 ))
