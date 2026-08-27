@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { PageHeader } from '@/components/PageHeader';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -235,6 +236,30 @@ export default function Panorama() {
     () => [saidas, entradas, interno, externo, inventariado, demanda],
     [saidas, entradas, interno, externo, inventariado, demanda]
   );
+
+  const queryClient = useQueryClient();
+
+  /**
+   * O "refazer" do botão quando nenhum filtro mudou.
+   *
+   * NÃO pode ser `consultas.forEach((q) => q.refetch())`: `refetch()` IGNORA `enabled`
+   * e dispara também a consulta parada. A da janela de cobertura vive parada no caso
+   * comum (a janela cabe no período consultado), então cada clique a mandava ao ERP com
+   * `parametros` nulo — sem `de` nem `ate` — e a Edge Function respondia 422. O
+   * resultado era um banner de erro sobre uma tela cujos números estavam todos certos.
+   *
+   * `refetchQueries` com `type: 'active'` pula as paradas e as que não estão montadas,
+   * então o clique atualiza exatamente o que está na tela — inclusive os produtos do
+   * painel de detalhe, quando ele está aberto.
+   */
+  const refazerConsultas = () => {
+    void queryClient.refetchQueries({
+      type: 'active',
+      // Dois prefixos porque o inventário não vem do ERP: sai da RPC do Supabase e tem
+      // chave própria.
+      predicate: (q) => q.queryKey[0] === 'erp' || q.queryKey[0] === 'panorama',
+    });
+  };
 
   /**
    * As consultas que SEGURAM a tela. O inventário não está entre elas de propósito.
@@ -536,7 +561,7 @@ export default function Panorama() {
             // Sem pendência o clique é um "refazer": os parâmetros são os mesmos, então
             // `setConsultado` não mudaria nada e o React Query serviria do cache.
             if (pendente || consultado === null) consultar();
-            else consultas.forEach((q) => void q.refetch());
+            else refazerConsultas();
           }}
         />
 
