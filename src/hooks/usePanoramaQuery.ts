@@ -359,22 +359,55 @@ export function useEstoqueInternoQuery(parametros: ParametrosEstoque | null) {
   });
 }
 
+/** PostgREST limita a resposta a 1000 linhas; a contagem vem em lotes desse tamanho. */
+const LOTE_INVENTARIADO = 1000;
+
 /**
  * Estoque inventariado — não passa pelo ERP: sai da RPC `estoque_inventariado` no
  * Supabase, sobre os inventários que os vendedores contaram.
  *
  * Por isso não usa `chamarErp` nem a política de repetição do gateway: aqui não há
  * VPN nem túnel no caminho, e um 503 significaria outra coisa.
+ *
+ * ⚠️ **Vem PAGINADA, e isso não é otimização.** A RPC devolve uma linha por
+ * (vendedor × código auxiliar) de TODOS os representantes de uma vez — passa de mil
+ * linhas com facilidade. Sem os lotes, o PostgREST cortava a resposta em 1000 e a
+ * tela somava uma contagem truncada sem avisar nada: o vendedor que ficasse na
+ * fronteira do corte aparecia com uma fração dos produtos dele (medido em produção:
+ * 165 de 706), e os seguintes sumiam por completo. É o pior tipo de erro, porque o
+ * número continua plausível.
+ *
+ * A ordenação existe para a paginação ser estável: sem `ORDER BY`, o `OFFSET` do
+ * PostgREST anda sobre uma ordem que o Postgres não garante entre duas execuções, e
+ * lotes vizinhos passam a repetir e a pular linhas.
  */
 export function useEstoqueInventariadoQuery(habilitado: boolean) {
   return useQuery<EstoqueInventariado[], Error>({
     queryKey: ['panorama', 'estoque-inventariado'],
     queryFn: async () => {
-      const { data, error } = await supabase.rpc('estoque_inventariado');
-      if (error) throw new Error(error.message);
-      // `linhas` não vem da RPC: lá cada linha JÁ é um produto. O 1 existe para a
-      // máquina de agregação, que soma este campo para dizer "N produtos".
-      return (data ?? []).map((l) => ({ ...l, linhas: 1 }) as EstoqueInventariado);
+      const todos: EstoqueInventariado[] = [];
+      let inicio = 0;
+
+      for (;;) {
+        const { data, error } = await supabase
+          .rpc('estoque_inventariado')
+          .order('codigo_vendedor', { ascending: true })
+          .order('codigo_auxiliar', { ascending: true })
+          .order('codigo_produto', { ascending: true })
+          .range(inicio, inicio + LOTE_INVENTARIADO - 1);
+
+        if (error) throw new Error(error.message);
+        if (!data || data.length === 0) break;
+
+        // `linhas` não vem da RPC: lá cada linha JÁ é um produto. O 1 existe para a
+        // máquina de agregação, que soma este campo para dizer "N produtos".
+        todos.push(...data.map((l) => ({ ...l, linhas: 1 }) as EstoqueInventariado));
+
+        if (data.length < LOTE_INVENTARIADO) break;
+        inicio += LOTE_INVENTARIADO;
+      }
+
+      return todos;
     },
     enabled: habilitado,
     staleTime: TEMPO_FRESCO,

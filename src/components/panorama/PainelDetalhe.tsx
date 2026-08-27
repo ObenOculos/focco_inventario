@@ -1,13 +1,15 @@
 import { useMemo, useState } from 'react';
+import { format, parseISO } from 'date-fns';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CloudOff, Search, X } from 'lucide-react';
-import { agrupar, eixoDe, type EixoId, type Medida } from '@/lib/panorama';
+import { agrupar, eixoDe, type EixoId, type Medida, type NoAgregado } from '@/lib/panorama';
 import type { LinhaPanorama } from '@/hooks/usePanoramaQuery';
 import {
   EIXOS_DA_FONTE,
+  rotuloLinhas,
   SAIDA_TRANSFERENCIA,
   TITULO_DA_FONTE,
   type FonteDetalhe,
@@ -113,6 +115,25 @@ export function PainelDetalhe({
   const [eixo, setEixo] = useState<EixoId>(eixos[0]);
   const [busca, setBusca] = useState('');
 
+  /**
+   * O eixo aberto pertence à FONTE, e a fonte troca sem o painel desmontar.
+   *
+   * ⚠️ Clicar em "Saiu" na mesma linha que estava aberta em "Entrou" mantém este
+   * componente montado — mesma posição na árvore, mesmo estado. Sem esta sincronização
+   * o painel continuava agrupando por `classifEntrada`, que não existe em saída: a lista
+   * inteira virava "Sem classificação" e nenhum botão de eixo aparecia marcado. Fechar e
+   * reabrir "consertava" porque aí sim havia desmontagem.
+   *
+   * A busca vai junto: a lista de produtos é refeita a cada troca de fonte, e um termo
+   * herdado da fonte anterior esconderia produtos sem dizer por quê.
+   */
+  const [fonteMontada, setFonteMontada] = useState<FonteDetalhe>(fonte);
+  if (fonteMontada !== fonte) {
+    setFonteMontada(fonte);
+    setEixo(eixos[0]);
+    setBusca('');
+  }
+
   const nos = useMemo(() => agrupar(linhas, eixo, medida), [linhas, eixo, medida]);
 
   /**
@@ -140,6 +161,35 @@ export function PainelDetalhe({
     }
     return mapa;
   }, [mostrarCusto, fonte, linhas, eixo]);
+
+  /**
+   * A DATA da contagem de cada grupo — só faz sentido na fonte inventário.
+   *
+   * ⚠️ É a informação que faltava para o número ser conferível. O Panorama usa o ÚLTIMO
+   * inventário aprovado de cada vendedor, e a última contagem pode ser um FRAGMENTO:
+   * quem manda a mala em dois ou três inventários no mesmo dia, ou faz uma recontagem
+   * de um recorte só, tem aqui um total menor que a contagem completa que fez antes.
+   * Sem a data na tela isso parece número errado; com ela, parece o que é.
+   */
+  const contagemPorChave = useMemo(() => {
+    if (fonte !== 'inventario') return null;
+    const e = eixoDe(eixo);
+    const mapa = new Map<string, { de: string; ate: string }>();
+    for (const l of linhas) {
+      const dia = l.data_inventario;
+      if (!dia) continue;
+      const chave = e.chaveDe(l);
+      const atual = mapa.get(chave);
+      // Comparação de string ISO: `AAAA-MM-DD` ordena igual à cronologia e não
+      // arrasta fuso horário para dentro da conta.
+      if (!atual) mapa.set(chave, { de: dia, ate: dia });
+      else {
+        if (dia < atual.de) atual.de = dia;
+        if (dia > atual.ate) atual.ate = dia;
+      }
+    }
+    return mapa;
+  }, [fonte, linhas, eixo]);
 
   const produtosFiltrados = useMemo(() => {
     if (!produtos) return [];
@@ -184,6 +234,36 @@ export function PainelDetalhe({
     const base = medida === 'valor' ? `${INTEIRO.format(t.quantidade)} un.` : MOEDA.format(t.valor);
     const margem = comCusto ? margemDe(comCusto) : null;
     return margem ? `${base} · ${margem}` : base;
+  };
+
+  const dataBr = (iso: string) => {
+    try {
+      return format(parseISO(iso), 'dd/MM/yyyy');
+    } catch {
+      return iso;
+    }
+  };
+
+  /**
+   * O apoio de um grupo: a outra grandeza, de quantos itens ela saiu, e — só na
+   * contagem — de quando.
+   *
+   * O substantivo vem de `rotuloLinhas` porque `linhas` não conta a mesma coisa nas
+   * cinco fontes: produto nos estoques, linha de NOTA no fluxo. Escrever "produtos"
+   * em toda parte deixaria o rótulo mais uniforme e o número errado.
+   */
+  const apoioDoGrupo = (no: NoAgregado) => {
+    const partes = [apoio(no, custoPorChave?.get(no.chave))];
+    partes.push(`${INTEIRO.format(no.linhas)} ${rotuloLinhas(fonte, no.linhas)}`);
+    const quando = contagemPorChave?.get(no.chave);
+    if (quando) {
+      partes.push(
+        quando.de === quando.ate
+          ? `contagem de ${dataBr(quando.ate)}`
+          : `contagens de ${dataBr(quando.de)} a ${dataBr(quando.ate)}`
+      );
+    }
+    return partes.join(' · ');
   };
 
   const totalProdutos = produtosFiltrados.reduce((s, p) => s + p[medida], 0);
@@ -232,7 +312,7 @@ export function PainelDetalhe({
               key={no.chave}
               rotulo={no.rotulo}
               valor={numero(no)}
-              apoio={apoio(no, custoPorChave?.get(no.chave))}
+              apoio={apoioDoGrupo(no)}
               participacao={no.participacao}
             />
           ))

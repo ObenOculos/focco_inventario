@@ -1,6 +1,11 @@
 import type { ReactNode } from 'react';
 import { ChevronDown, ChevronRight, Package } from 'lucide-react';
-import { chaveDoCaminho, type FonteDetalhe, type NoArvore } from '@/lib/panoramaComparativo';
+import {
+  chaveDoCaminho,
+  rotuloLinhas,
+  type FonteDetalhe,
+  type NoArvore,
+} from '@/lib/panoramaComparativo';
 import type { Medida } from '@/lib/panorama';
 import { curto, exato, inteiro, moedaCurta, percentual } from '@/lib/panoramaFormato';
 
@@ -12,7 +17,7 @@ import { curto, exato, inteiro, moedaCurta, percentual } from '@/lib/panoramaFor
  * guardando o primeiro número de cabeça. Aqui os dois ficam abertos lado a lado.
  *
  * **Cada linha tem as fontes do ERP na mesma linha**, e é isso que acaba com a
- * segmentação: fluxo (entrou/saiu) e posição (interno/mala) do MESMO recorte, sem
+ * segmentação: fluxo (entrou/saiu) e posição (interno/externo) do MESMO recorte, sem
  * trocar de tela. A contagem do representante é a sexta coluna e entra só quando pedida
  * — ver `mostrarInventario`.
  *
@@ -107,34 +112,43 @@ export function ArvoreComparativa({
 }: Props) {
   const numero = (t: { quantidade: number; valor: number }) => curto(t, medida);
 
+  /**
+   * De quantos itens o número saiu, para o `title`.
+   *
+   * O substantivo muda com a fonte — produto nos estoques, linha de nota no fluxo —
+   * e por isso vem de `rotuloLinhas` em vez de estar escrito à mão em cada célula.
+   */
+  const deQuantos = (fonte: FonteDetalhe, t: { linhas: number }) =>
+    `${inteiro(t.linhas)} ${rotuloLinhas(fonte, t.linhas)}`;
+
   /** As células de uma linha, na ordem em que a história se conta. */
   const celulas = (no: NoArvore) => [
     {
       id: 'entrou' as const,
       rotulo: 'Entrou',
       valor: numero(no.entrou),
-      titulo: `Entradas de ${no.rotulo} — ${exato(no.entrou)}`,
+      titulo: `Entradas de ${no.rotulo} — ${exato(no.entrou)} · ${deQuantos('entrou', no.entrou)}`,
       abre: no.entrou.quantidade !== 0,
     },
     {
       id: 'saiu' as const,
       rotulo: 'Saiu',
       valor: numero(no.saiu),
-      titulo: `Saídas de ${no.rotulo} — ${exato(no.saiu)}`,
+      titulo: `Saídas de ${no.rotulo} — ${exato(no.saiu)} · ${deQuantos('saiu', no.saiu)}`,
       abre: no.saiu.quantidade !== 0,
     },
     {
       id: 'interno' as const,
       rotulo: 'Interno',
       valor: numero(no.interno),
-      titulo: `Na empresa — ${exato(no.interno)}`,
+      titulo: `Estoque interno, na empresa — ${exato(no.interno)} · ${deQuantos('interno', no.interno)}`,
       abre: false,
     },
     {
       id: 'externo' as const,
-      rotulo: 'Mala',
+      rotulo: 'Externo',
       valor: numero(no.externo),
-      titulo: `Na mala, pelo sistema — ${exato(no.externo)}`,
+      titulo: `Estoque externo, em poder dos representantes, pelo sistema — ${exato(no.externo)} · ${deQuantos('externo', no.externo)}`,
       abre: no.externo.quantidade !== 0,
     },
     ...(mostrarInventario
@@ -146,7 +160,7 @@ export function ArvoreComparativa({
             titulo:
               no.divergencia === null
                 ? 'Sem inventário aprovado neste recorte'
-                : `Contagem do representante — ${exato(no.inventario)}`,
+                : `Contagem do representante — ${exato(no.inventario)} · ${deQuantos('inventario', no.inventario)}`,
             abre: no.divergencia !== null,
           },
         ]
@@ -156,7 +170,7 @@ export function ArvoreComparativa({
   /**
    * A sublinha de uma célula: o que a camada de custo acrescenta sem pedir largura.
    *
-   * Sob "Saiu" vai a MARGEM, porque é dela que a receita fala. Sob "Interno" e "Mala"
+   * Sob "Saiu" vai a MARGEM, porque é dela que a receita fala. Sob "Interno" e "Externo"
    * vai o custo em reais — o dinheiro parado ali. Sob "Entrou" não vai nada: entrada já
    * chega pelo valor de aquisição, e repetir "custo" ali seria o mesmo número com
    * outro nome.
@@ -226,7 +240,7 @@ export function ArvoreComparativa({
             <span className="w-28 text-right">Entrou</span>
             <span className="w-28 text-right">Saiu</span>
             <span className="w-28 text-right">Interno</span>
-            <span className="w-28 text-right">Mala</span>
+            <span className="w-28 text-right">Externo</span>
             {mostrarInventario && <span className="w-28 text-right">Contado</span>}
             <span
               className="w-16 text-right"

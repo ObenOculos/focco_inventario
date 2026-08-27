@@ -28,7 +28,7 @@ import type { LinhaPanorama } from '@/hooks/usePanoramaQuery';
  *
  *   - **com o mundo** (`entrou` / `saiu`): compra, devolução, venda, bonificação. É o
  *     que de fato aumenta ou diminui o que a empresa tem.
- *   - **transferência** (`paraMala`): remessa menos retorno de remessa. Não altera o
+ *   - **transferência** (`paraExterno`): remessa menos retorno de remessa. Não altera o
  *     total; explica a divisão entre estoque interno e externo.
  */
 
@@ -50,10 +50,35 @@ export const EIXOS_DA_FONTE: Record<FonteDetalhe, EixoId[]> = {
   interno: ['situacao'],
 };
 
+/**
+ * O que o campo `linhas` CONTA em cada fonte — e não é a mesma coisa nas cinco.
+ *
+ * ⚠️ Nas duas lentes de fluxo o gateway manda `COUNT(*)` sobre linhas de NOTA: um
+ * produto vendido em três notas conta três. Chamar aquilo de "produtos" seria inventar
+ * um número — o mesmo tipo de erro que fez a contagem truncada passar por boa. Nos três
+ * estoques a contagem é por produto (ver o comentário em `panorama.py`, na montagem do
+ * estoque interno, e o `linhas: 1` do inventário).
+ *
+ * Nos estoques o produto que existe nas DUAS empresas conta duas vezes, porque a
+ * empresa entra no agrupamento. É a razão de o filtro abrir na empresa 2 em vez de
+ * "ambas" — ver `EMPRESA_PADRAO`.
+ */
+const ROTULO_LINHAS: Record<FonteDetalhe, readonly [string, string]> = {
+  saiu: ['linha de nota', 'linhas de nota'],
+  entrou: ['linha de nota', 'linhas de nota'],
+  interno: ['produto', 'produtos'],
+  externo: ['produto', 'produtos'],
+  inventario: ['produto', 'produtos'],
+};
+
+/** `linhas` com o substantivo certo para a fonte, já no singular ou no plural. */
+export const rotuloLinhas = (fonte: FonteDetalhe, quantas: number) =>
+  ROTULO_LINHAS[fonte][quantas === 1 ? 0 : 1];
+
 export const TITULO_DA_FONTE: Record<FonteDetalhe, string> = {
   saiu: 'Saídas',
   entrou: 'Entradas',
-  externo: 'Na mala (ERP)',
+  externo: 'Estoque externo (ERP)',
   inventario: 'Contado pelo representante',
   interno: 'Na empresa',
 };
@@ -131,8 +156,8 @@ export interface NoComparativo {
   entrou: TotaisComCusto;
   /** Vendas e bonificações — o que saiu para fora. Aqui `custo` é o CMV. */
   saiu: TotaisComCusto;
-  /** Remessa menos retorno, em unidades. Positivo = foi para a mala no período. */
-  paraMala: number;
+  /** Remessa menos retorno, em unidades. Positivo = foi para o externo no período. */
+  paraExterno: number;
   interno: TotaisComCusto;
   externo: TotaisComCusto;
   /** A mala contada. Fora de `estoqueTotal` de propósito — ver `FontesComparativo`. */
@@ -209,7 +234,7 @@ export function compararPorEixo(
     rotulo,
     entrou: { ...ZERO },
     saiu: { ...ZERO },
-    paraMala: 0,
+    paraExterno: 0,
     interno: { ...ZERO },
     externo: { ...ZERO },
     inventario: { ...ZERO },
@@ -232,13 +257,13 @@ export function compararPorEixo(
 
   for (const l of filtrarPeloCaminho(fontes.saidas, ordem, caminho)) {
     const no = pegar(l);
-    if (l.classif_operacao === SAIDA_TRANSFERENCIA) no.paraMala += Number(l.quantidade) || 0;
+    if (l.classif_operacao === SAIDA_TRANSFERENCIA) no.paraExterno += Number(l.quantidade) || 0;
     else no.saiu = acumular(no.saiu, l);
   }
 
   for (const l of filtrarPeloCaminho(fontes.entradas, ordem, caminho)) {
     const no = pegar(l);
-    if (l.classif_entrada === ENTRADA_TRANSFERENCIA) no.paraMala -= Number(l.quantidade) || 0;
+    if (l.classif_entrada === ENTRADA_TRANSFERENCIA) no.paraExterno -= Number(l.quantidade) || 0;
     else no.entrou = acumular(no.entrou, l);
   }
 
@@ -314,7 +339,7 @@ export function totalComparativo(
     rotulo: 'Total',
     entrou: { ...ZERO },
     saiu: { ...ZERO },
-    paraMala: 0,
+    paraExterno: 0,
     interno: { ...ZERO },
     externo: { ...ZERO },
     inventario: { ...ZERO },
@@ -340,7 +365,7 @@ export function totalComparativo(
         semCusto: total[campo].semCusto + no[campo].semCusto,
       };
     }
-    total.paraMala += no.paraMala;
+    total.paraExterno += no.paraExterno;
     total.porMes += no.porMes;
   }
 

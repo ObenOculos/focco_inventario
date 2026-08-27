@@ -126,12 +126,12 @@ export function FaixaIndicadores({
         apoio={
           mostrarCusto && medida === 'valor'
             ? `${moedaCurta(estoque.valor)} a preço de tabela`
-            : `${inteiro(total.interno.quantidade)} na empresa · ${inteiro(total.externo.quantidade)} nas malas`
+            : `${inteiro(total.interno.quantidade)} interno · ${inteiro(total.externo.quantidade)} externo`
         }
         ajuda={
           mostrarCusto
-            ? 'Quanto existe agora na empresa mais o que está nas malas, valorizado a CUSTO — o dinheiro parado em mercadoria. Não muda com o período escolhido.'
-            : 'Quanto existe agora, somando o que está na empresa e o que está nas malas dos representantes. Não muda com o período escolhido.'
+            ? 'O estoque interno da empresa mais o externo, em poder dos representantes, valorizado a CUSTO — o dinheiro parado em mercadoria. Não muda com o período escolhido.'
+            : 'Quanto existe agora, somando o estoque interno da empresa e o externo, em poder dos representantes. Não muda com o período escolhido.'
         }
         heroi
       />
@@ -152,7 +152,7 @@ export function FaixaIndicadores({
       <Indicador
         rotulo="Saldo do período"
         valor={comSinal(total.saldoPeriodo)}
-        apoio={`${comSinal(total.paraMala)} foram para as malas`}
+        apoio={`${comSinal(total.paraExterno)} foram para o externo`}
         ajuda="O que entrou menos o que saiu no período. Positivo, o estoque cresceu; negativo, encolheu."
       />
       <Indicador
@@ -208,12 +208,19 @@ export function FaixaIndicadores({
       {mostrarInventario && (
         <Indicador
           rotulo="Diferença na contagem"
-          ajuda="O que os representantes contaram menos o que o sistema diz que está com eles. Diferente de zero não é necessariamente erro — pode ser movimento posterior à contagem."
+          ajuda={
+            'O que os representantes contaram menos o que o sistema diz que está com eles. ' +
+            'Diferente de zero não é necessariamente erro — pode ser movimento posterior à ' +
+            'contagem. Usa o ÚLTIMO inventário aprovado de CADA representante: se a última ' +
+            'contagem dele foi parcial (fragmento do mesmo dia ou recontagem de um recorte), ' +
+            'o total fica menor que a contagem cheia anterior. Clique em "Contado" na lista ' +
+            'para ver a data e o número de produtos de cada um.'
+          }
           valor={total.divergencia === null ? '—' : comSinal(total.divergencia)}
           apoio={
             total.divergencia === null
               ? 'sem inventário aprovado neste recorte'
-              : `${inteiro(total.inventario.quantidade)} contados nas malas`
+              : `${inteiro(total.inventario.linhas)} produtos · ${inteiro(total.inventario.quantidade)} un. contadas`
           }
         />
       )}

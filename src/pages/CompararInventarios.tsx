@@ -48,6 +48,12 @@ import {
 } from '@/components/RegrasConciliacaoDialog';
 import { ehAcessorio, normalizarCodigoErp } from '@/lib/codigoErp';
 import {
+  calcularEsperado,
+  janelaDeReconciliacao,
+  janelaValida,
+  movimentoDoProduto,
+} from '@/lib/reconciliacao';
+import {
   ArrowLeft,
   ArrowLeftRight,
   ArrowRight,
@@ -78,6 +84,7 @@ import { Segmentado } from '@/components/comparativo/Segmentado';
 import {
   NIVEIS,
   SELECAO_VAZIA,
+  SEM_CATEGORIA,
   caminhoDaSelecao,
   casaComSelecao,
   sanearSelecao,
@@ -110,15 +117,20 @@ const CAMPOS_DE_BUSCA: (keyof LinhaExibida)[] = [
 type Etapa = '1' | '2' | '3';
 
 /**
- * A trilha de categoria de uma linha — `OBEN · OCULOS SOLAR · FEMININO · ACETATO`.
+ * A trilha de categoria de uma linha — `OCULOS SOLAR · FEMININO · ACETATO`.
+ *
+ * SEM A MARCA, que tem coluna própria na tabela: repeti-la no subtítulo escreveria o
+ * mesmo valor duas vezes na mesma linha. A leitura gerencial continua agrupando pelos
+ * quatro níveis — lá não há coluna de marca para competir com a trilha.
  *
  * Os níveis vazios são OMITIDOS em vez de virarem "Sem categoria" a cada posição: numa
- * linha de tabela, quatro repetições de "Sem categoria" ocupam mais espaço que a
+ * linha de tabela, três repetições de "Sem categoria" ocupam mais espaço que a
  * informação e escondem os níveis que o produto de fato tem. Produto sem categoria
  * nenhuma devolve string vazia, e a linha não ganha subtítulo.
  */
 function categoriaDaLinha(l: LinhaExibida): string {
-  return NIVEIS.map(({ chave }) => l[chave])
+  return NIVEIS.filter(({ chave }) => chave !== 'marca')
+    .map(({ chave }) => l[chave])
     .filter(Boolean)
     .join(' · ');
 }
@@ -416,26 +428,36 @@ export default function CompararInventarios() {
    */
   const dataBase = primeiroInventario ? dataMalaVazia || null : dataA;
 
+  /**
+   * A janela sugerida começa no DIA SEGUINTE à base — a regra mora em
+   * `janelaDeReconciliacao`, junto do motivo (nota na data exata da base era contada
+   * nesta janela E na anterior). Vale igual no primeiro inventário: "mala vazia em X"
+   * é uma contagem de zero feita em X, e a regra é a mesma para as duas.
+   */
+  const janelaSugerida = useMemo(
+    () => (dataBase && dataB ? janelaDeReconciliacao(dataBase, dataB) : null),
+    [dataBase, dataB]
+  );
+
   // Trocar A ou B repõe o período sugerido. Sobrescrever é decisão pontual sobre
   // um par de inventários — carregar as datas antigas para um par novo produziria
   // uma janela que não corresponde a nada.
   useEffect(() => {
-    setRemessaDe(dataBase ?? '');
-    setRemessaAte(dataB ?? '');
-    setVendaDe(dataBase ?? '');
-    setVendaAte(dataB ?? '');
-  }, [dataBase, dataB]);
+    setRemessaDe(janelaSugerida?.de ?? '');
+    setRemessaAte(janelaSugerida?.ate ?? '');
+    setVendaDe(janelaSugerida?.de ?? '');
+    setVendaAte(janelaSugerida?.ate ?? '');
+  }, [janelaSugerida]);
 
   const janelaRemessa = ajustarPeriodo
     ? { de: remessaDe, ate: remessaAte }
-    : { de: dataBase, ate: dataB };
+    : { de: janelaSugerida?.de ?? null, ate: janelaSugerida?.ate ?? null };
   const janelaVenda = ajustarPeriodo
     ? { de: vendaDe, ate: vendaAte }
-    : { de: dataBase, ate: dataB };
+    : { de: janelaSugerida?.de ?? null, ate: janelaSugerida?.ate ?? null };
 
   /** O início precisa ser anterior ao fim; janela desligada não precisa ser válida. */
-  const janelaOk = (j: { de: string | null; ate: string | null }) =>
-    !!j.de && !!j.ate && j.de <= j.ate;
+  const janelaOk = janelaValida;
   const ordemCorreta =
     (!considerarRemessas || janelaOk(janelaRemessa)) &&
     (!considerarVendas || janelaOk(janelaVenda));
@@ -684,9 +706,8 @@ export default function CompararInventarios() {
       .map((l) => {
         const chave = normalizarCodigoErp(l.codigo_auxiliar);
         usadas.add(chave);
-        const remessa = remessaPorChave.get(chave)?.remessa ?? 0;
-        const venda = vendaPorChave.get(chave)?.venda ?? 0;
-        const esperado = l.quantidade_a + remessa - venda;
+        const { remessa, venda } = movimentoDoProduto(chave, remessaPorChave, vendaPorChave);
+        const esperado = calcularEsperado(l.quantidade_a, remessa, venda);
         return { ...l, remessa, venda, esperado, diferenca: l.quantidade_b - esperado };
       });
 
@@ -698,9 +719,9 @@ export default function CompararInventarios() {
       .map((k) => {
         const r = remessaPorChave.get(k);
         const v = vendaPorChave.get(k);
-        const remessa = r?.remessa ?? 0;
-        const venda = v?.venda ?? 0;
-        const esperado = remessa - venda;
+        const { remessa, venda } = movimentoDoProduto(k, remessaPorChave, vendaPorChave);
+        // Ninguém contou: a âncora é zero. É a mesma fórmula, não um caso à parte.
+        const esperado = calcularEsperado(0, remessa, venda);
         // Preço e categoria vêm do catálogo, não da RPC — a RPC só conhece produto
         // contado. Ausente = 0 e nulos, que a tela já mostra como "sem valor" e
         // agrupa como "Sem categoria" em vez de fingir R$ 0,00 numa categoria real.
@@ -994,6 +1015,10 @@ export default function CompararInventarios() {
         linhas: linhasFiltradas.map((l) => ({
           codigo_auxiliar: l.codigo_auxiliar,
           nome_produto: l.nome_produto,
+          // Mesmo rótulo da tela para produto fora do catálogo: a planilha é lida meses
+          // depois, e uma célula vazia ali se lê como falha de exportação em vez do que
+          // é — cadastro que não existe.
+          marca: l.marca ?? SEM_CATEGORIA,
           valor_unitario: l.valor_unitario,
           quantidade_a: l.quantidade_a,
           remessa: l.remessa,
@@ -1057,10 +1082,11 @@ export default function CompararInventarios() {
 
   const modoGestor = modoLeitura === 'gestor';
 
-  // Produto, Valor unit., Qtd A, Qtd B, Dif. qtd, Dif. em R$, Situação — mais as
-  // colunas de movimento (remessa, venda, esperado) quando a reconciliação está ligada.
+  // Produto, Marca, Valor unit., Qtd A, Qtd B, Dif. qtd, Dif. em R$, Situação — mais
+  // as colunas de movimento (remessa, venda, esperado) quando a reconciliação está
+  // ligada.
   const totalColunas =
-    7 + (podeReconciliar ? 1 + (considerarRemessas ? 1 : 0) + (considerarVendas ? 1 : 0) : 0);
+    8 + (podeReconciliar ? 1 + (considerarRemessas ? 1 : 0) + (considerarVendas ? 1 : 0) : 0);
 
   /** Cor da divergência: positiva informativa, negativa em atenção. Escala divergente. */
   const corDif = (v: number) =>
@@ -1633,7 +1659,11 @@ export default function CompararInventarios() {
                     {empresa !== 'ambas' && ` · empresa ${empresa}`}
                     {baseData === 'emissao' && ' · por emissão'}
                     {!regrasNoPadrao && ' · regras customizadas'}
-                    {!ajustarPeriodo && ' · período padrão entre contagens'}
+                    {/* "do dia seguinte" não é detalhe: é o que garante que a nota
+                        emitida na data da base não conte nesta janela E na anterior. */}
+                    {!ajustarPeriodo &&
+                      janelaSugerida &&
+                      ` · de ${dataBr(janelaSugerida.de)} a ${dataBr(janelaSugerida.ate)}, do dia seguinte à base`}
                   </p>
                 )}
 
@@ -2163,6 +2193,10 @@ export default function CompararInventarios() {
                     <TableHeader>
                       <TableRow className="bg-muted/40 text-xs uppercase tracking-wider text-muted-foreground hover:bg-muted/40">
                         <TableHead className="font-semibold">Produto</TableHead>
+                        {/* A marca sai da trilha e vira coluna: é o primeiro nível da
+                            hierarquia e o recorte que o gestor usa mais, e enterrada no
+                            subtítulo ela não dava para varrer com o olho pela coluna. */}
+                        <TableHead className="font-semibold">Marca</TableHead>
                         <TableHead className="text-right font-semibold">Valor unit.</TableHead>
                         <TableHead className="text-right font-semibold">Qtd A</TableHead>
                         {podeReconciliar && (
@@ -2205,6 +2239,17 @@ export default function CompararInventarios() {
                                 <span className="mt-0.5 block truncate text-2xs text-muted-foreground/80">
                                   {categoriaDaLinha(l)}
                                 </span>
+                              )}
+                            </TableCell>
+                            <TableCell className="py-3 text-sm">
+                              {/* Produto fora do catálogo cai em "Sem categoria", com o
+                                  MESMO texto do filtro e do painel gestor — um rótulo
+                                  escrito diferente aqui viraria um recorte que esvazia a
+                                  lista sem erro nenhum. */}
+                              {l.marca ? (
+                                <span className="font-medium">{l.marca}</span>
+                              ) : (
+                                <span className="text-muted-foreground">{SEM_CATEGORIA}</span>
                               )}
                             </TableCell>
                             <TableCell className="text-right text-sm tabular-nums">

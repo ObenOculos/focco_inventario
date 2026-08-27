@@ -25,6 +25,17 @@ import { curto, inteiro, moeda } from '@/lib/panoramaFormato';
  * obrigar a passar o mouse para ler um número que cabe na tela é esconder o dado. Sem
  * centavos, porque dois dígitos de centavo numa coluna estreita só tiram espaço do que
  * importa — o valor exato continua no `title`.
+ *
+ * **O total do período mora na legenda, não numa coluna extra.** Uma barra "Total" ao
+ * lado das mensais seria doze vezes mais alta que a maior delas e achataria o gráfico
+ * inteiro; dar a ela uma escala própria resolveria a altura mentindo sobre a proporção —
+ * o erro clássico. Na legenda o número não custa tinta nenhuma, cai onde o olho já vai
+ * para descobrir o que a cor significa, e a soma fica colada na série que ela soma.
+ *
+ * ⚠️ Este total é sempre o do PERÍODO INTEIRO, mesmo com um mês em foco — a série nunca
+ * é recortada pelo foco (senão sobraria uma coluna só). Por isso ele diverge da faixa de
+ * indicadores acima, que segue o mês focado, e por isso a legenda diz de quantos meses
+ * está falando.
  */
 
 const mesCurto = (iso: string) => {
@@ -53,17 +64,33 @@ export function SerieMensal({ pontos, medida, mesEmFoco, onMes }: Props) {
   const preciso = (v: number) => (medida === 'valor' ? moeda(v) : `${inteiro(v)} un.`);
   const altura = (v: number) => `${Math.max((v / maximo) * 100, v > 0 ? 3 : 0)}%`;
 
+  // Somado aqui, dos mesmos `pontos` que viram barra: qualquer outra origem poderia
+  // divergir do que está desenhado, e um total que não fecha com as colunas ao lado é
+  // pior que total nenhum.
+  const totalEntrou = pontos.reduce((s, p) => s + p.entrou, 0);
+  const totalSaiu = pontos.reduce((s, p) => s + p.saiu, 0);
+
   return (
     <div>
-      <div className="mb-1.5 flex items-center gap-3 text-2xs text-muted-foreground">
+      <div className="mb-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-muted-foreground">
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-3 rounded-sm bg-primary/45" aria-hidden />
           Entrou
+          <span className="font-semibold tabular-nums text-foreground" title={preciso(totalEntrou)}>
+            {formatar(totalEntrou)}
+          </span>
         </span>
         <span className="flex items-center gap-1">
           <span className="inline-block h-2 w-3 rounded-sm bg-primary" aria-hidden />
           Saiu
+          <span className="font-semibold tabular-nums text-foreground" title={preciso(totalSaiu)}>
+            {formatar(totalSaiu)}
+          </span>
         </span>
+        {/* Diz de quantos meses é a soma. Sem isso, com um mês em foco, o total da
+            legenda e o cartão "Entrou" da faixa acima mostram números diferentes sem
+            explicar por quê. */}
+        <span>· total de {pontos.length} meses</span>
         <span className="ms-auto">clique num mês para focar</span>
       </div>
 

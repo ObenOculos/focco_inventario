@@ -91,6 +91,17 @@ export interface EscopoPanorama {
 }
 
 const EMPRESAS: EscolhaEmpresa[] = ['ambas', '1', '2'];
+
+/**
+ * A empresa 2 abre a tela, e não "ambas".
+ *
+ * O mesmo produto é cadastrado nas DUAS empresas, então "ambas" conta cada SKU duas
+ * vezes na contagem de produtos do estoque — o número de unidades continua certo, o de
+ * produtos não. Abrir por uma empresa só dá a leitura que fecha; quem quiser o
+ * consolidado troca no filtro e assume a duplicação sabendo dela.
+ */
+const EMPRESA_PADRAO: EscolhaEmpresa = '2';
+
 // `tudo` primeiro: é a raiz, e ler a lista da esquerda para a direita passa a ser
 // do mais amplo ao mais específico.
 const EIXOS_TOPO: EixoId[] = ['tudo', 'marca', 'tipo', 'subtipo', 'grupo'];
@@ -120,7 +131,7 @@ export function usePanoramaEstado() {
     return {
       de,
       ate,
-      empresa: umDe(params.get('empresa'), EMPRESAS, 'ambas'),
+      empresa: umDe(params.get('empresa'), EMPRESAS, EMPRESA_PADRAO),
       baseData: umDe(params.get('base'), ['movimento', 'emissao'] as const, 'movimento'),
       medida: umDe(params.get('medida'), ['quantidade', 'valor'] as const, 'quantidade'),
       abrirPor: umDe(params.get('abrir'), EIXOS_TOPO, 'marca'),
@@ -146,7 +157,7 @@ export function usePanoramaEstado() {
           };
           if ('de' in mudanca) por('de', mudanca.de, PERIODO_PADRAO.de);
           if ('ate' in mudanca) por('ate', mudanca.ate, PERIODO_PADRAO.ate);
-          if ('empresa' in mudanca) por('empresa', mudanca.empresa, 'ambas');
+          if ('empresa' in mudanca) por('empresa', mudanca.empresa, EMPRESA_PADRAO);
           if ('baseData' in mudanca) por('base', mudanca.baseData, 'movimento');
           if ('medida' in mudanca) por('medida', mudanca.medida, 'quantidade');
           if ('abrirPor' in mudanca) por('abrir', mudanca.abrirPor, 'marca');

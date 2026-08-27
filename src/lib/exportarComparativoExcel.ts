@@ -41,6 +41,8 @@ const FMT_NUM = '#,##0';
 export interface LinhaExportacao {
   codigo_auxiliar: string;
   nome_produto: string;
+  /** Primeiro nível da hierarquia do Ciclone. `''` = produto fora do catálogo. */
+  marca: string;
   valor_unitario: number;
   quantidade_a: number;
   remessa: number;
@@ -113,9 +115,19 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
 
   // Colunas montadas conforme o que está ligado — a banda de movimento só existe
   // quando há movimento, e cada uma das duas colunas segue o seu toggle.
-  const colunas: { chave: keyof LinhaExportacao | 'nada'; titulo: string; banda: string }[] = [
-    { chave: 'codigo_auxiliar', titulo: 'Código Auxiliar', banda: 'id' },
-    { chave: 'nome_produto', titulo: 'Nome Produto', banda: 'id' },
+  const colunas: {
+    chave: keyof LinhaExportacao | 'nada';
+    titulo: string;
+    banda: string;
+    /** Largura da coluna; as numéricas usam a padrão. */
+    largura?: number;
+  }[] = [
+    { chave: 'codigo_auxiliar', titulo: 'Código Auxiliar', banda: 'id', largura: 16 },
+    { chave: 'nome_produto', titulo: 'Nome Produto', banda: 'id', largura: 32 },
+    // A marca entra na banda de identificação, junto do código e do nome: é atributo
+    // do produto, não medida do período. É também o que torna a planilha útil em
+    // tabela dinâmica sem precisar quebrar a trilha de categoria em fórmula.
+    { chave: 'marca', titulo: 'Marca', banda: 'id', largura: 18 },
     { chave: 'quantidade_a', titulo: 'Qtd Inicial', banda: 'a' },
   ];
   if (op.comMovimentos) {
@@ -134,9 +146,22 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
     return { primeiro, ultimo };
   };
 
-  ws.getColumn(1).width = 16;
-  ws.getColumn(2).width = 32;
-  for (let c = 3; c <= colunas.length; c++) ws.getColumn(c).width = 14;
+  /**
+   * Largura padrão das colunas de número. As de texto declaram a sua na lista.
+   *
+   * Antes as larguras vinham por POSIÇÃO (`getColumn(1) = 16`, `getColumn(2) = 32`, o
+   * resto 14). Acrescentar uma coluna de texto no meio da banda de identificação dava
+   * a ela a largura de um número e empurrava a régua inteira — o tipo de defeito que
+   * só aparece depois de aberto o arquivo.
+   */
+  const LARGURA_NUM = 14;
+  colunas.forEach((c, i) => {
+    ws.getColumn(i + 1).width = c.largura ?? LARGURA_NUM;
+  });
+
+  /** Colunas de TEXTO: alinham à esquerda e não entram no SUBTOTAL do rodapé. */
+  const ehTexto = (chave: (typeof colunas)[number]['chave']) =>
+    chave === 'codigo_auxiliar' || chave === 'nome_produto' || chave === 'marca';
 
   const borda = {
     top: { style: 'thin' as const, color: { argb: 'FFBBBBBB' } },
@@ -202,7 +227,9 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
   // Altura da linha 1 conforme o rótulo mais longo caber em uma ou duas linhas.
   const larguraBanda = (banda: string) => {
     const { primeiro, ultimo } = idx(banda);
-    return (ultimo - primeiro + 1) * 14;
+    let soma = 0;
+    for (let c = primeiro; c <= ultimo; c++) soma += Number(ws.getColumn(c).width) || LARGURA_NUM;
+    return soma;
   };
   const precisaDuasLinhas = bandas.some(
     (b) => b.titulo.length > larguraBanda(b.banda) * 0.95
@@ -227,7 +254,9 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
 
   const R0 = 3;
   ws.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: colunas.length } };
-  ws.views = [{ state: 'frozen', xSplit: 2, ySplit: 2 }];
+  // Congela a banda de IDENTIFICAÇÃO inteira, não duas colunas fixas: com a marca
+  // dentro dela, um `xSplit: 2` deixaria a marca rolando para fora junto dos números.
+  ws.views = [{ state: 'frozen', xSplit: idx('id').ultimo, ySplit: 2 }];
 
   // ── Dados ────────────────────────────────────────────────────────────────
   const zebra: Record<string, [string, string]> = {
@@ -252,8 +281,8 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
       // sinal que o olho procura ao abrir a planilha.
       if (c.banda === 'dif' && alerta) fundo = COR.difAlerta;
 
-      if (c.chave === 'codigo_auxiliar' || c.chave === 'nome_produto') {
-        pintar(r, col, l[c.chave], fundo, { alinha: 'left' });
+      if (ehTexto(c.chave)) {
+        pintar(r, col, l[c.chave as 'codigo_auxiliar'], fundo, { alinha: 'left' });
       } else if (c.chave === 'valor_unitario') {
         pintar(r, col, l.valor_unitario, fundo, { alinha: 'right', fmt: FMT_BRL });
       } else if (c.chave === 'nada') {
@@ -282,7 +311,7 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
   colunas.forEach((c, j) => {
     const col = j + 1;
     const letra = ws.getColumn(col).letter;
-    const somavel = c.chave !== 'codigo_auxiliar' && c.chave !== 'nome_produto';
+    const somavel = !ehTexto(c.chave);
     if (j === 0) {
       pintar(rt, col, 'TOTAL', COR.dif, { negrito: true, cor: COR.branco, alinha: 'left' });
     } else if (somavel && c.chave !== 'valor_unitario') {
