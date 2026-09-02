@@ -171,9 +171,10 @@ const OPERACOES: Record<string, { caminho: string; montar: (p: Params) => URLSea
   estoque: {
     caminho: '/estoque',
     // Sem data: é foto, não fluxo. Um período aqui prometeria um histórico de saldo
-    // que `eq_produtoespecifico` não guarda.
+    // que o cadastro não guarda.
     montar: (p) => {
       const q = new URLSearchParams();
+      q.set('nivel', nivelEstoque(p.nivel));
       if (p.incluir_zerados !== undefined) {
         q.set('incluir_zerados', String(booleano(p.incluir_zerados, 'incluir_zerados')));
       }
@@ -224,6 +225,24 @@ function nivel(valor: unknown): string {
   if (valor === undefined || valor === null) return 'categoria';
   if (valor !== 'categoria' && valor !== 'produto') {
     throw new ErroDeEntrada("'nivel' deve ser 'categoria' ou 'produto'.");
+  }
+  return valor;
+}
+
+/**
+ * Nível do estoque INTERNO — `modelo` ou `produto`, não `categoria`.
+ *
+ * Validador próprio em vez do `nivel()` acima porque o vocabulário é outro, e a
+ * diferença é real: no estoque interno o nível de entrada não é categoria nenhuma,
+ * é um cadastro por modelo (`eq_produtoespecifico`), enquanto `produto` desce ao
+ * código auxiliar com cor (`eq_produtoespecificoestoque`). Reaproveitar o validador
+ * de categoria obrigaria a mentir no nome do parâmetro — e foi exatamente um nome
+ * errado que sustentou, até 2026-09-02, a ideia de que o saldo por cor não existia.
+ */
+function nivelEstoque(valor: unknown): string {
+  if (valor === undefined || valor === null) return 'modelo';
+  if (valor !== 'modelo' && valor !== 'produto') {
+    throw new ErroDeEntrada("'nivel' do estoque deve ser 'modelo' ou 'produto'.");
   }
   return valor;
 }

@@ -9,13 +9,22 @@ import type { LinhaPanorama } from '@/hooks/usePanoramaQuery';
  * pela hierarquia de categoria e deriva o que só existe no cruzamento — saldo do
  * período, estoque total e cobertura.
  *
- * ## Por que só por CATEGORIA
+ * ## Por que a ÁRVORE é só por CATEGORIA
  *
  * As quatro fontes falam a mesma língua em marca/tipo/subtipo/grupo, e **só ali**. Nos
- * outros eixos elas divergem de propósito (tipo de saída não existe em estoque) ou o
- * grão não bate: o estoque interno é por MODELO, enquanto externo, entradas e saídas
- * descem até o CÓDIGO AUXILIAR. Por isso este módulo não desce até o produto — seria
- * confrontar duas medidas que não são a mesma coisa.
+ * outros eixos elas divergem de propósito — tipo de saída não existe em estoque, e
+ * terceiro não existe em compra.
+ *
+ * ⚠️ **O motivo mudou em 2026-09-02.** Antes havia uma segunda razão, e ela era falsa:
+ * "o estoque interno é por modelo, os outros por código auxiliar, então confrontá-los no
+ * produto seria somar medidas diferentes". O saldo por grade sempre existiu
+ * (`eqpee_estoque` é coluna real; ver `erp-gateway/panorama.py`), e hoje o `/estoque`
+ * responde nos dois grãos. **As cinco fontes descem ao mesmo código auxiliar.**
+ *
+ * A árvore continua por categoria por um motivo de CUSTO, não de grão: montar o
+ * comparativo no produto exigiria as folhas das cinco fontes de uma vez, e o gateway
+ * serializa três consultas simultâneas sobre a VPN. O produto aparece onde ele é barato
+ * — no painel de detalhe, uma fonte por vez, sob demanda.
  *
  * ## A correção que os números exigem
  *

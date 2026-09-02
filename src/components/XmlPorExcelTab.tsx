@@ -22,7 +22,12 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { FileDown, FileCode, Loader2, Upload, AlertTriangle, Store } from 'lucide-react';
-import { gerarXmlRetornoCiclone, downloadXml, downloadXmlsAsZip } from '@/lib/gerarXmlCiclone';
+import {
+  gerarXmlRetornoCiclone,
+  downloadXml,
+  downloadXmlsAsZip,
+  LOJAS,
+} from '@/lib/gerarXmlCiclone';
 
 interface ItemLido {
   linha: number;
@@ -36,11 +41,6 @@ interface ErroLinha {
   linha: number;
   mensagem: string;
 }
-
-const LOJAS = [
-  { codigo: 1, nome: 'Loja 01' },
-  { codigo: 2, nome: 'Loja 02' },
-];
 
 const COLUNAS_OBRIGATORIAS = ['codigo_auxiliar', 'nome_produto', 'quantidade', 'valor_unitario'];
 

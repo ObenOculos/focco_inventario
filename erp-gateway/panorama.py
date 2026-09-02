@@ -647,34 +647,68 @@ ORDER BY quantidade DESC
 
 
 # ===========================================================================
-# ESTOQUE INTERNO — o saldo da empresa no Ciclone
+# ESTOQUE INTERNO - o saldo da empresa no Ciclone
 # ===========================================================================
 #
-# Fonte: `eq_produtoespecifico`, a mesma do relatorio "Analise de Estoque por
-# Colecao Marca" do proprio ERP. `eqpde_estoque` e COLUNA de verdade, somavel.
+# DOIS NIVEIS, e a diferenca entre eles nao e so de agregacao: e de TABELA.
 #
-# DUAS DIFERENCAS DE NATUREZA em relacao as outras duas lentes, e as duas mudam a
-# tela:
+#   nivel="modelo"  -> `eq_produtoespecifico.eqpde_estoque`, por empresa + filial +
+#                      produto generico. Coluna real e somavel. E a mesma fonte do
+#                      relatorio "Analise de Estoque por Colecao Marca".
+#   nivel="produto" -> `eq_produtoespecificoestoque.eqpee_estoque`, que quebra tambem
+#                      por COR e traz o codigo auxiliar da grade. E a fonte do
+#                      relatorio 006059, "Analise de Estoque por Colecao/Marca x
+#                      Produto c/ Grade".
 #
-#   1. E FOTO, NAO FLUXO. O saldo e o de agora; nao existe periodo, nao existe
-#      serie mensal e nao faz sentido perguntar "quanto de estoque em marco".
-#      Por isso esta funcao nao recebe data nenhuma.
+# Os niveis nao se chamam "categoria"/"produto" como nas outras lentes DE PROPOSITO:
+# aqui o nivel de entrada nao e categoria nenhuma, e um cadastro por modelo. Dar a ele
+# o nome errado foi metade do engano descrito abaixo.
 #
-#   2. O GRAO E O MODELO, NAO O CODIGO AUXILIAR. `eq_produtoespecifico` e por
-#      empresa + filial + produto GENERICO — nao por cor. O saldo por grade existe
-#      em `eq_produtoespecificoestoque.eqpee_estoque`, mas ali NAO e coluna: e
-#      `cast(( 0 /*#_estoque#*/ ) ...)`, um macro que so o cliente Ciclone expande
-#      — fora dele devolve zero. Consequencia: o estoque INTERNO desce ate o
-#      modelo (OB1190) enquanto o EXTERNO, que vem dos inventarios, desce ate o
-#      codigo auxiliar (OB1190 A02). Comparar os dois exige subir o externo para
-#      modelo, e a tela precisa DIZER isso em vez de somar os dois calada.
+# ATENCAO - CORRECAO DE 2026-09-02, e vale a leitura antes de mexer:
 #
-# Nao ha nivel de folha separado aqui: sao ~1.800 produtos com saldo (medido em
-# 2026-08-24), entao a resposta ja vem no grao mais fino e o cliente agrega todos
-# os niveis localmente. Uma segunda rota para a folha seria cerimonia sem ganho.
+#   Este arquivo AFIRMAVA que o saldo por grade nao existia fora do cliente Ciclone,
+#   porque `eqpee_estoque` seria `cast(( 0 /*#_estoque#*/ ) ...)`, um macro. ISSO
+#   ESTAVA ERRADO. Aquele `cast` existe, mas so no relatorio "Listagem dos Produtos
+#   com Estoque Detalhado", onde e convencao do construtor de relatorios: ele injeta
+#   ali o calculo do proprio ERP. A COLUNA e real.
+#
+#   Medido por consulta direta em 2026-09-02: `eq_produtoespecificoestoque` e tabela,
+#   `eqpee_estoque` e numeric, 1.593 grades com saldo na empresa 2 (2.407 na 1), e
+#   `SUM(eqpee_estoque)` por modelo bate com `eqpde_estoque` em 748 de 748 modelos,
+#   diferenca 0,00. E a mesma tabela de onde o `SQL_CATALOGO` ja le
+#   `eqpee_referenciaauxiliargrade`, entao o codigo auxiliar sai junto.
+#
+#   Consequencia: interno e externo DESCEM AO MESMO GRAO. Acabou o descompasso que
+#   obrigava a subir o externo para modelo antes de comparar os dois.
+#
+# E FOTO, NAO FLUXO. O saldo e o de agora; nao existe periodo, nao existe serie mensal
+# e nao faz sentido perguntar "quanto de estoque em marco". Por isso nenhum dos dois
+# niveis recebe data.
+#
+# Cardinalidade (medida em 2026-09-02, empresas 1+2, so com saldo): 1.784 linhas no
+# nivel modelo, ~4.000 no nivel produto. As duas cabem numa viagem so - bem longe das
+# 16.500 do estoque externo por SKU, que foi o que obrigou aquela lente a paginar por
+# nivel.
 
-def estoque_interno(empresas=None, incluir_zerados=False, **recortes) -> pd.DataFrame:
-    """Saldo atual da empresa, por empresa x filial x modelo.
+# Codigo auxiliar da grade. NAO filtra sentinela de cor/tamanho, e isso e deliberado.
+#
+# O relatorio "Estoque Detalhado" tem um WHERE que casa `eqpde_controlaestoquecor` com
+# a sentinela 'COR' (e o mesmo para tamanho). Copiar aquele filtro AQUI quebraria o
+# total: a prova de que a soma por grade bate com o saldo do modelo (748 de 748) foi
+# feita somando TODAS as linhas, inclusive as de sentinela - que sao justamente os
+# acessorios sem cor (ESTOJO PW sozinho tem 22.801 unidades).
+_SQL_CODIGO_AUXILIAR_GRADE = """
+    TRIM(COALESCE(
+        est.eqpee_referenciaauxiliargrade,
+        CASE WHEN COALESCE(est.eqpee_cor, '') NOT IN ('', 'COR')
+             THEN CONCAT(est.eqpdg_codigo, ' ', est.eqpee_cor)
+             ELSE est.eqpdg_codigo END
+    ))
+"""
+
+
+def estoque_interno(empresas=None, incluir_zerados=False, nivel="modelo", **recortes):
+    """Saldo atual da empresa. `nivel` escolhe entre modelo e codigo auxiliar.
 
     `incluir_zerados` desligado por padrao: o catalogo tem 3.778 cadastros e so
     1.784 tem saldo diferente de zero. Trazer os zerados dobraria a resposta com
@@ -687,12 +721,17 @@ def estoque_interno(empresas=None, incluir_zerados=False, **recortes) -> pd.Data
     """
     if empresas is None:
         empresas = db.EMPRESAS_PADRAO
+    if nivel not in ("modelo", "produto"):
+        raise ValueError("nivel deve ser 'modelo' ou 'produto'")
 
-    condicoes = ["pe.pgemp_codigo = ANY(%(empresas)s)"]
+    alvo = "est" if nivel == "produto" else "pe"
+    saldo = "est.eqpee_estoque" if nivel == "produto" else "pe.eqpde_estoque"
+
+    condicoes = [f"{alvo}.pgemp_codigo = ANY(%(empresas)s)"]
     params: dict[str, Any] = {"empresas": list(empresas)}
 
     if not incluir_zerados:
-        condicoes.append("COALESCE(pe.eqpde_estoque, 0) <> 0")
+        condicoes.append(f"COALESCE({saldo}, 0) <> 0")
 
     for nome, coluna in CATEGORIAS.items():
         chave = f"{nome}s"
@@ -704,9 +743,66 @@ def estoque_interno(empresas=None, incluir_zerados=False, **recortes) -> pd.Data
     categorias = ",\n".join(
         f"    {_categoria(coluna)} AS {nome}" for nome, coluna in CATEGORIAS.items()
     )
-    # `linhas` aqui conta PRODUTOS, nao linhas de nota — e o que faz a maquina de
+
+    # `linhas` aqui conta PRODUTOS, nao linhas de nota - e o que faz a maquina de
     # agregacao do cliente continuar valendo sem um campo so para esta lente.
-    sql = f"""
+    if nivel == "produto":
+        # `disponivel` e DERIVADO, nao a coluna do cadastro: no grao de grade nao
+        # existe `eqpee_estoquedisponivel`. E a mesma conta do relatorio 006059.
+        #
+        # A situacao vem da GRADE quando existe: no Ciclone o OB1190 pode estar ativo
+        # com a cor A02 ja inativada, e e a cor que decide se da para pedir. Mesma
+        # regra do `SQL_CATALOGO`.
+        sql = f"""
+SELECT
+    {_SQL_CODIGO_AUXILIAR_GRADE.strip()} AS codigo_auxiliar,
+    est.pgemp_codigo                      AS empresa,
+    est.pgfll_codigo                      AS filial,
+    est.eqpdg_codigo                      AS codigo_produto,
+    COALESCE(est.eqpee_cor, '')           AS cor,
+    MIN(gen.eqpdg_nome)                   AS nome_produto,
+    MIN(COALESCE(est.eqpee_situacao, gen.eqpdg_situacao)) AS situacao,
+{categorias},
+    SUM(COALESCE(est.eqpee_estoque, 0))                    AS quantidade,
+    SUM(COALESCE(est.eqpee_estoque, 0)
+        - COALESCE(est.eqpee_estoquesaidapendente, 0))     AS disponivel,
+    SUM(COALESCE(est.eqpee_estoquesaidapendente, 0))       AS saida_pendente,
+    -- Mercadoria NOSSA em poder de terceiros, na MESMA tabela e no mesmo grao.
+    --
+    -- Vem junto porque responde a pergunta que o saldo interno sozinho deixa no ar:
+    -- "a empresa nao tem esta cor" e verdade sobre o ARMAZEM e engana sobre a
+    -- operacao. Medido em 2026-09-02, nos 57 SKUs que um representante tinha e a loja
+    -- nao: os 57 tinham saldo em terceiro (2.308 un no total) e 44 estavam com saldo
+    -- interno NEGATIVO. Sem esta coluna a tela dizia "nao tem" para item que a casa
+    -- tem 71 unidades espalhadas em malas.
+    --
+    -- NAO substitui o `/estoque-externo`: la a quebra e por terceiro, aqui e o total
+    -- da grade. Sao a mesma medida em graos diferentes.
+    SUM(COALESCE(est.eqpee_estoqueemterceiro, 0))          AS em_terceiro,
+    SUM(COALESCE(est.eqpee_estoque, 0) * {_PRECO_TABELA})  AS valor,
+    SUM(COALESCE(est.eqpee_estoque, 0) * {_CUSTO_UNITARIO}) AS custo,
+    COUNT(*)                                               AS linhas
+FROM eq_produtoespecificoestoque est
+JOIN eq_produtogenerico gen
+      ON  gen.pgemp_codigo = est.pgemp_codigo
+      AND gen.eqpdg_codigo = est.eqpdg_codigo
+-- O preco e o custo moram no cadastro por FILIAL, nao na linha de grade. A chave de
+-- `eq_produtoespecifico` e empresa+filial+produto e a linha de grade traz as tres,
+-- entao e 1:1 e nao multiplica quantidade.
+LEFT JOIN eq_produtoespecifico pe
+      ON  pe.pgemp_codigo = est.pgemp_codigo
+      AND pe.pgfll_codigo = est.pgfll_codigo
+      AND pe.eqpdg_codigo = est.eqpdg_codigo
+LEFT JOIN eq_colecao         col ON col.eqcol_codigo = gen.eqcol_codigo
+LEFT JOIN eq_tipoproduto     tpr ON tpr.eqtpr_codigo = gen.eqtpr_codigo
+LEFT JOIN eq_grupoespecifico gru ON gru.eqgru_codigo = gen.eqgru_codigo
+LEFT JOIN eq_grupogenerico   grg ON grg.eqgrg_codigo = gru.eqgrg_codigo
+WHERE {" AND ".join(condicoes)}
+GROUP BY 1, 2, 3, 4, 5, 8, 9, 10, 11
+ORDER BY quantidade DESC
+"""
+    else:
+        sql = f"""
 SELECT
     pe.pgemp_codigo                       AS empresa,
     pe.pgfll_codigo                       AS filial,
@@ -732,10 +828,14 @@ WHERE {" AND ".join(condicoes)}
 GROUP BY 1, 2, 3, 6, 7, 8, 9
 ORDER BY quantidade DESC
 """
+
     df = _consultar(sql, params)
     if df.empty:
         return df
-    for col in ("quantidade", "valor", "custo", "disponivel", "saida_pendente"):
+    numericas = ["quantidade", "valor", "custo", "disponivel", "saida_pendente"]
+    if "em_terceiro" in df.columns:
+        numericas.append("em_terceiro")
+    for col in numericas:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
     return df
 

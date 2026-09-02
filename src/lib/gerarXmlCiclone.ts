@@ -1,3 +1,17 @@
+/**
+ * As lojas que emitem o pedido — `pgemp_codigo` no Ciclone.
+ *
+ * Mora aqui, junto do gerador, porque as TRÊS abas de Exportar XML escolhem uma
+ * loja e a lista precisa ser a mesma nas três: uma cópia que ganhasse a Loja 03
+ * sozinha geraria pedido para uma empresa que as outras duas não conhecem.
+ */
+export const LOJAS = [
+  { codigo: 1, nome: 'Loja 01' },
+  { codigo: 2, nome: 'Loja 02' },
+] as const;
+
+export type Loja = (typeof LOJAS)[number];
+
 interface ItemXmlCiclone {
   codigo_auxiliar: string;
   nome_produto: string;

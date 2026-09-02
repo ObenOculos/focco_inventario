@@ -1,5 +1,4 @@
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -10,6 +9,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Segmentado } from '@/components/comparativo/Segmentado';
+import { CaixaDeMarcacao } from '@/components/CaixaDeMarcacao';
 import { ChevronDown, RefreshCw, SlidersHorizontal } from 'lucide-react';
 import type { EscolhaEmpresa } from '@/hooks/useConsultaErpQuery';
 import { MEDIDAS, type Medida } from '@/lib/panorama';
@@ -181,33 +181,6 @@ function Secao({
       </div>
       {children}
     </div>
-  );
-}
-
-/** Caixa de marcação com rótulo clicável — o formato das camadas e do recorte. */
-function Caixa({
-  marcado,
-  onMarcado,
-  children,
-  descricao,
-}: {
-  marcado: boolean;
-  onMarcado: (v: boolean) => void;
-  children: React.ReactNode;
-  descricao: string;
-}) {
-  return (
-    <label className="flex cursor-pointer select-none items-start gap-2.5">
-      <Checkbox
-        checked={marcado}
-        onCheckedChange={(v) => onMarcado(v === true)}
-        className="mt-0.5"
-      />
-      <span className="min-w-0">
-        <span className="block text-sm font-medium">{children}</span>
-        <span className="block text-2xs text-muted-foreground">{descricao}</span>
-      </span>
-    </label>
   );
 }
 
@@ -494,13 +467,13 @@ export function BarraEscopo({
                 onValor={(v) => onMedida(v)}
               />
             </div>
-            <Caixa
+            <CaixaDeMarcacao
               marcado={ocultarDiversos}
               onMarcado={onOcultarDiversos}
               descricao="Tira o balde de sobras do cadastro de todos os números."
             >
               Ocultar Diversos
-            </Caixa>
+            </CaixaDeMarcacao>
           </Secao>
 
           {/* ── 4. Camadas ─────────────────────────────────────────────── */}
@@ -508,20 +481,20 @@ export function BarraEscopo({
             titulo="Camadas extras"
             ajuda="Informação complementar. O Panorama é uma leitura do ERP; estas camadas acrescentam colunas a ela sem substituí-la."
           >
-            <Caixa
+            <CaixaDeMarcacao
               marcado={custo}
               onMarcado={onCusto}
               descricao="Margem sob as saídas e o estoque a custo. Usa o custo de HOJE — não o da época da venda."
             >
               Custo e margem
-            </Caixa>
-            <Caixa
+            </CaixaDeMarcacao>
+            <CaixaDeMarcacao
               marcado={inventario}
               onMarcado={onInventario}
               descricao="A contagem dos representantes ao lado do saldo do ERP."
             >
               Dados dos inventários
-            </Caixa>
+            </CaixaDeMarcacao>
           </Secao>
         </div>
       )}

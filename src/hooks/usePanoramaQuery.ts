@@ -167,13 +167,19 @@ export type EntradaCategoria = BasePanorama & DimensoesFiscais & DimensoesEntrad
 export type EntradaProduto = BasePanorama & DimensoesFiscais & DimensoesEntrada & DimensoesProduto;
 
 /**
- * Saldo da empresa no Ciclone.
+ * Saldo da empresa no Ciclone, em dois grãos.
  *
- * ⚠️ **O grão é o MODELO, não o código auxiliar** — `eq_produtoespecifico` é por
- * empresa + filial + produto genérico, sem cor. O saldo por grade existe no ERP mas
- * como macro do aplicativo dele, não como coluna. Consequência: este lado desce até
- * `codigo_produto` e o externo desce até `codigo_auxiliar`; somar os dois como se
- * fossem a mesma medida está errado, e a tela diz isso.
+ * `nivel: 'modelo'` (padrão) agrega por empresa + filial + produto genérico;
+ * `nivel: 'produto'` desce ao **código auxiliar com cor**. Os dois somam o mesmo
+ * total — medido na empresa 2: 56.069 un e R$ 2.706.009,54 nos dois, com 765 de 765
+ * chaves batendo exatamente.
+ *
+ * ⚠️ **Correção de 2026-09-02.** Este tipo afirmava que o saldo por grade não existia
+ * fora do aplicativo do Ciclone, e por isso o interno pararia no modelo enquanto o
+ * externo desce ao código auxiliar. Era falso: `eqpee_estoque` é coluna real. O `cast`
+ * com marcador de macro que sustentava a ideia vive só num relatório, onde é convenção
+ * do construtor de relatórios. **Interno e externo descem ao mesmo grão** — ver o
+ * cabeçalho do bloco de estoque em `erp-gateway/panorama.py`, que traz a medição.
  */
 export interface EstoqueInterno extends BasePanorama {
   empresa: number;
@@ -184,12 +190,28 @@ export interface EstoqueInterno extends BasePanorama {
   // tratar produto sem saber de qual lente ele veio.
   codigo_produto: string | number | null;
   nome_produto: string | null;
-  /** `'A'` / `'I'` do cadastro genérico. Produto inativo COM saldo é achado, não erro. */
+  /**
+   * `'A'` / `'I'`. No nível de produto vem da GRADE quando ela tem situação própria —
+   * o modelo pode estar ativo com uma cor já inativada, e é a cor que decide se dá
+   * para pedir. Produto inativo COM saldo é achado, não erro.
+   */
   situacao: string | null;
   disponivel: number;
   saida_pendente: number;
   /** Custo direto + indireto do ERP. `valor` é a preço de tabela. */
   custo: number;
+  /** Só em `nivel: 'produto'`. Já na grafia do catálogo: `OB1107 C2`. */
+  codigo_auxiliar?: string;
+  /** Só em `nivel: 'produto'`. `'COR'` é a sentinela dos itens sem cor (estojo, flanela). */
+  cor?: string | number | null;
+  /**
+   * Só em `nivel: 'produto'`. Mercadoria NOSSA em poder de terceiros, nesta grade.
+   *
+   * Vem junto do saldo interno porque sozinho ele engana: "a empresa não tem esta cor"
+   * é verdade sobre o armazém e falso sobre a operação. Não substitui o
+   * `/estoque-externo` — lá a quebra é por terceiro, aqui é o total da grade.
+   */
+  em_terceiro?: number;
 }
 
 /**
@@ -332,24 +354,38 @@ export const useEntradasQuery = (p: ParametrosPanorama | null) =>
 export const useEntradasProdutoQuery = (p: ParametrosPanorama | null) =>
   usePanoramaLente<EntradaProduto>('entradas', 'produto', p);
 
+/** O que os dois estoques do ERP têm em comum. O `nivel` fica fora: o vocabulário difere. */
 export interface ParametrosEstoque {
   empresas?: number[];
   /** Cadastros sem saldo. Dobram a resposta e não dizem nada sobre o estoque de hoje. */
   incluir_zerados?: boolean;
 }
 
+export interface ParametrosEstoqueInterno extends ParametrosEstoque {
+  /**
+   * `'modelo'` (padrão) ou `'produto'`. Não é `'categoria'` como no estoque externo:
+   * aqui o nível de entrada é um cadastro por modelo, não uma categoria — e foi
+   * justamente um nome errado que sustentou a ideia de que a cor não existia.
+   */
+  nivel?: 'modelo' | 'produto';
+}
+
 /**
  * Saldo interno, do Ciclone. **Sem período** — é foto, não fluxo.
  *
- * Vem tudo no grão de produto numa viagem só (~1.800 linhas, meio megabyte) e o
- * cliente agrega os níveis localmente. Não há consulta de folha separada como nas
- * lentes de fluxo: com esta cardinalidade, uma segunda ida ao ERP seria cerimônia.
+ * No nível `modelo` são ~1.800 linhas; no `produto`, ~4.000. As duas cabem numa
+ * viagem só e o cliente agrega os níveis de categoria localmente — bem longe das
+ * 16.500 linhas do estoque externo por SKU, que foi o que obrigou aquela lente a
+ * separar os níveis por peso.
  */
-export function useEstoqueInternoQuery(parametros: ParametrosEstoque | null) {
+export function useEstoqueInternoQuery(parametros: ParametrosEstoqueInterno | null) {
   return useQuery<EstoqueInterno[], ErroErp>({
     queryKey: ['erp', 'panorama', 'estoque-interno', parametros],
     queryFn: async () => {
-      const r = await chamarErp<RespostaErp<EstoqueInterno>>('estoque', { ...parametros });
+      const r = await chamarErp<RespostaErp<EstoqueInterno>>('estoque', {
+        ...parametros,
+        nivel: parametros?.nivel ?? 'modelo',
+      });
       return r.dados;
     },
     enabled: parametros !== null,

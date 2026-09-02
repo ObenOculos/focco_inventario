@@ -394,6 +394,18 @@ export default function Panorama() {
   const produtosMala = useEstoqueExternoQuery(
     pedindo('externo') ? { empresas, nivel: 'produto', ...recorte } : null
   );
+  /**
+   * Os produtos do estoque INTERNO — segunda ida ao ERP, como nas outras fontes.
+   *
+   * Antes o interno caía no atalho de "já chegou no grão de produto" junto com o
+   * inventário, e era meia verdade: ele chegava no grão de MODELO, então o painel
+   * listava `OB1107` sem cor nenhuma enquanto a mala ao lado listava `OB1107 C2`.
+   * Com o `nivel: 'produto'` os dois falam a mesma língua e dá para confrontá-los
+   * linha a linha.
+   */
+  const produtosInterno = useEstoqueInternoQuery(
+    pedindo('interno') ? { empresas, nivel: 'produto', ...recorte } : null
+  );
 
   const consultaProdutos =
     detalhe?.fonte === 'saiu'
@@ -402,7 +414,9 @@ export default function Panorama() {
         ? produtosEntrada
         : detalhe?.fonte === 'externo'
           ? produtosMala
-          : null;
+          : detalhe?.fonte === 'interno'
+            ? produtosInterno
+            : null;
 
   /**
    * Os produtos da fonte aberta.
@@ -414,8 +428,9 @@ export default function Panorama() {
    */
   const produtos: LinhaPanorama[] | null = useMemo(() => {
     if (!detalhe) return null;
-    // Inventário e interno já chegam no grão de produto — não há segunda ida à rede.
-    if (detalhe.fonte === 'inventario' || detalhe.fonte === 'interno') return linhasDoDetalhe;
+    // O inventário já chega no grão de produto (vem inteiro do Supabase) — não há
+    // segunda ida à rede para ele. As outras quatro fontes buscam a folha sob demanda.
+    if (detalhe.fonte === 'inventario') return linhasDoDetalhe;
     if (!consultaProdutos?.data) return null;
     return filtrarPeloCaminho(
       consultaProdutos.data as LinhaPanorama[],

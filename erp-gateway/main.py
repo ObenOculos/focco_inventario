@@ -709,6 +709,7 @@ def entradas(
 
 @app.get("/estoque", dependencies=PROTEGIDO)
 def estoque(
+    nivel: str = Query("modelo", pattern="^(modelo|produto)$"),
     empresas: list[int] | None = Query(None, description="Padrão: EMPRESAS_PADRAO"),
     incluir_zerados: bool = Query(False, description="Cadastros sem saldo. Dobra a resposta."),
     marcas: list[str] | None = Query(None, description="Recorte; '' = sem categoria."),
@@ -716,18 +717,24 @@ def estoque(
     subtipos: list[str] | None = Query(None),
     grupos: list[str] | None = Query(None),
 ):
-    """Saldo atual da empresa — o estoque INTERNO.
+    """Saldo atual da empresa — o estoque INTERNO, em dois grãos.
 
     **Sem período, de propósito.** É foto, não fluxo: o saldo é o de agora, e uma
     data aqui prometeria um histórico que a tabela não guarda.
 
-    ⚠️ **O grão é o MODELO, não o código auxiliar.** `eq_produtoespecifico` é por
-    empresa + filial + produto genérico — não por cor. Quem consome tem que dizer
-    isso na tela, porque o estoque EXTERNO (dos inventários) desce até a cor, e
-    somar os dois como se fossem a mesma medida está errado. Ver `panorama.py`.
+    `nivel=modelo` (padrão) responde por empresa + filial + produto genérico, de
+    `eq_produtoespecifico`. `nivel=produto` desce ao **código auxiliar com cor**, de
+    `eq_produtoespecificoestoque` — a mesma tabela de onde o catálogo já tira a
+    referência de grade.
 
-    Vem tudo no grão mais fino numa viagem só — são ~1.800 produtos com saldo — e o
-    cliente agrega os níveis localmente. Não há rota de folha separada.
+    Os níveis se chamam `modelo`/`produto` e não `categoria`/`produto` como nas outras
+    rotas porque aqui o nível de entrada não é categoria nenhuma: é um cadastro por
+    modelo. Ver o cabeçalho do bloco em `panorama.py`.
+
+    ⚠️ Até 2026-09-02 esta rota afirmava que o saldo por cor **não existia** fora do
+    cliente Ciclone. Era falso, e o engano viajou para o app inteiro. Medido: os dois
+    níveis somam o mesmo total (empresa 2: 56.069 un, R$ 2.706.009,54) e 765 de 765
+    chaves batem exatamente.
 
     Saldo NEGATIVO não é filtrado: é condição real do ERP (618 dos 1.784 produtos) e
     esconder faria o total não fechar com o do Ciclone.
@@ -737,6 +744,7 @@ def estoque(
             df = panorama.estoque_interno(
                 empresas=empresas,
                 incluir_zerados=incluir_zerados,
+                nivel=nivel,
                 marcas=marcas,
                 tipos=tipos,
                 subtipos=subtipos,
