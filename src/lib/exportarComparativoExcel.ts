@@ -41,8 +41,21 @@ const FMT_NUM = '#,##0';
 export interface LinhaExportacao {
   codigo_auxiliar: string;
   nome_produto: string;
-  /** Primeiro nível da hierarquia do Ciclone. `''` = produto fora do catálogo. */
+  /**
+   * A hierarquia do Ciclone (Marca → Tipo → Subtipo → Grupo), um nível por campo.
+   *
+   * EM COLUNAS SEPARADAS, e não numa trilha `OCULOS RECEITUARIO · MASCULINO · METAL`
+   * como a tela mostra: a planilha é lida em tabela dinâmica e com filtro automático,
+   * e ali um texto concatenado obriga a quebrar de volta em fórmula antes de agrupar
+   * por qualquer nível. A trilha serve ao olho numa linha de tabela; a coluna serve ao
+   * Excel.
+   *
+   * Nunca vazio — quem chama escreve "Sem categoria" no lugar do nulo.
+   */
   marca: string;
+  tipo: string;
+  subtipo: string;
+  grupo: string;
   valor_unitario: number;
   quantidade_a: number;
   remessa: number;
@@ -121,13 +134,18 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
     banda: string;
     /** Largura da coluna; as numéricas usam a padrão. */
     largura?: number;
+    /** Fica visível ao rolar para a direita. Só nas primeiras colunas — ver `ws.views`. */
+    congela?: boolean;
   }[] = [
-    { chave: 'codigo_auxiliar', titulo: 'Código Auxiliar', banda: 'id', largura: 16 },
-    { chave: 'nome_produto', titulo: 'Nome Produto', banda: 'id', largura: 32 },
-    // A marca entra na banda de identificação, junto do código e do nome: é atributo
-    // do produto, não medida do período. É também o que torna a planilha útil em
-    // tabela dinâmica sem precisar quebrar a trilha de categoria em fórmula.
-    { chave: 'marca', titulo: 'Marca', banda: 'id', largura: 18 },
+    { chave: 'codigo_auxiliar', titulo: 'Código Auxiliar', banda: 'id', largura: 16, congela: true },
+    { chave: 'nome_produto', titulo: 'Nome Produto', banda: 'id', largura: 32, congela: true },
+    // A hierarquia inteira entra na banda de identificação, junto do código e do nome:
+    // são atributos do produto, não medidas do período. É o que torna a planilha útil
+    // em tabela dinâmica — agrupar por Tipo é escolher a coluna, não escrever fórmula.
+    { chave: 'marca', titulo: 'Marca', banda: 'id', largura: 18, congela: true },
+    { chave: 'tipo', titulo: 'Tipo', banda: 'id', largura: 22 },
+    { chave: 'subtipo', titulo: 'Subtipo', banda: 'id', largura: 16 },
+    { chave: 'grupo', titulo: 'Grupo', banda: 'id', largura: 16 },
     { chave: 'quantidade_a', titulo: 'Qtd Inicial', banda: 'a' },
   ];
   if (op.comMovimentos) {
@@ -159,9 +177,14 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
     ws.getColumn(i + 1).width = c.largura ?? LARGURA_NUM;
   });
 
-  /** Colunas de TEXTO: alinham à esquerda e não entram no SUBTOTAL do rodapé. */
-  const ehTexto = (chave: (typeof colunas)[number]['chave']) =>
-    chave === 'codigo_auxiliar' || chave === 'nome_produto' || chave === 'marca';
+  /**
+   * Colunas de TEXTO: alinham à esquerda e não entram no SUBTOTAL do rodapé.
+   *
+   * Pela BANDA, não por lista nominal de chaves: a banda de identificação é inteira
+   * textual, e uma lista de chaves esquecida ao acrescentar coluna dá uma categoria
+   * centralizada tentando somar no rodapé — erro que só aparece com o arquivo aberto.
+   */
+  const ehTexto = (c: (typeof colunas)[number]) => c.banda === 'id';
 
   const borda = {
     top: { style: 'thin' as const, color: { argb: 'FFBBBBBB' } },
@@ -254,9 +277,12 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
 
   const R0 = 3;
   ws.autoFilter = { from: { row: 2, column: 1 }, to: { row: 2, column: colunas.length } };
-  // Congela a banda de IDENTIFICAÇÃO inteira, não duas colunas fixas: com a marca
-  // dentro dela, um `xSplit: 2` deixaria a marca rolando para fora junto dos números.
-  ws.views = [{ state: 'frozen', xSplit: idx('id').ultimo, ySplit: 2 }];
+  // Congela até a Marca — não a banda de identificação inteira. Código, nome e marca
+  // são o que identifica a linha enquanto se rola para os números; congelar também
+  // Tipo, Subtipo e Grupo somaria mais de 100 caracteres de largura fixa e deixaria
+  // as bandas de contagem espremidas na sobra da tela.
+  const congeladas = colunas.filter((c) => c.congela).length;
+  ws.views = [{ state: 'frozen', xSplit: congeladas, ySplit: 2 }];
 
   // ── Dados ────────────────────────────────────────────────────────────────
   const zebra: Record<string, [string, string]> = {
@@ -281,7 +307,7 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
       // sinal que o olho procura ao abrir a planilha.
       if (c.banda === 'dif' && alerta) fundo = COR.difAlerta;
 
-      if (ehTexto(c.chave)) {
+      if (ehTexto(c)) {
         pintar(r, col, l[c.chave as 'codigo_auxiliar'], fundo, { alinha: 'left' });
       } else if (c.chave === 'valor_unitario') {
         pintar(r, col, l.valor_unitario, fundo, { alinha: 'right', fmt: FMT_BRL });
@@ -311,7 +337,7 @@ export async function exportarComparativoExcel(op: OpcoesExportacao): Promise<vo
   colunas.forEach((c, j) => {
     const col = j + 1;
     const letra = ws.getColumn(col).letter;
-    const somavel = !ehTexto(c.chave);
+    const somavel = !ehTexto(c);
     if (j === 0) {
       pintar(rt, col, 'TOTAL', COR.dif, { negrito: true, cor: COR.branco, alinha: 'left' });
     } else if (somavel && c.chave !== 'valor_unitario') {

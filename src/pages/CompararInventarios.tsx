@@ -1017,8 +1017,13 @@ export default function CompararInventarios() {
           nome_produto: l.nome_produto,
           // Mesmo rótulo da tela para produto fora do catálogo: a planilha é lida meses
           // depois, e uma célula vazia ali se lê como falha de exportação em vez do que
-          // é — cadastro que não existe.
+          // é — cadastro que não existe. Vale para os quatro níveis: no Excel cada um
+          // tem coluna própria, e um filtro por Tipo precisa de um valor para agrupar
+          // os sem cadastro, não de um branco que some do painel.
           marca: l.marca ?? SEM_CATEGORIA,
+          tipo: l.tipo ?? SEM_CATEGORIA,
+          subtipo: l.subtipo ?? SEM_CATEGORIA,
+          grupo: l.grupo ?? SEM_CATEGORIA,
           valor_unitario: l.valor_unitario,
           quantidade_a: l.quantidade_a,
           remessa: l.remessa,
