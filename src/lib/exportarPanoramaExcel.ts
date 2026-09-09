@@ -33,14 +33,27 @@ import { SEM_CATEGORIA } from '@/lib/categoriasProduto';
  * que uma coluna ausente.
  */
 
+type BaseData = 'movimento' | 'emissao';
+
 /**
- * Colunas, na ordem de leitura: o que a movimentação É, com quem foi, o que era, e
- * só então quanto foi. Os números ficam no fim porque é onde a soma do Excel os
- * espera, e porque a identificação da linha precisa caber na primeira tela.
+ * O cabeçalho da coluna de mês DECLARA a base da data, e isso não é enfeite.
+ *
+ * `movimento` (data da nota) e `emissao` (data do pedido) são o mesmo botão do filtro
+ * da tela, e **só coincidem em 34,6% das linhas** — mediana de 2 dias de diferença.
+ * Uma planilha que diz só "Mês" obriga quem a recebeu a adivinhar qual das duas está
+ * lendo, e a resposta muda de qual mês a linha é. O escopo já vai nos metadados do
+ * arquivo, mas metadado ninguém abre: o nome da coluna, sim.
  */
-const COLUNAS = [
-  'Sentido',
-  'Mês',
+const rotuloMes = (base: BaseData): string =>
+  base === 'emissao' ? 'Mês (emissão do pedido)' : 'Mês (movimento)';
+
+/**
+ * ⚠️ **Não há data de DIA aqui, e não é omissão.** O gateway responde com
+ * `date_trunc('month', …)`: o dia já foi somado fora no Postgres, e uma linha desta
+ * planilha é "junho inteiro, empresa 2, OBEN, VENDA, fulano" — não um documento.
+ * Escrever `01/06/2026` daria a uma agregação a cara de uma data exata.
+ */
+const COLUNAS_APOS_MES = [
   'Empresa',
   'Classificação',
   'Contraparte',
@@ -59,6 +72,19 @@ const COLUNAS = [
   'Valor',
   'Linhas de nota',
 ] as const;
+
+/**
+ * Colunas na ordem final, com o rótulo do mês já resolvido.
+ *
+ * A ordem é de leitura: o que a movimentação É, com quem foi, o que era, e só então
+ * quanto foi. Os números ficam no fim porque é onde a soma do Excel os espera, e
+ * porque a identificação da linha precisa caber na primeira tela.
+ */
+const colunasDe = (base: BaseData): string[] => [
+  'Sentido',
+  rotuloMes(base),
+  ...COLUNAS_APOS_MES,
+];
 
 type Sentido = 'Entrada' | 'Saída';
 
@@ -106,13 +132,13 @@ const papelDa = (l: LinhaPanorama, sentido: Sentido): string => {
 const classificacaoDa = (l: LinhaPanorama, sentido: Sentido): string =>
   (sentido === 'Entrada' ? l.classif_entrada : l.classif_operacao) || SEM_CLASSIFICACAO;
 
-type Registro = Record<(typeof COLUNAS)[number], string | number>;
+type Registro = Record<string, string | number>;
 
-function registroDe(l: LinhaPanorama, sentido: Sentido): Registro {
+function registroDe(l: LinhaPanorama, sentido: Sentido, colMes: string): Registro {
   const cod = l.contraparte_cod;
   return {
     Sentido: sentido,
-    'Mês': mesCurto(l.mes),
+    [colMes]: mesCurto(l.mes),
     Empresa: numero(l.empresa),
     'Classificação': classificacaoDa(l, sentido),
     // O nome cai para o código quando o cadastro não tem nome — some-lo em branco
@@ -161,9 +187,12 @@ export function exportarPanoramaExcel(
   escopo: EscopoExportado,
   nomeArquivo = nomeArquivoPanorama()
 ): { nomeArquivo: string; linhas: number } {
+  const colunas = colunasDe(escopo.baseData);
+  const colMes = rotuloMes(escopo.baseData);
+
   const dados: Registro[] = [
-    ...saidas.map((l) => registroDe(l, 'Saída')),
-    ...entradas.map((l) => registroDe(l, 'Entrada')),
+    ...saidas.map((l) => registroDe(l, 'Saída', colMes)),
+    ...entradas.map((l) => registroDe(l, 'Entrada', colMes)),
   ];
 
   // Ordem de leitura, não a ordem em que as consultas voltaram: entrada e saída do
@@ -171,7 +200,7 @@ export function exportarPanoramaExcel(
   // sem o usuário ordenar à mão.
   dados.sort(
     (a, b) =>
-      String(a['Mês']).localeCompare(String(b['Mês'])) ||
+      String(a[colMes]).localeCompare(String(b[colMes])) ||
       String(a.Sentido).localeCompare(String(b.Sentido)) ||
       String(a['Classificação']).localeCompare(String(b['Classificação'])) ||
       // Maior volume primeiro dentro do grupo — comparação NUMÉRICA: como texto,
@@ -182,12 +211,12 @@ export function exportarPanoramaExcel(
   const ws = XLSX.utils.json_to_sheet(dados, {
     // Sem isto a ordem das colunas viria das chaves do primeiro objeto, e uma linha
     // inicial com campo faltando reordenaria a planilha inteira.
-    header: [...COLUNAS],
+    header: colunas,
   });
 
   // Larguras: o que se lê (contraparte, descrições) precisa caber; o resto é curto.
   ws['!cols'] = [
-    { wch: 9 }, { wch: 9 }, { wch: 8 }, { wch: 20 }, { wch: 38 }, { wch: 15 },
+    { wch: 9 }, { wch: 22 }, { wch: 8 }, { wch: 20 }, { wch: 38 }, { wch: 15 },
     { wch: 14 }, { wch: 5 }, { wch: 12 }, { wch: 20 }, { wch: 16 }, { wch: 14 },
     { wch: 26 }, { wch: 28 }, { wch: 8 }, { wch: 30 }, { wch: 11 }, { wch: 14 },
     { wch: 14 },
@@ -200,7 +229,7 @@ export function exportarPanoramaExcel(
     ws['!autofilter'] = {
       ref: XLSX.utils.encode_range({
         s: { c: 0, r: 0 },
-        e: { c: COLUNAS.length - 1, r: dados.length },
+        e: { c: colunas.length - 1, r: dados.length },
       }),
     };
   }
@@ -215,7 +244,7 @@ export function exportarPanoramaExcel(
     Title: 'Panorama — movimentações',
     Subject:
       `${escopo.de} a ${escopo.ate} · empresa(s) ${escopo.empresas.join(', ')} · ` +
-      `por data de ${escopo.baseData}` +
+      `agregado por mês, base ${escopo.baseData === 'emissao' ? 'emissão do pedido' : 'movimento'}` +
       (escopo.mes ? ` · mês em foco ${mesCurto(escopo.mes)}` : '') +
       (escopo.ocultarDiversos ? ' · sem DIVERSOS' : '') +
       ` · ${dados.length} linha(s) de agregado`,
