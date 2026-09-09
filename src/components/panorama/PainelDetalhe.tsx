@@ -5,7 +5,15 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CloudOff, Search, X } from 'lucide-react';
-import { agrupar, eixoDe, type EixoId, type Medida, type NoAgregado } from '@/lib/panorama';
+import {
+  agrupar,
+  eixoDe,
+  rotuloEixo,
+  type EixoId,
+  type Medida,
+  type NoAgregado,
+  type Sentido,
+} from '@/lib/panorama';
 import type { LinhaPanorama } from '@/hooks/usePanoramaQuery';
 import {
   EIXOS_DA_FONTE,
@@ -18,7 +26,7 @@ import {
 /**
  * O detalhe de uma célula da árvore — a lente antiga, agora alcançada por clique.
  *
- * É aqui que voltam os eixos que não cabem no comparativo: tipo de saída, fornecedor,
+ * É aqui que voltam os eixos que não cabem no comparativo: tipo de saída, contraparte,
  * quem está com a mercadoria, qual vendedor contou. Eles não são telas paralelas; são
  * o aprofundamento de um número que o gestor apontou.
  *
@@ -111,6 +119,11 @@ export function PainelDetalhe({
   onProdutos,
   onFechar,
 }: Props) {
+  // Só as duas fontes de fluxo têm lado; nos três estoques não há "de onde/para
+  // onde", e o eixo cai no nome neutro.
+  const sentido: Sentido | undefined =
+    fonte === 'entrou' ? 'entrada' : fonte === 'saiu' ? 'saida' : undefined;
+
   const eixos = EIXOS_DA_FONTE[fonte];
   const [eixo, setEixo] = useState<EixoId>(eixos[0]);
   const [busca, setBusca] = useState('');
@@ -289,7 +302,7 @@ export function PainelDetalhe({
                     : 'bg-muted/60 text-muted-foreground hover:text-foreground'
                 }`}
               >
-                {eixoDe(id).rotulo}
+                {rotuloEixo(id, sentido)}
               </button>
             ))}
           <button

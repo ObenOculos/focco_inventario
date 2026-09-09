@@ -104,17 +104,47 @@ interface DimensoesSaida {
   classif_pedido: string | null;
 }
 
-/** De onde a entrada veio. */
-interface DimensoesEntrada {
-  fornecedor_cod: number | null;
-  /**
-   * ⚠️ **Nem sempre é um fornecedor.** Em `RETORNO DE REMESSA` o remetente é o
-   * próprio representante devolvendo o que sobrou da mala — em 2026, cinco dos treze
-   * remetentes eram vendedores. Quem separa os dois casos é `classif_entrada`, nunca
-   * o nome.
-   */
-  fornecedor: string;
+/**
+ * Quem está do OUTRO LADO da movimentação — de quem veio, para quem foi.
+ *
+ * É **um campo só para as duas lentes**, e não dois campos paralelos, porque no
+ * Ciclone é o mesmo relacionamento visto de dois ângulos: a entrada resolve
+ * `pgfor_codigo` e a saída resolve `pgcln_codigo`, ambos pela MESMA view
+ * (`pg_view_relacionaclnforfun`). Um par de campos por lente obrigaria a árvore, o
+ * painel de detalhe e a exportação a saberem de qual lente a linha veio para ler o
+ * mesmo dado.
+ *
+ * ⚠️ **Nem sempre é cliente, nem sempre é fornecedor.** Quem separa os casos é a
+ * CLASSIFICAÇÃO, nunca o nome — e a assimetria é espelhada nos dois lados:
+ *
+ *   - entrada: em `COMPRA` é o fornecedor; em `RETORNO DE REMESSA` é o representante
+ *     devolvendo o que sobrou da mala (5 dos 13 remetentes de 2026 eram vendedores);
+ *   - saída: em `VENDA` e `BONIFICAÇÃO/BRINDE` é o cliente (512 e 375 distintos em
+ *     2026); em `REMESSA`, `DEMONSTRAÇÃO` e `ACERTO DE ESTOQUE` é o representante
+ *     recebendo a mala (10, 1 e 1).
+ *
+ * Por isso o rótulo na tela é **"Origem"** numa lente e **"Destino"** na outra, e
+ * nunca "Fornecedor" ou "Cliente".
+ */
+interface DimensoesContraparte {
+  contraparte_cod: number | null;
+  contraparte: string;
   uf: string;
+  /**
+   * A contraparte está no cadastro de vendedores (`pg_vendedor`)?
+   *
+   * ⚠️ **Vem do CADASTRO, não da classificação — e a diferença é medida.** A leitura
+   * intuitiva ("remessa vai para representante, venda vai para cliente") está errada:
+   * em 2026, `VENDA` tem 125 unidades endereçadas a 6 representantes e
+   * `BONIFICAÇÃO/BRINDE` outras 980. Derivar o papel do CFOP rotularia 1.105 unidades
+   * de forma incorreta. Não por acaso, "venda endereçada a representante" é o sinal
+   * S2 da auditoria em `regras.py`.
+   */
+  contraparte_representante: boolean;
+}
+
+/** O que só a entrada classifica. */
+interface DimensoesEntrada {
   /** `'COMPRA'`, `'RETORNO DE REMESSA'`, `'DEVOLUCAO DE VENDA'`… */
   classif_entrada: string | null;
 }
@@ -155,16 +185,26 @@ interface ComMes {
 
 export type SaidaCategoria = BasePanorama &
   DimensoesFiscais &
+  DimensoesContraparte &
   DimensoesSaida &
   MedidasCusto &
   ComMes;
 export type SaidaProduto = BasePanorama &
   DimensoesFiscais &
+  DimensoesContraparte &
   DimensoesSaida &
   MedidasCusto &
   DimensoesProduto;
-export type EntradaCategoria = BasePanorama & DimensoesFiscais & DimensoesEntrada & ComMes;
-export type EntradaProduto = BasePanorama & DimensoesFiscais & DimensoesEntrada & DimensoesProduto;
+export type EntradaCategoria = BasePanorama &
+  DimensoesFiscais &
+  DimensoesContraparte &
+  DimensoesEntrada &
+  ComMes;
+export type EntradaProduto = BasePanorama &
+  DimensoesFiscais &
+  DimensoesContraparte &
+  DimensoesEntrada &
+  DimensoesProduto;
 
 /**
  * Saldo da empresa no Ciclone, em dois grãos.
@@ -269,6 +309,7 @@ export interface EstoqueInventariado extends BasePanorama {
 export type LinhaPanorama = BasePanorama &
   Partial<
     DimensoesFiscais &
+      DimensoesContraparte &
       DimensoesSaida &
       DimensoesEntrada &
       DimensoesProduto &
@@ -289,8 +330,8 @@ export interface RecortePanorama {
   cfops?: (string | number)[];
   /** Só na lente de saídas. */
   tipos_pedido?: number[];
-  /** Só na lente de entradas. */
-  fornecedores?: number[];
+  /** Códigos de contraparte — remetente na entrada, destinatário na saída. */
+  contrapartes?: number[];
 }
 
 export interface ParametrosPanorama extends RecortePanorama {

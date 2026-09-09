@@ -573,6 +573,7 @@ def saidas(
     tipos_pedido: list[int] | None = Query(None),
     operacoes: list[int] | None = Query(None),
     cfops: list[str] | None = Query(None),
+    contrapartes: list[int] | None = Query(None, description="Códigos de destinatário."),
 ):
     """Saídas agregadas — a lente gerencial, oposta à auditoria do `/pedidos`.
 
@@ -589,6 +590,11 @@ def saidas(
     As classificações continuam vindo de `regras.py`, as mesmas da tela de
     auditoria — ver o cabeçalho de `panorama.py` para por que aplicá-las depois do
     GROUP BY dá o mesmo resultado.
+
+    `contraparte` é o DESTINATÁRIO da nota, e não é só cliente: em VENDA e
+    BONIFICAÇÃO é o cliente, em REMESSA e DEMONSTRAÇÃO é o representante que
+    recebeu a mala. Espelha exatamente a contraparte do `/entradas`, pela mesma
+    view do Ciclone. Quem separa os casos é `classif_operacao`, nunca o nome.
     """
     if de > ate:
         raise HTTPException(422, "A data inicial não pode ser posterior à final.")
@@ -601,6 +607,7 @@ def saidas(
         "tipos_pedido": tipos_pedido,
         "operacoes": operacoes,
         "cfops": cfops,
+        "contrapartes": contrapartes,
     }
     consulta = (
         panorama.saidas_por_produto if nivel == "produto" else panorama.saidas_por_categoria
@@ -646,7 +653,7 @@ def entradas(
     tipos: list[str] | None = Query(None),
     subtipos: list[str] | None = Query(None),
     grupos: list[str] | None = Query(None),
-    fornecedores: list[int] | None = Query(None),
+    contrapartes: list[int] | None = Query(None, description="Códigos de remetente."),
     operacoes: list[int] | None = Query(None),
     cfops: list[str] | None = Query(None),
 ):
@@ -662,8 +669,10 @@ def entradas(
          não movimenta estoque, outra com o SKU real que movimenta. Ele existe para
          conferência fiscal, não para leitura gerencial.
 
-    `fornecedor` não é só fornecedor: em RETORNO DE REMESSA o remetente é o próprio
+    `contraparte` não é só fornecedor: em RETORNO DE REMESSA o remetente é o próprio
     representante devolvendo o que sobrou da mala. Quem separa é `classif_entrada`.
+    O campo tem o mesmo nome no `/saidas` porque é o mesmo conceito visto do outro
+    lado — é o que permite à tela e à exportação tratarem os dois com um eixo só.
     """
     if de > ate:
         raise HTTPException(422, "A data inicial não pode ser posterior à final.")
@@ -673,7 +682,7 @@ def entradas(
         "tipos": tipos,
         "subtipos": subtipos,
         "grupos": grupos,
-        "fornecedores": fornecedores,
+        "contrapartes": contrapartes,
         "operacoes": operacoes,
         "cfops": cfops,
     }

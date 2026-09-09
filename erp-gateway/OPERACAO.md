@@ -85,6 +85,62 @@ preenche** na tela Consulta ao ERP.
 
 ---
 
+## Mexi no código do gateway. E agora?
+
+**O gateway NÃO recarrega sozinho.** Ele roda como Tarefa Agendada, com o uvicorn
+**sem `--reload`**: editar `main.py` ou `panorama.py` não muda **nada** na resposta
+até a tarefa ser reiniciada.
+
+⚠️ **O sintoma engana.** Não aparece erro nenhum. O campo novo simplesmente não vem
+no JSON, e a tela mostra zero, ou agrupa tudo numa linha só, ou exibe um rótulo
+vazio — tudo com cara de bug de cálculo, quando o que está no ar é código velho.
+Já custou uma caçada a "erro de SQL" num gateway que nunca tinha carregado o SQL novo.
+
+### 1. Confirme em dois segundos — olhe as CHAVES, não os valores
+
+```powershell
+cd C:\Users\User\Documents\Inventario_App
+$s = (Select-String -Path .\erp-gateway\.env -Pattern '^GATEWAY_SECRET=').Line -replace '^GATEWAY_SECRET=','' -replace '"',''
+$r = Invoke-RestMethod 'http://127.0.0.1:8000/entradas?de=2026-06-01&ate=2026-06-30&empresas=2' -Headers @{'X-Gateway-Secret'=$s.Trim()} -TimeoutSec 120
+$r.dados[0].PSObject.Properties.Name -join ', '
+```
+
+Se o campo que você acabou de escrever não estiver nessa lista, é código velho no ar.
+
+### 2. Reinicie em DUAS etapas, conferindo no meio
+
+⚠️ **Nunca cole `Stop-ScheduledTask` e `Start-ScheduledTask` na mesma tacada.** O
+filho do uvicorn não morre a tempo, o processo novo não consegue ocupar a porta 8000,
+e o resultado é `State = Running` com `/saude` mudo e dois `python.exe` órfãos.
+
+```powershell
+$t = 'OPTISTOCK - ERP Gateway'
+Stop-ScheduledTask -TaskName $t
+Start-Sleep -Seconds 5
+# A porta TEM de estar livre antes de subir de novo:
+Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+Start-ScheduledTask -TaskName $t
+Start-Sleep -Seconds 25
+Invoke-RestMethod http://127.0.0.1:8000/saude
+```
+
+Se a porta ainda aparecer ocupada depois do `Stop`, mate o dono antes de subir:
+`Stop-Process -Id <OwningProcess> -Force`.
+
+### 3. O app ainda mostra o número velho?
+
+É cache do React Query (`staleTime` de 10 minutos), não o gateway. O botão
+**Atualizar** do Panorama força a ida nova.
+
+### 4. Mudou parâmetro de rota? A Edge Function também precisa ir
+
+Renomear ou acrescentar um parâmetro em `main.py` não basta: a allowlist de
+`supabase/functions/erp-consulta` decide o que chega ao gateway, e ela é deployada
+à parte. Gateway reiniciado sem a Edge Function atualizada = parâmetro descartado
+no caminho, em silêncio.
+
+---
+
 ## Quando dá erro: siga nesta ordem
 
 Cada passo elimina uma causa. Não pule.
@@ -95,7 +151,8 @@ Cada passo elimina uma causa. Não pule.
 Invoke-RestMethod http://127.0.0.1:8000/saude
 ```
 
-**Falhou?** A tarefa caiu. Reinicie:
+**Falhou?** A tarefa caiu. Reinicie. (Se o `/saude` responde mas um campo novo não
+aparece, o problema é outro — veja *"Mexi no código do gateway"* acima.)
 
 ```powershell
 Stop-ScheduledTask -TaskName 'OPTISTOCK - ERP Gateway'

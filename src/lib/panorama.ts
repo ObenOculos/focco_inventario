@@ -34,7 +34,7 @@ export type EixoId =
   | 'classificacao'
   | 'tipoPedido'
   | 'classifEntrada'
-  | 'fornecedor'
+  | 'contraparte'
   | 'uf'
   | 'vendedor'
   | 'terceiro'
@@ -54,9 +54,21 @@ export type EixoId =
  */
 export const SEM_CLASSIFICACAO = 'Sem classificação';
 
+/**
+ * De que lado do fluxo a linha está.
+ *
+ * Existe por causa de UM eixo: a contraparte é o mesmo campo nas duas lentes, mas
+ * chamá-la de "Origem" numa saída seria mentira. O sentido é o mínimo necessário
+ * para o rótulo acertar sem partir o eixo em dois.
+ */
+export type Sentido = 'entrada' | 'saida';
+
 interface Eixo {
   id: EixoId;
+  /** Nome do eixo quando o sentido não vem ao caso. */
   rotulo: string;
+  /** Nome por sentido, para o eixo cujo significado depende do lado do fluxo. */
+  rotuloPorSentido?: Record<Sentido, string>;
   /**
    * Exemplos do que o eixo contém, para o `title` do botão.
    *
@@ -134,17 +146,29 @@ export const EIXOS: Eixo[] = [
     rotuloDe: (l) => l.classif_entrada || SEM_CLASSIFICACAO,
   },
   {
-    id: 'fornecedor',
-    rotulo: 'Origem',
+    // UM eixo para os dois lados do fluxo. O campo é o mesmo (`contraparte`), o que
+    // muda é como se chama quem está do outro lado — ver `DimensoesContraparte`.
+    id: 'contraparte',
+    rotulo: 'Contraparte',
+    rotuloPorSentido: { entrada: 'Origem', saida: 'Destino' },
     // Chave pelo CÓDIGO, rótulo pelo nome: dois cadastros podem repetir o nome, e o
-    // código é o que o Ciclone garante único. E o rótulo é "Origem", não
-    // "Fornecedor", porque no retorno de remessa quem manda é o representante.
-    chaveDe: (l) => codigo(l.fornecedor_cod),
-    rotuloDe: (l) => l.fornecedor || `Origem ${codigo(l.fornecedor_cod)}`,
+    // código é o que o Ciclone garante único. Os rótulos nunca são "Fornecedor" nem
+    // "Cliente" porque na remessa (dos dois lados) quem está ali é o representante.
+    chaveDe: (l) => codigo(l.contraparte_cod),
+    // Três casos, e o terceiro existia mal resolvido: sem código, `codigo()` devolve
+    // string vazia e o rótulo saía como "Código " — um grupo sem nome, que é o que
+    // aparece quando a linha não traz a contraparte de jeito nenhum.
+    rotuloDe: (l) => {
+      if (l.contraparte) return l.contraparte;
+      const cod = codigo(l.contraparte_cod);
+      return cod ? `Código ${cod}` : 'Sem contraparte';
+    },
   },
   {
     id: 'uf',
-    rotulo: 'UF de origem',
+    // Serve às duas lentes e ao estoque externo, então o rótulo não pode dizer
+    // "de origem": na saída é a UF do destinatário.
+    rotulo: 'UF',
     chaveDe: (l) => l.uf || '',
     rotuloDe: (l) => l.uf || 'Sem UF',
   },
@@ -186,20 +210,28 @@ export const eixoDe = (id: EixoId): Eixo => {
   return e;
 };
 
+/** Como o eixo se chama neste lado do fluxo. Sem sentido, cai no nome neutro. */
+export const rotuloEixo = (id: EixoId, sentido?: Sentido): string => {
+  const e = eixoDe(id);
+  return (sentido && e.rotuloPorSentido?.[sentido]) || e.rotulo;
+};
+
 /**
  * Ordem de leitura padrão de cada lente — e também quais eixos ela oferece.
  *
  * A saída começa pelo que o gestor pediu: "Saídas → Tipo de saída → Marca → Tipo →
- * Produto". A entrada começa pela classificação e não pela origem porque origem
- * sozinha mistura fornecedor com representante devolvendo mala; a classificação é o
- * que separa os dois, então ela vem antes.
+ * Produto". A entrada começa pela classificação e não pela contraparte porque a
+ * contraparte sozinha mistura fornecedor com representante devolvendo mala; a
+ * classificação é o que separa os dois, então ela vem antes. Vale igual do lado da
+ * saída, onde a mesma contraparte pode ser cliente (venda) ou representante
+ * (remessa) — por isso ela também entra DEPOIS do tipo de saída.
  *
  * `subtipo` e `grupo` ficam no fim nas duas: respondem uma pergunta mais fina
  * (público e material) que só interessa depois de escolher marca e tipo.
  */
 export const ORDEM_PADRAO: Record<Visao, EixoId[]> = {
   saidas: ['classificacao', 'marca', 'tipo', 'subtipo', 'grupo'],
-  entradas: ['classifEntrada', 'fornecedor', 'marca', 'tipo', 'subtipo', 'grupo'],
+  entradas: ['classifEntrada', 'contraparte', 'marca', 'tipo', 'subtipo', 'grupo'],
   // O estoque começa pela composição, que é a pergunta dele: "como está distribuído
   // entre as marcas e tipos". Não há eixo de documento para vir antes.
   'estoque-interno': ['marca', 'tipo', 'subtipo', 'grupo'],
@@ -216,8 +248,8 @@ export const ORDEM_PADRAO: Record<Visao, EixoId[]> = {
 
 /** Eixos que a visão aceita — o que a barra "Abrir por" oferece. */
 export const EIXOS_DA_VISAO: Record<Visao, EixoId[]> = {
-  saidas: ['classificacao', 'tipoPedido', 'marca', 'tipo', 'subtipo', 'grupo'],
-  entradas: ['classifEntrada', 'fornecedor', 'uf', 'marca', 'tipo', 'subtipo', 'grupo'],
+  saidas: ['classificacao', 'tipoPedido', 'contraparte', 'uf', 'marca', 'tipo', 'subtipo', 'grupo'],
+  entradas: ['classifEntrada', 'contraparte', 'uf', 'marca', 'tipo', 'subtipo', 'grupo'],
   'estoque-interno': ['marca', 'tipo', 'subtipo', 'grupo', 'situacao'],
   'estoque-externo': ['terceiro', 'uf', 'marca', 'tipo', 'subtipo', 'grupo'],
   'estoque-inventario': ['vendedor', 'marca', 'tipo', 'subtipo', 'grupo'],
@@ -401,9 +433,13 @@ export function recorteDoCaminho(
     cfops: distintos(linhas.map((l) => codigo(l.cfop)).filter((c) => c !== '')),
   };
 
+  // A contraparte entra nas DUAS lentes — é o mesmo parâmetro do gateway dos dois
+  // lados, e é o que faz a folha respeitar um drill-down aberto por ela.
+  const contrapartes = inteiros(linhas.map((l) => l.contraparte_cod));
+
   return visao === 'entradas'
-    ? { ...comum, fornecedores: inteiros(linhas.map((l) => l.fornecedor_cod)) }
-    : { ...comum, tipos_pedido: inteiros(linhas.map((l) => l.tipo_pedido_cod)) };
+    ? { ...comum, contrapartes }
+    : { ...comum, contrapartes, tipos_pedido: inteiros(linhas.map((l) => l.tipo_pedido_cod)) };
 }
 
 /**

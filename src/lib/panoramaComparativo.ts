@@ -52,8 +52,10 @@ export type FonteDetalhe = 'entrou' | 'saiu' | 'interno' | 'externo' | 'inventar
 
 /** Eixos que fazem sentido para cada fonte — o vocabulário próprio de cada uma. */
 export const EIXOS_DA_FONTE: Record<FonteDetalhe, EixoId[]> = {
-  saiu: ['classificacao', 'tipoPedido'],
-  entrou: ['classifEntrada', 'fornecedor', 'uf'],
+  // As duas fontes de fluxo oferecem a MESMA contraparte, só com nomes diferentes na
+  // tela ("Destino" na saída, "Origem" na entrada) — ver `rotuloEixo`.
+  saiu: ['classificacao', 'tipoPedido', 'contraparte', 'uf'],
+  entrou: ['classifEntrada', 'contraparte', 'uf'],
   externo: ['terceiro', 'uf'],
   inventario: ['vendedor'],
   interno: ['situacao'],

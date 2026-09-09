@@ -118,7 +118,7 @@ const OPERACOES: Record<string, { caminho: string; montar: (p: Params) => URLSea
       for (const campo of ['marcas', 'tipos', 'subtipos', 'grupos', 'cfops'] as const) {
         for (const v of listaTextos(p[campo], campo)) q.append(campo, v);
       }
-      for (const campo of ['tipos_pedido', 'operacoes'] as const) {
+      for (const campo of ['tipos_pedido', 'operacoes', 'contrapartes'] as const) {
         for (const v of listaInteiros(p[campo], campo)) q.append(campo, v);
       }
       return q;
@@ -148,7 +148,7 @@ const OPERACOES: Record<string, { caminho: string; montar: (p: Params) => URLSea
       for (const campo of ['marcas', 'tipos', 'subtipos', 'grupos', 'cfops'] as const) {
         for (const v of listaTextos(p[campo], campo)) q.append(campo, v);
       }
-      for (const campo of ['fornecedores', 'operacoes'] as const) {
+      for (const campo of ['contrapartes', 'operacoes'] as const) {
         for (const v of listaInteiros(p[campo], campo)) q.append(campo, v);
       }
       return q;

@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CloudOff, Package, Search, SlidersHorizontal } from 'lucide-react';
+import { CloudOff, Download, Package, Search, SlidersHorizontal } from 'lucide-react';
+import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { empresasDaEscolha, type EscolhaEmpresa } from '@/hooks/useConsultaErpQuery';
@@ -40,6 +41,7 @@ import {
   type FontesComparativo,
   type NoArvore,
 } from '@/lib/panoramaComparativo';
+import { exportarPanoramaExcel } from '@/lib/exportarPanoramaExcel';
 import { BarraEscopo } from '@/components/panorama/BarraEscopo';
 import { FaixaIndicadores } from '@/components/panorama/FaixaIndicadores';
 import { SerieMensal } from '@/components/panorama/SerieMensal';
@@ -63,7 +65,7 @@ import { PainelDetalhe } from '@/components/panorama/PainelDetalhe';
  *   4. **Árvore** — a hierarquia inteira, expansível no lugar, com fluxo e posição
  *      lado a lado.
  *   5. **Detalhe** — abre sob demanda ao clicar num número, com o vocabulário da
- *      fonte (tipo de saída, fornecedor, quem está com a mercadoria).
+ *      fonte (tipo de saída, contraparte, quem está com a mercadoria).
  *
  * **Duas naturezas convivem na mesma linha e a tela precisa dizê-lo.** Entrou/saiu são
  * do PERÍODO; interno/mala são de HOJE. Filtrar por mês recorta o fluxo e deixa o
@@ -382,6 +384,40 @@ export default function Panorama() {
     [detalhe, linhasDoDetalhe]
   );
 
+  /**
+   * Exporta o que está VISÍVEL — `fontes`, não as consultas cruas.
+   *
+   * É de propósito que saia daqui e não de `fontesCompletas`: o arquivo tem que
+   * responder a mesma pergunta que a tela, incluindo o mês em foco e o recorte de
+   * DIVERSOS. Um arquivo que ignora os filtros da tela vira uma segunda fonte de
+   * verdade, e aí os dois números circulam pela empresa sem ninguém saber qual vale.
+   *
+   * O caminho do drill-down NÃO entra: ele é navegação dentro do escopo consultado, e
+   * exportar só o galho aberto surpreenderia quem clicou no botão do cabeçalho da
+   * tabela inteira.
+   */
+  const exportar = () => {
+    if (!consultado) return;
+    const total = fontes.saidas.length + fontes.entradas.length;
+    if (total === 0) {
+      toast.error('Não há movimentações no recorte atual.');
+      return;
+    }
+    try {
+      const { nomeArquivo, linhas } = exportarPanoramaExcel(fontes.saidas, fontes.entradas, {
+        de: consultado.de,
+        ate: consultado.ate,
+        empresas,
+        mes: escopo.mes,
+        baseData: consultado.baseData,
+        ocultarDiversos: escopo.ocultarDiversos,
+      });
+      toast.success(`Planilha gerada · ${linhas} linhas.`, { description: nomeArquivo });
+    } catch {
+      toast.error('Não foi possível gerar a planilha.');
+    }
+  };
+
   const pedindo = (fonte: FonteDetalhe) =>
     pedirProdutos && detalhe?.fonte === fonte && recorte !== null;
 
@@ -699,13 +735,26 @@ export default function Panorama() {
                       que ele significa, e um deles — a base da cobertura — mexia num
                       cartão da faixa de indicadores logo ACIMA da tabela em que morava.
                       Ver o cabeçalho de `BarraEscopo`. */}
-                  <button
-                    type="button"
-                    onClick={tudoExpandido}
-                    className="rounded-lg bg-muted/60 px-2.5 py-1 text-2xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                  >
-                    {expandidos.size > 0 ? 'Recolher tudo' : 'Expandir tudo'}
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={tudoExpandido}
+                      className="rounded-lg bg-muted/60 px-2.5 py-1 text-2xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      {expandidos.size > 0 ? 'Recolher tudo' : 'Expandir tudo'}
+                    </button>
+                    {/* Mesma altura dos chips vizinhos de propósito: o `Button` do
+                        design system nasce com 44px, que ao lado destes ficaria
+                        desproporcional para uma ação secundária do cabeçalho. */}
+                    <button
+                      type="button"
+                      onClick={exportar}
+                      className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1 text-2xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
+                    >
+                      <Download size={12} aria-hidden />
+                      Exportar Excel
+                    </button>
+                  </div>
                 </div>
               </CardHeader>
               <CardContent>

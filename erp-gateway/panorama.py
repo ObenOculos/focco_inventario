@@ -118,11 +118,42 @@ LEFT JOIN vd_tipopedidovendaorcamento tp
       ON  tp.vdtpo_codigo = p.vdtpo_codigo
       AND tp.pgemp_codigo = p.pgemp_codigo
       AND tp.pgfll_codigo = p.pgfll_codigo
+-- A CONTRAPARTE da saida, pela MESMA view que a entrada usa para a dela. E o que
+-- torna os dois lados um so eixo na tela: `pgcln_codigo` aqui, `pgfor_codigo` la,
+-- os dois resolvidos por `pg_view_relacionaclnforfun`. LEFT por simetria com o
+-- lado da entrada; medido em 2026, nenhuma nota de saida esta sem destinatario.
+LEFT JOIN pg_view_relacionaclnforfun cln ON cln.pgview_codigo = n.pgcln_codigo
 """
 
-# Dimensoes que descrevem O QUE a saida foi. Vao nos dois niveis: e por elas que a
-# tela monta "tipo de saida", e o CFOP e o insumo da classificacao de `regras.py`.
+# Dimensoes que descrevem O QUE a saida foi e PARA QUEM ela foi. Vao nos dois
+# niveis: e por elas que a tela monta "tipo de saida", e o CFOP e o insumo da
+# classificacao de `regras.py`.
+#
+# "CONTRAPARTE" AQUI NAO E SO CLIENTE — e o espelho exato da armadilha da entrada.
+# Em VENDA e BONIFICACAO o destinatario e o cliente (512 e 375 distintos em 2026);
+# em REMESSA, DEMONSTRACAO e ACERTO DE ESTOQUE ele e o REPRESENTANTE recebendo a
+# mala (10, 1 e 1). Quem separa os casos e a CLASSIFICACAO, nunca o nome — por isso
+# as duas viajam juntas e o r-otulo na tela e "Destino", nao "Cliente".
+#
+# `contraparte_representante` sai do CADASTRO (`pg_vendedor`), e NAO da classificacao.
+# A tentacao e derivar o papel do CFOP — "remessa vai para representante, venda vai
+# para cliente" — e isso esta ERRADO. Medido em 2026-09-09, empresas 1 e 2, ano
+# corrente: VENDA tem 125 un endereçadas a 6 representantes e BONIFICACAO tem 980 un a
+# outros 6. Um mapa por classificacao rotularia 1.105 unidades com o papel errado.
+# (Nao por acaso, "venda endereçada a representante" e o sinal S2 da auditoria em
+# `regras.py`.) O campo e funcionalmente dependente do codigo da contraparte, entao
+# entra no GROUP BY sem criar uma linha sequer.
+#
+# CUSTO DE TRAZE-LA: medido em 2026-09-09, o agregado do ano vai de 1.500 para 6.667
+# linhas (12 meses: 2.050 -> 9.959). Cabe no teto de 20 mil do gateway, mas ocupa
+# metade dele — uma janela maior que 12 meses com as duas empresas precisa ser
+# medida antes de ser oferecida na tela.
 _DIMENSOES_SAIDA = """
+    n.pgcln_codigo                        AS contraparte_cod,
+    EXISTS (SELECT 1 FROM pg_vendedor pv WHERE pv.pgven_codigo = n.pgcln_codigo)
+                                          AS contraparte_representante,
+    COALESCE(NULLIF(TRIM(cln.pgview_nome), ''), '')    AS contraparte,
+    COALESCE(NULLIF(TRIM(cln.pgview_estado), ''), '')  AS uf,
     p.vdtpo_codigo                        AS tipo_pedido_cod,
     tp.vdtpo_descricao                    AS tipo_pedido_desc,
     n.pgopr_codigo                        AS operacao_cod,
@@ -213,6 +244,7 @@ def _where(
     for chave, coluna in (
         ("tipos_pedido", "p.vdtpo_codigo"),
         ("operacoes", "n.pgopr_codigo"),
+        ("contrapartes", "n.pgcln_codigo"),
     ):
         valores = filtros.get(chave)
         if valores:
@@ -304,7 +336,7 @@ SELECT
 {_MEDIDAS.strip()}
 {_SQL_FROM.strip()}
 WHERE {" AND ".join(condicoes)}
-GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12
+GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
 ORDER BY mes, marca, tipo_pedido_cod
 """
     return _classificar(_consultar(sql, params))
@@ -357,7 +389,7 @@ SELECT
 {_MEDIDAS.strip()}
 {_SQL_FROM.strip()}
 WHERE {" AND ".join(condicoes)}
-GROUP BY 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15
+GROUP BY 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19
 ORDER BY quantidade DESC
 """
     return _classificar(_consultar(sql, params))
@@ -458,16 +490,20 @@ LEFT JOIN pg_naturezaoperacao nat ON nat.pgnat_codigo = prod.pgnat_codigo
 LEFT JOIN pg_view_relacionaclnforfun forn ON forn.pgview_codigo = n.pgfor_codigo
 """
 
-# Quem mandou, e sob que natureza.
+# Quem mandou, e sob que natureza. A CONTRAPARTE da entrada — mesmo nome e mesma
+# view que a da saida (`_DIMENSOES_SAIDA`), porque e o mesmo conceito visto do outro
+# lado: de quem veio / para quem foi.
 #
-# "FORNECEDOR" AQUI NAO E SO FORNECEDOR. Em RETORNO DE REMESSA o remetente e o
+# "CONTRAPARTE" AQUI NAO E SO FORNECEDOR. Em RETORNO DE REMESSA o remetente e o
 # proprio REPRESENTANTE devolvendo o que sobrou da mala — medido em 2026: dos 13
 # remetentes do ano, cinco sao vendedores. Quem separa os dois casos e a
 # CLASSIFICACAO, nunca o nome; por isso as duas viajam juntas e a tela abre por
-# classificacao antes de fornecedor.
+# classificacao antes da contraparte.
 _DIMENSOES_ENTRADA = """
-    n.pgfor_codigo                        AS fornecedor_cod,
-    COALESCE(NULLIF(TRIM(forn.pgview_nome), ''), '')   AS fornecedor,
+    n.pgfor_codigo                        AS contraparte_cod,
+    EXISTS (SELECT 1 FROM pg_vendedor pv WHERE pv.pgven_codigo = n.pgfor_codigo)
+                                          AS contraparte_representante,
+    COALESCE(NULLIF(TRIM(forn.pgview_nome), ''), '')   AS contraparte,
     COALESCE(NULLIF(TRIM(forn.pgview_estado), ''), '') AS uf,
     n.pgopr_codigo                        AS operacao_cod,
     opr.pgopr_descricao                   AS operacao_desc,
@@ -526,7 +562,7 @@ def _where_entrada(
             params[chave] = [str(v) for v in valores]
 
     for chave, coluna in (
-        ("fornecedores", "n.pgfor_codigo"),
+        ("contrapartes", "n.pgfor_codigo"),
         ("operacoes", "n.pgopr_codigo"),
     ):
         valores = filtros.get(chave)
@@ -563,11 +599,11 @@ def entradas_por_categoria(
     incluir_sem_movimento=False,
     **recortes,
 ) -> pd.DataFrame:
-    """Uma linha por mes x empresa x categoria x fornecedor x natureza da entrada.
+    """Uma linha por mes x empresa x categoria x contraparte x natureza da entrada.
 
     O espelho do `saidas_por_categoria`, e de proposito com a mesma forma: as duas
     lentes do Panorama compartilham medida, categoria e drill-down, e so mudam de
-    eixo proprio (tipo de saida la, fornecedor aqui).
+    eixo proprio (tipo de saida la, tipo de entrada aqui).
 
     Fornecedor cabe na chave porque sao poucos — 13 em oito meses de 2026. Se um dia
     passarem de algumas centenas, ele sai daqui e vira nivel pedido sob demanda,
@@ -595,8 +631,8 @@ SELECT
     {_MEDIDAS_ENTRADA.strip()}
 {_SQL_FROM_ENTRADA.strip()}
 WHERE {" AND ".join(condicoes)}
-GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13
-ORDER BY mes, fornecedor
+GROUP BY 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14
+ORDER BY mes, contraparte
 """
     return _classificar_entrada(_consultar(sql, params))
 
@@ -610,7 +646,7 @@ def entradas_por_produto(
     incluir_sem_movimento=False,
     **recortes,
 ) -> pd.DataFrame:
-    """A folha da lente de entradas: produto x empresa x fornecedor x natureza.
+    """A folha da lente de entradas: produto x empresa x contraparte x natureza.
 
     `nome_produto` sai por MIN pelo mesmo motivo da saida: e o nome COMO FOI ESCRITO
     NA NOTA, e agrupar por ele partiria o produto por causa de uma grafia.
@@ -640,7 +676,7 @@ SELECT
     {_MEDIDAS_ENTRADA.strip()}
 {_SQL_FROM_ENTRADA.strip()}
 WHERE {" AND ".join(condicoes)}
-GROUP BY 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16
+GROUP BY 1, 2, 3, 4, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17
 ORDER BY quantidade DESC
 """
     return _classificar_entrada(_consultar(sql, params))
