@@ -95,6 +95,23 @@ const codigo = (v: unknown): string => {
 const comDescricao = (valor: string, descricao: string | null | undefined) =>
   descricao ? `${valor} - ${descricao}` : valor;
 
+/**
+ * Rótulo de PESSOA (cliente, fornecedor, representante, terceiro): código na frente.
+ *
+ * O código já era a chave de agrupamento dos três eixos, mas ficava invisível — e é
+ * ele que o gestor usa para achar o cadastro no Ciclone e para desempatar nome
+ * repetido, que é justamente o motivo de a chave não ser o nome. Mesma forma do
+ * `comDescricao` do tipo de pedido: **código primeiro**, porque o rótulo é truncado
+ * na árvore e o que sobra na tela precisa ser a parte que identifica sem ambiguidade.
+ *
+ * Sem nome, mostra só o código; sem os dois, o texto de ausência — que é diferente
+ * por eixo, então vem de fora.
+ */
+const comCodigo = (cod: string, nome: string | null | undefined, ausente: string) => {
+  if (!cod) return nome || ausente;
+  return nome ? `${cod} - ${nome}` : cod;
+};
+
 const eixoDeCategoria = (
   id: 'marca' | 'tipo' | 'subtipo' | 'grupo',
   rotulo: string,
@@ -155,14 +172,7 @@ export const EIXOS: Eixo[] = [
     // código é o que o Ciclone garante único. Os rótulos nunca são "Fornecedor" nem
     // "Cliente" porque na remessa (dos dois lados) quem está ali é o representante.
     chaveDe: (l) => codigo(l.contraparte_cod),
-    // Três casos, e o terceiro existia mal resolvido: sem código, `codigo()` devolve
-    // string vazia e o rótulo saía como "Código " — um grupo sem nome, que é o que
-    // aparece quando a linha não traz a contraparte de jeito nenhum.
-    rotuloDe: (l) => {
-      if (l.contraparte) return l.contraparte;
-      const cod = codigo(l.contraparte_cod);
-      return cod ? `Código ${cod}` : 'Sem contraparte';
-    },
+    rotuloDe: (l) => comCodigo(codigo(l.contraparte_cod), l.contraparte, 'Sem contraparte'),
   },
   {
     id: 'uf',
@@ -179,13 +189,13 @@ export const EIXOS: Eixo[] = [
     // garante único. O rótulo não é "Vendedor" porque nem todo terceiro é um: há
     // óticas e a própria matriz na lista.
     chaveDe: (l) => codigo(l.terceiro_cod),
-    rotuloDe: (l) => l.terceiro || `Terceiro ${codigo(l.terceiro_cod)}`,
+    rotuloDe: (l) => comCodigo(codigo(l.terceiro_cod), l.terceiro, 'Sem terceiro'),
   },
   {
     id: 'vendedor',
     rotulo: 'Vendedor',
     chaveDe: (l) => l.codigo_vendedor ?? '',
-    rotuloDe: (l) => l.nome_vendedor || `Vendedor ${l.codigo_vendedor ?? '?'}`,
+    rotuloDe: (l) => comCodigo(l.codigo_vendedor ?? '', l.nome_vendedor, 'Sem vendedor'),
   },
   {
     id: 'situacao',

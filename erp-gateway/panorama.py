@@ -539,14 +539,24 @@ def _where_entrada(
         condicoes.append("COALESCE(n.eqnfe_situacao, '') <> 'C'")
 
     # ESTE FILTRO E O QUE IMPEDE A COMPRA DE CONTAR EM DOBRO, e por isso vem ligado.
-    # Medido em 2026-08-24, fornecedor INDCASE, jun a ago: toda compra entra como
-    # DUAS notas com o MESMO numero e series diferentes —
-    #   serie 0, operacao 21021, movimenta='N': codigo generico ('ARM DE OCULOS
-    #            ACET', 'ESTOJO PW'), valor baixo (R$ 381,60);
-    #   serie 1, operacao 21022, movimenta='S': o SKU de verdade, valor cheio
-    #            (R$ 6.263,59), e e esta que entra no estoque.
-    # As quantidades sao praticamente iguais nas duas, entao somar ambas dobra as
-    # unidades e mistura duas bases de valor. Onze notas conferidas, onze com o par.
+    # Toda compra entra como DUAS notas de mesmo numero. Quem as separa e a OPERACAO
+    # FISCAL, com correspondencia 1:1 com `movimentaestoque` — medido em 2026-09-09,
+    # empresas 1 e 2, ano corrente:
+    #   21021 "COMPRA P/ COMERCIALIZACAO F. E"       -> 100% 'N', 11 produtos
+    #         GENERICOS de faturamento ('ARM DE OCULOS ACET', 'ARM DE OCULOS MET'),
+    #         66.518 un;
+    #   21022 "COMPRA P/ COMERCIALIZACAO BLOCO F. E" -> 100% 'S', 139 SKUs reais,
+    #         65.902 un — e esta que entra no estoque.
+    # As quantidades sao quase iguais, entao somar ambas DOBRA as unidades e mistura
+    # duas bases de valor.
+    #
+    # ATENCAO: NAO e a SERIE que separa as duas, ao contrario do que esta nota dizia
+    # ate 2026-09-09. As series se sobrepoem — a 21021 aparece nas series 0, 000 e 1;
+    # a 21022 nas series 0, 1, 2 e 3. Filtrar por serie contaria errado.
+    #
+    # O CFOP tambem NAO separa: as duas sao 2102, entao `classificar_entrada` rotula
+    # ambas como COMPRA. E por isso que o corte tem de ser este filtro, e nao a
+    # classificacao.
     #
     # O teste e CONTRA 'N', e nao a favor de 'S', porque o campo nao e um sim/nao: o
     # retorno de remessa usa 'E' e 'A', e a demonstracao usa 'D'. Exigir 'S' apagaria
