@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { CloudOff, Download, Package, Search, SlidersHorizontal } from 'lucide-react';
+import { ChevronDown, CloudOff, Download, Package, Search, SlidersHorizontal } from 'lucide-react';
 import { toast } from 'sonner';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -41,7 +41,16 @@ import {
   type FontesComparativo,
   type NoArvore,
 } from '@/lib/panoramaComparativo';
-import { exportarPanoramaExcel } from '@/lib/exportarPanoramaExcel';
+import {
+  exportarPanoramaExcel,
+  type RecorteSentido,
+} from '@/lib/exportarPanoramaExcel';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { BarraEscopo } from '@/components/panorama/BarraEscopo';
 import { FaixaIndicadores } from '@/components/panorama/FaixaIndicadores';
 import { SerieMensal } from '@/components/panorama/SerieMensal';
@@ -290,8 +299,8 @@ export default function Panorama() {
     return (saidas.data ?? []).filter((l) => l.mes >= janelaDe && l.mes <= janelaAte);
   }, [consultado, janelaCabeNoPeriodo, demanda.data, saidas.data]);
   const carregando = consultasErp.some((q) => q.isLoading);
-  // O inventário conta aqui: o giro no cabeçalho é justamente o aviso de que algo ainda
-  // está chegando sem que a tela tenha sido esvaziada.
+  // O inventário conta aqui: vira o giro DENTRO do botão — o aviso de que algo ainda
+  // está chegando sem que a tela tenha sido esvaziada. Ver `BarraEscopo`.
   const atualizando = consultas.some((q) => q.isFetching);
   // A primeira falha manda: se o ERP caiu, as cinco falham pelo mesmo motivo, e repetir
   // a mensagem cinco vezes não ajuda ninguém.
@@ -395,25 +404,54 @@ export default function Panorama() {
    * O caminho do drill-down NÃO entra: ele é navegação dentro do escopo consultado, e
    * exportar só o galho aberto surpreenderia quem clicou no botão do cabeçalho da
    * tabela inteira.
+   *
+   * O `sentido` escolhe QUAL metade vai no arquivo. A separação acontece aqui, em
+   * arquivos distintos, e nunca em duas abas — ver o cabeçalho da lib.
    */
-  const exportar = () => {
+  const exportar = (sentido: RecorteSentido) => {
     if (!consultado) return;
-    const total = fontes.saidas.length + fontes.entradas.length;
-    if (total === 0) {
-      toast.error('Não há movimentações no recorte atual.');
+    /**
+     * Filtro mexido sem consultar NÃO exporta — avisa.
+     *
+     * O arquivo sai de `fontes` e de `consultado`, que são o que está NA TELA. Com o
+     * painel em outro período, gerar assim mesmo entregaria uma planilha do recorte
+     * anterior a quem acabou de digitar 2024 e foi direto ao botão — e ela pareceria
+     * certa, porque o único lugar que desmente é o metadado do arquivo. O botão de
+     * exportar mora no cabeçalho da tabela, longe do painel, o que torna o descuido
+     * natural em vez de distração.
+     */
+    if (pendente) {
+      toast.error('Os filtros mudaram desde a última consulta.', {
+        description: 'Clique em Consultar antes de exportar, ou o arquivo sai do período anterior.',
+      });
+      return;
+    }
+    const saidas = sentido === 'entradas' ? [] : fontes.saidas;
+    const entradas = sentido === 'saidas' ? [] : fontes.entradas;
+    if (saidas.length + entradas.length === 0) {
+      // A mensagem nomeia o que faltou: "não há movimentações" sobre um período que
+      // tem saídas na tela, só porque o usuário pediu as entradas, parece defeito.
+      const oque =
+        sentido === 'saidas' ? 'saídas' : sentido === 'entradas' ? 'entradas' : 'movimentações';
+      toast.error(`Não há ${oque} no recorte atual.`);
       return;
     }
     try {
-      const { nomeArquivo, linhas } = exportarPanoramaExcel(fontes.saidas, fontes.entradas, {
+      const { nomeArquivo, linhas } = exportarPanoramaExcel(saidas, entradas, {
         de: consultado.de,
         ate: consultado.ate,
         empresas,
         mes: escopo.mes,
         baseData: consultado.baseData,
         ocultarDiversos: escopo.ocultarDiversos,
+        sentido,
       });
       toast.success(`Planilha gerada · ${linhas} linhas.`, { description: nomeArquivo });
-    } catch {
+    } catch (falha) {
+      // O motivo real vai para o console: um `catch` mudo aqui já escondeu um
+      // `TypeError` de campo ausente atrás de "não foi possível", e a pista começava
+      // e terminava no mesmo texto genérico.
+      console.error('Falha ao exportar o Panorama', falha);
       toast.error('Não foi possível gerar a planilha.');
     }
   };
@@ -567,15 +605,32 @@ export default function Panorama() {
     ? janelaPorData(consultado.janelaDe, consultado.janelaAte).rotulo
     : '—';
 
+  /**
+   * O período que a tabela está mostrando — do `consultado`, nunca do painel.
+   *
+   * Mesmo motivo do `rotuloBase` logo acima: o cabeçalho tem de nomear o recorte que
+   * produziu os números abaixo dele. Lendo o escopo em edição, ele se mexia a cada
+   * tecla — e virava " a " enquanto a data estivesse pela metade, sobre uma tabela
+   * perfeitamente válida do período anterior.
+   */
+  const rotuloPeriodo = escopo.mes
+    ? mesPorExtenso(escopo.mes)
+    : consultado
+      ? `${dataCurta(consultado.de)} a ${dataCurta(consultado.ate)}`
+      : '—';
+
   const temDado = arvore.length > 0;
 
   return (
     <AppLayout>
       <div className="space-y-5">
+        {/* Sem `isFetching`: quem anuncia a consulta em voo é o botão do painel de
+            filtros, que é onde a pessoa clicou. O indicador daqui repetia o mesmo
+            recado em 12px do outro lado da tela — e um anel girando fora de botão é
+            justamente o que o DESIGN_SYSTEM.md proíbe. */}
         <PageHeader
           title="Panorama"
           description="O que entrou, o que saiu e onde o estoque está — no mesmo lugar."
-          isFetching={atualizando && !carregando}
         />
 
         <BarraEscopo
@@ -593,6 +648,7 @@ export default function Panorama() {
           inventario={escopo.inventario}
           ocultarDiversos={escopo.ocultarDiversos}
           carregando={carregando}
+          atualizando={atualizando}
           onPeriodo={(de, ate) => atualizar({ de, ate, mes: null })}
           onEmpresa={(empresa) => atualizar({ empresa })}
           onBaseData={(baseData) => atualizar({ baseData })}
@@ -746,14 +802,26 @@ export default function Panorama() {
                     {/* Mesma altura dos chips vizinhos de propósito: o `Button` do
                         design system nasce com 44px, que ao lado destes ficaria
                         desproporcional para uma ação secundária do cabeçalho. */}
-                    <button
-                      type="button"
-                      onClick={exportar}
-                      className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1 text-2xs font-semibold text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <Download size={12} aria-hidden />
-                      Exportar Excel
-                    </button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger className="flex items-center gap-1.5 rounded-lg bg-muted/60 px-2.5 py-1 text-2xs font-semibold text-muted-foreground transition-colors hover:text-foreground">
+                        <Download size={12} aria-hidden />
+                        Exportar Excel
+                        <ChevronDown size={12} aria-hidden />
+                      </DropdownMenuTrigger>
+                      {/* Cada item gera UM arquivo. Separar em duas abas foi recusado
+                          aqui e na Reposição: tabela dinâmica não atravessa abas. */}
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onSelect={() => exportar('ambos')}>
+                          Saídas e entradas
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => exportar('saidas')}>
+                          Só saídas
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => exportar('entradas')}>
+                          Só entradas
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               </CardHeader>
@@ -793,9 +861,7 @@ export default function Panorama() {
                         )
                       : undefined
                   }
-                  rotuloPeriodo={
-                    escopo.mes ? mesPorExtenso(escopo.mes) : `${dataCurta(escopo.de)} a ${dataCurta(escopo.ate)}`
-                  }
+                  rotuloPeriodo={rotuloPeriodo}
                   expandidos={expandidos}
                   onAlternar={alternar}
                   onDetalhe={abrirDetalhe}

@@ -12,6 +12,19 @@ import { SEM_CATEGORIA } from '@/lib/categoriasProduto';
  * abas à mão para perguntar qualquer coisa que atravesse as duas ("quanto entrou e
  * saiu de OBEN em junho"). Com uma grade única, isso é uma tabela dinâmica.
  *
+ * ## Quem quer só um sentido escolhe o ARQUIVO, nunca a aba
+ *
+ * O menu de exportação oferece os três recortes (`RecorteSentido`), e cada um gera um
+ * arquivo com a grade inteira do que foi pedido. A alternativa — duas abas no mesmo
+ * arquivo — foi recusada aqui e também em `exportarReposicaoExcel`, pelo mesmo motivo:
+ * tabela dinâmica não atravessa abas, e o usuário acabaria colando à mão o que a
+ * ferramenta tinha acabado de separar.
+ *
+ * ⚠️ **As colunas são as MESMAS nos três recortes, `Sentido` inclusive.** Num arquivo
+ * só de saídas essa coluna parece redundante, e é ela que deixa os dois arquivos serem
+ * reunidos com um Ctrl+V quando alguém mudar de ideia. Cabeçalhos que divergem por
+ * recorte custariam exatamente o trabalho manual que a grade única existe para evitar.
+ *
  * **O que sai é o RECORTE VISÍVEL**, não a consulta inteira: já sem `DIVERSOS` quando
  * a caixa está marcada e já recortado pelo mês em foco. Mesma decisão da Consulta ao
  * ERP — o arquivo é a resposta da pergunta que estava na tela.
@@ -166,29 +179,92 @@ function registroDe(l: LinhaPanorama, sentido: Sentido, colMes: string): Registr
   };
 }
 
+/**
+ * O rótulo das empresas no metadado.
+ *
+ * ⚠️ `empresas` chega **ausente** quando o filtro está em "Ambas" — é a convenção de
+ * todo o app (`empresasDaEscolha`), que omite o parâmetro para o padrão do gateway
+ * continuar valendo sem o cliente repetir quais são as duas. Ler `.join` direto
+ * quebrava a exportação inteira justamente no caso mais comum, e com `strict: false`
+ * no `tsconfig` o compilador não reclamava: `number[] | undefined` entrava num
+ * `number[]` sem um aviso sequer.
+ */
+const rotuloEmpresas = (empresas?: number[]): string =>
+  empresas && empresas.length > 0 ? `empresa(s) ${empresas.join(', ')}` : 'ambas as empresas';
+
 export interface EscopoExportado {
   de: string;
   ate: string;
-  empresas: number[];
+  /** Ausente = ambas, pelo padrão do gateway. Ver `rotuloEmpresas`. */
+  empresas?: number[];
   /** Mês em foco, quando há um. Já veio aplicado às linhas. */
   mes?: string | null;
+  /** Ausente = os dois sentidos. Ver `RecorteSentido`. */
+  sentido?: RecorteSentido;
   baseData: 'movimento' | 'emissao';
   ocultarDiversos: boolean;
 }
 
-/** `panorama_movimentacoes_20260909_1445.xlsx` — mesmo padrão das outras exportações. */
-export function nomeArquivoPanorama(agora = new Date()): string {
-  return `panorama_movimentacoes_${format(agora, 'yyyyMMdd_HHmm')}.xlsx`;
+/**
+ * Qual metade da movimentação vai no arquivo.
+ *
+ * Não é deduzido de qual array veio vazio: um período pode genuinamente não ter
+ * entrada nenhuma, e aí o arquivo se renomearia sozinho para "só saídas" sem ninguém
+ * ter pedido isso. O recorte é intenção do usuário, então viaja declarado.
+ */
+export type RecorteSentido = 'ambos' | 'saidas' | 'entradas';
+
+/** O que cada recorte nomeia — arquivo, aba do Excel e o texto do metadado. */
+const RECORTE: Record<RecorteSentido, { arquivo: string; aba: string; rotulo: string }> = {
+  ambos: { arquivo: 'movimentacoes', aba: 'Movimentacoes', rotulo: 'saídas e entradas' },
+  saidas: { arquivo: 'saidas', aba: 'Saidas', rotulo: 'só saídas' },
+  entradas: { arquivo: 'entradas', aba: 'Entradas', rotulo: 'só entradas' },
+};
+
+/**
+ * `panorama_saidas_20250101-20251231_20260914_1445.xlsx`.
+ *
+ * Recorte E período entram no NOME, não só nos metadados, porque os arquivos caem
+ * todos na mesma pasta de Downloads com a mesma cara. Metadado ninguém abre; nome de
+ * arquivo é o único rótulo que sobrevive a um anexo de e-mail e a uma pasta.
+ *
+ * ⚠️ **O período também desempata.** Só com o carimbo de hora, exportar 2024 e 2025
+ * dentro do mesmo minuto produzia dois arquivos de nome IDÊNTICO — o navegador
+ * acrescenta "(1)" e a pessoa abre o primeiro achando que é o novo. Foi assim que a
+ * exportação pareceu ignorar o filtro.
+ *
+ * A hora fica mesmo assim: duas leituras do MESMO período com camadas diferentes
+ * (Diversos, mês em foco) continuam sendo arquivos distintos.
+ */
+export function nomeArquivoPanorama(
+  agora = new Date(),
+  sentido: RecorteSentido = 'ambos',
+  periodo?: { de: string; ate: string }
+): string {
+  // `split/join` e não `replaceAll`: o alvo do `tsconfig` é ES2020, onde ele não existe.
+  const compacto = (iso: string) => iso.split('-').join('');
+  const trecho = periodo ? `${compacto(periodo.de)}-${compacto(periodo.ate)}_` : '';
+  return `panorama_${RECORTE[sentido].arquivo}_${trecho}${format(agora, 'yyyyMMdd_HHmm')}.xlsx`;
 }
 
 export function exportarPanoramaExcel(
   saidas: readonly LinhaPanorama[],
   entradas: readonly LinhaPanorama[],
   escopo: EscopoExportado,
-  nomeArquivo = nomeArquivoPanorama()
+  // `undefined` e não um padrão no parâmetro: o nome depende do `sentido`, que só se
+  // conhece DENTRO da função. Um `= nomeArquivoPanorama()` na assinatura seria
+  // avaliado antes de olhar o escopo, e todo arquivo sairia como "movimentacoes".
+  nomeArquivo?: string
 ): { nomeArquivo: string; linhas: number } {
   const colunas = colunasDe(escopo.baseData);
   const colMes = rotuloMes(escopo.baseData);
+  const recorte = RECORTE[escopo.sentido ?? 'ambos'];
+  const arquivo =
+    nomeArquivo ??
+    nomeArquivoPanorama(new Date(), escopo.sentido ?? 'ambos', {
+      de: escopo.de,
+      ate: escopo.ate,
+    });
 
   const dados: Registro[] = [
     ...saidas.map((l) => registroDe(l, 'Saída', colMes)),
@@ -236,14 +312,15 @@ export function exportarPanoramaExcel(
   ws['!freeze'] = { xSplit: 0, ySplit: 1 };
 
   const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Movimentacoes');
+  XLSX.utils.book_append_sheet(wb, ws, recorte.aba);
 
   // O escopo vive nos METADADOS, não numa faixa acima do cabeçalho: qualquer linha
   // antes dele quebraria o filtro automático. Mesma decisão da exportação da mala.
   wb.Props = {
-    Title: 'Panorama — movimentações',
+    Title: `Panorama — ${recorte.rotulo}`,
     Subject:
-      `${escopo.de} a ${escopo.ate} · empresa(s) ${escopo.empresas.join(', ')} · ` +
+      `${escopo.de} a ${escopo.ate} · ${rotuloEmpresas(escopo.empresas)} · ` +
+      `${recorte.rotulo} · ` +
       `agregado por mês, base ${escopo.baseData === 'emissao' ? 'emissão do pedido' : 'movimento'}` +
       (escopo.mes ? ` · mês em foco ${mesCurto(escopo.mes)}` : '') +
       (escopo.ocultarDiversos ? ' · sem DIVERSOS' : '') +
@@ -251,7 +328,7 @@ export function exportarPanoramaExcel(
     CreatedDate: new Date(),
   };
 
-  XLSX.writeFile(wb, nomeArquivo);
+  XLSX.writeFile(wb, arquivo);
 
-  return { nomeArquivo, linhas: dados.length };
+  return { nomeArquivo: arquivo, linhas: dados.length };
 }

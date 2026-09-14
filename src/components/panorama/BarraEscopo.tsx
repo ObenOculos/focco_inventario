@@ -113,7 +113,17 @@ interface Props {
   custo: boolean;
   inventario: boolean;
   ocultarDiversos: boolean;
+  /** Primeira ida ao ERP deste recorte — a tela ainda é esqueleto. */
   carregando: boolean;
+  /**
+   * Há consulta em voo com os números ANTIGOS ainda na tela.
+   *
+   * É estado separado de `carregando` porque no "Atualizar" o React Query já tem
+   * dado em cache: `isLoading` fica `false` o tempo todo e só `isFetching` sobe. Sem
+   * este prop o botão não se mexia justamente na ação mais repetida da tela, e o
+   * único sinal era um indicador de 12px no cabeçalho da página.
+   */
+  atualizando: boolean;
   onPeriodo: (de: string, ate: string) => void;
   onEmpresa: (e: EscolhaEmpresa) => void;
   onBaseData: (b: 'movimento' | 'emissao') => void;
@@ -199,6 +209,7 @@ export function BarraEscopo({
   inventario,
   ocultarDiversos,
   carregando,
+  atualizando,
   onPeriodo,
   onEmpresa,
   onBaseData,
@@ -224,6 +235,26 @@ export function BarraEscopo({
 
   /** Nunca consultou, ou mexeu em algo que exige nova ida ao ERP. */
   const precisaConsultar = !jaConsultou || pendente;
+
+  /**
+   * O botão reage a QUALQUER consulta em voo, não só à primeira.
+   *
+   * É onde a pessoa clicou, então é onde ela olha — e o `DESIGN_SYSTEM.md` é explícito:
+   * ação do usuário se anuncia por spinner DENTRO do botão, com ele desabilitado.
+   * Desabilitar também impede a segunda leva de cliques que enfileirava idas ao Ciclone
+   * (o gateway serializa em três) enquanto a primeira ainda voltava.
+   */
+  const ocupado = carregando || atualizando;
+
+  // Os dois verbos são diferentes de propósito: "Consultando" é a tela ainda em branco,
+  // "Atualizando" é o número antigo na tela prestes a ser trocado.
+  const rotuloAcao = carregando
+    ? 'Consultando'
+    : atualizando
+      ? 'Atualizando'
+      : precisaConsultar
+        ? 'Consultar'
+        : 'Atualizar';
 
   const pilula = (ativo: boolean) =>
     `rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors ${
@@ -293,10 +324,10 @@ export function BarraEscopo({
           variant={precisaConsultar ? 'default' : 'outline'}
           size="sm"
           onClick={onAtualizar}
-          disabled={carregando || impedimento !== null}
+          disabled={ocupado || impedimento !== null}
         >
-          <RefreshCw className={`h-4 w-4 ${carregando ? 'animate-spin' : ''}`} />
-          {carregando ? 'Consultando' : precisaConsultar ? 'Consultar' : 'Atualizar'}
+          <RefreshCw className={`h-4 w-4 ${ocupado ? 'animate-spin' : ''}`} />
+          {rotuloAcao}
         </Button>
       </div>
 

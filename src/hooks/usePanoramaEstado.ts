@@ -122,12 +122,31 @@ const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
 const data = (valor: string | null, padrao: string) =>
   valor && DATA_ISO.test(valor) ? valor : padrao;
 
+/**
+ * A data do PERÍODO, e por que ela não pode usar o `data()` acima.
+ *
+ * ⚠️ **Campo vazio e parâmetro ausente são estados diferentes, e confundi-los travava
+ * a digitação.** O `<input type="date">` emite string VAZIA no instante em que a data
+ * fica incompleta — que é o meio de qualquer redigitação. Caindo no padrão, o campo
+ * (que é controlado) era reescrito com o período padrão por cima do que a pessoa
+ * estava digitando, e a única saída era apagar tudo e começar de novo.
+ *
+ * Então: `null` é "ninguém escolheu nada ainda" e vale o padrão; qualquer outra coisa
+ * que não seja ISO completo é **campo em edição**, e fica vazio até a pessoa
+ * terminar. Quem avisa que falta data é `impedimentoDaConsulta`, que já bloqueia o
+ * botão com a frase certa — os campos da cobertura sempre funcionaram assim.
+ */
+const dataDoPeriodo = (valor: string | null, padrao: string) => {
+  if (valor === null) return padrao;
+  return DATA_ISO.test(valor) ? valor : '';
+};
+
 export function usePanoramaEstado() {
   const [params, setParams] = useSearchParams();
 
   const escopo: EscopoPanorama = useMemo(() => {
-    const de = data(params.get('de'), PERIODO_PADRAO.de);
-    const ate = data(params.get('ate'), PERIODO_PADRAO.ate);
+    const de = dataDoPeriodo(params.get('de'), PERIODO_PADRAO.de);
+    const ate = dataDoPeriodo(params.get('ate'), PERIODO_PADRAO.ate);
     return {
       de,
       ate,

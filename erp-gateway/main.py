@@ -26,6 +26,7 @@ from contextlib import contextmanager
 from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 
@@ -387,10 +388,18 @@ def catalogo_produtos(
         with _fila_erp("/produtos"):
             conn = db.conectar()
             try:
-                df = pd.read_sql_query(
-                    SQL_CATALOGO, conn,
-                    params={"empresas": list(empresas), "tipos": list(TIPOS_OCULOS)},
-                )
+                # `dict[str, Any]`, e o `Any` não é preguiça: o `pandas-stubs`
+                # declara `params` como `Mapping[str, Scalar]`, que não admite lista.
+                # Aqui a lista é OBRIGATÓRIA — `= ANY(%(empresas)s)` só funciona
+                # porque o psycopg2 adapta lista para ARRAY do Postgres; uma tupla
+                # viraria o registro `(1, 2)` e a comparação estouraria no banco.
+                # Obedecer ao stub quebraria a consulta. Mesmo padrão de
+                # `panorama.py`, onde o `params` já nasce anotado assim.
+                params: dict[str, Any] = {
+                    "empresas": list(empresas),
+                    "tipos": list(TIPOS_OCULOS),
+                }
+                df = pd.read_sql_query(SQL_CATALOGO, conn, params=params)
             finally:
                 conn.close()
     except Exception as exc:
