@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "tipo": "inventario_focco",
+  "observacoes": "",
+  "items": [
+    {
+      "codigo_auxiliar": "EXEMPLO PRETO",
+      "nome_produto": "Produto Exemplo",
+      "quantidade_fisica": 5
+    },
+    {
+      "codigo_auxiliar": "EXEMPLO BRANCO",
+      "nome_produto": "Produto Exemplo 2",
+      "quantidade_fisica": 2
+    }
+  ]
+}

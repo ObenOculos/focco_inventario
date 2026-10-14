@@ -151,15 +151,16 @@ Cada passo elimina uma causa. Não pule.
 Invoke-RestMethod http://127.0.0.1:8000/saude
 ```
 
-**Falhou?** A tarefa caiu. Reinicie. (Se o `/saude` responde mas um campo novo não
-aparece, o problema é outro — veja *"Mexi no código do gateway"* acima.)
+**Falhou?** A tarefa caiu. Reinicie **em duas etapas**, com o bloco do passo 2 de
+*"Mexi no código do gateway"* acima — `Stop` e `Start` colados na mesma tacada
+deixam processo órfão segurando a porta. (Se o `/saude` responde mas um campo novo
+não aparece, o problema é outro — veja a mesma seção.)
 
-```powershell
-Stop-ScheduledTask -TaskName 'OPTISTOCK - ERP Gateway'
-Start-ScheduledTask -TaskName 'OPTISTOCK - ERP Gateway'
-```
+**Respondeu?** Não reinicie o gateway "por garantia": cada reinício deixa o app uns
+25 segundos sem resposta, e um erro visto nessa janela fica parecendo que a causa é
+outra.
 
-Espere uns 15 segundos e teste de novo. Se continuar falhando, veja o motivo:
+Se continuar falhando, veja o motivo:
 
 ```powershell
 Get-Content C:\Users\User\Documents\Inventario_App\erp-gateway\servico\gateway.log -Tail 30
@@ -193,8 +194,8 @@ https://desktop-297nu0m.tailecd207.ts.net/saude
 Tem que aparecer `{"ok":true,"servico":"erp-gateway"}`. Essa rota é aberta e não
 devolve nada sensível — pode abrir no celular sem problema.
 
-**Apareceu?** O caminho público está inteiro e o problema não é desta máquina —
-vá ao passo 4.
+**Apareceu?** A entrada pública está de pé — mas isso ainda **não** prova que o
+Supabase consegue passar por ela. Vá ao passo 4.
 
 **Deu erro 502?** O túnel está de pé mas o gateway não — volte ao passo 1.
 
@@ -212,13 +213,60 @@ Funnel sumiu, religue:
 & "C:\Program Files\Tailscale\tailscale.exe" funnel --bg 8000
 ```
 
-Se o `funnel status` **já dizia `Funnel on`**, não há o que consertar deste lado:
-a máquina está publicando e quem não está entregando é a Tailscale. Espere uns
-minutos e teste de novo pelo celular. Religar o Funnel nesse caso é tentativa, não
-procedimento — em 12/08/2026 não mudou nenhum registro observável e a volta veio
-sem dar para saber se foi o comando ou a própria recuperação.
+Se o `funnel status` **já dizia `Funnel on`**, reinicie o serviço da Tailscale
+(passo 5). Religar só o Funnel é tentativa, não procedimento — em 12/08/2026 não
+mudou nenhum registro observável e a volta veio sem dar para saber se foi o comando
+ou a própria recuperação.
 
-### 4. Nada disso resolveu
+### 4. As chamadas do app estão chegando ao gateway?
+
+Abra o app, tente a tela que falha, e logo depois olhe o log:
+
+```powershell
+Get-Content C:\Users\User\Documents\Inventario_App\erp-gateway\servico\gateway.log -Tail 15
+```
+
+O que importa é **de onde** vem cada linha:
+
+| começo da linha | quem chamou |
+|---|---|
+| `127.0.0.1` | você, testando nesta máquina |
+| `100.72.199.28` | você, testando pelo endereço `ts.net` de dentro do tailnet |
+| `2600:1f1e:…` | **o app** (Edge Function do Supabase) — é esse que interessa |
+
+**Apareceram linhas `2600:1f1e:…` com `200`?** O caminho inteiro funciona e o
+erro é passageiro — tente de novo.
+
+**Nenhuma linha `2600:1f1e:…` no horário em que você tentou?** O app não está
+chegando aqui — a conexão morre antes, e por isso o log não mostra erro nenhum. Vá
+ao passo 5.
+
+> Para ver o motivo exato do lado do Supabase, peça ao Claude os logs da Edge
+> Function `erp-consulta` (ele precisa do `SUPABASE_ACCESS_TOKEN` que está no
+> `.env`). Em 14/10/2026 a mensagem era `tls handshake eof` — o Supabase alcançava
+> a Tailscale, mas a conexão segura caía antes de chegar ao gateway.
+
+### 5. Reinicie o serviço da Tailscale
+
+Foi o que resolveu em 14/10/2026: tudo desta máquina passando, `Funnel on`, celular
+abrindo o `/saude`, e mesmo assim **nenhuma** chamada do app chegando por mais de
+uma hora. O computador estava ligado havia 13 dias.
+
+Num PowerShell **como administrador**:
+
+```powershell
+Restart-Service Tailscale
+Start-Sleep -Seconds 20
+& "C:\Program Files\Tailscale\tailscale.exe" funnel status
+```
+
+Confirme `Funnel on`, dê **Ctrl+F5** no app e tente de novo. O gateway e a VPN não
+são afetados — não precisa reiniciar mais nada.
+
+Uma falha isolada logo depois é normal: o app repete sozinho e a segunda tentativa
+passa.
+
+### 6. Nada disso resolveu
 
 Reinicie o computador. É o caminho mais rápido — as três peças sobem sozinhas.
 
@@ -229,7 +277,8 @@ Reinicie o computador. É o caminho mais rápido — as três peças sobem sozin
 | o que aparece no app | causa provável | onde olhar |
 |---|---|---|
 | "ERP indisponível" | computador desligado, VPN caída ou gateway parado | passos 1 e 2 |
-| "ERP indisponível" **com tudo aqui passando** | a entrada pública da Tailscale não está entregando | passo 3, e teste **pelo celular** |
+| "ERP indisponível" **com tudo aqui passando** | a entrada pública da Tailscale não está entregando | passos 3 a 5 — o log do gateway sem linhas `2600:1f1e:…` confirma |
+| "ERP indisponível" que some ao reabrir a tela | o app consultou durante um reinício do gateway e guardou o erro | Ctrl+F5 |
 | Spinner e depois "tentando novamente (2 de 3)" | instabilidade passageira | espere; ele se resolve sozinho |
 | Erro 502 | gateway parado, túnel de pé | passo 1 |
 | "Apenas gerentes consultam o ERP" | usuário logado é vendedor | não é falha |
