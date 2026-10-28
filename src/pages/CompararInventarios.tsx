@@ -852,9 +852,19 @@ export default function CompararInventarios() {
      */
     let unidadesContadas = 0;
     let valorContado = 0;
+    /**
+     * O OUTRO lado da mesma conta: contra quanto o Contado foi medido.
+     *
+     * `l.esperado` já existe em toda linha — vira `quantidade_a` sem reconciliação
+     * e `A + remessa − venda` com ela (ver `linhasExibidas`), e é exatamente o
+     * número de que Falta/Sobra/Saldo são derivados. Some aqui só para a faixa não
+     * repetir a soma que o modo Gestor já faz em `PainelGestor.agregar`.
+     */
+    let esperadoQtd = 0;
     for (const l of linhas) {
       unidadesContadas += l.quantidade_b;
       valorContado += l.quantidade_b * l.valor_unitario;
+      esperadoQtd += l.esperado;
     }
 
     const soMovimento = linhas.filter((l) => l.so_movimento).length;
@@ -887,6 +897,7 @@ export default function CompararInventarios() {
       saldoQtd: faltaQtd + sobraQtd,
       unidadesContadas,
       valorContado,
+      esperadoQtd,
       soMovimento,
       soEmA,
       soEmB,
@@ -2029,6 +2040,29 @@ export default function CompararInventarios() {
               */}
               {resumo.total > 0 && (
                 <p className="flex flex-wrap items-baseline gap-x-2 gap-y-1 text-xs text-muted-foreground">
+                  {/* "Esperado" só entra com reconciliação ligada — sem ela `l.esperado`
+                      é a própria Qtd A, e mostrar os dois lado a lado repetiria o mesmo
+                      número com rótulos diferentes. Mesmo gate do card em `PainelGestor`
+                      (`comEsperado`), e mesma decisão de ser TEXTO, não um quinto tile —
+                      ver o comentário acima sobre por que "Contado" não é card. */}
+                  {podeReconciliar && (
+                    <>
+                      <span className="font-semibold uppercase tracking-wider">Esperado</span>
+                      <span className="tabular-nums">
+                        <span className="font-semibold text-foreground">
+                          {unid(resumo.esperadoQtd)}
+                        </span>{' '}
+                        unidades
+                      </span>
+                      {/* Seta, não "·": Esperado é a BASE e Contado é o RESULTADO — a
+                          mesma relação de onde sai o Saldo. Um separador neutro tratava
+                          os dois como fatos soltos; a seta diz "de onde saiu, onde
+                          chegou" sem gastar largura extra. */}
+                      <span aria-hidden="true" className="text-muted-foreground/70">
+                        →
+                      </span>
+                    </>
+                  )}
                   <span className="font-semibold uppercase tracking-wider">Contado</span>
                   <span className="tabular-nums">
                     <span className="font-semibold text-foreground">
@@ -2036,6 +2070,13 @@ export default function CompararInventarios() {
                     </span>{' '}
                     unidades
                   </span>
+                  {/* O "bate certo" existe para não obrigar o olho a descer até o card
+                      Saldo só para confirmar o caso mais comum: nenhuma diferença.
+                      Sem repetir a conta — o Saldo já faz isso — só o veredito, no
+                      mesmo tom neutro da linha (não é "sucesso": é ausência de problema). */}
+                  {podeReconciliar && resumo.esperadoQtd === resumo.unidadesContadas && (
+                    <span className="text-2xs">(bate certo)</span>
+                  )}
                   <span aria-hidden="true">·</span>
                   <span className="tabular-nums">
                     <span className="font-semibold text-foreground">
