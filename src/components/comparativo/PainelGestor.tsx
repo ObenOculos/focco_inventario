@@ -548,7 +548,7 @@ function LinhaArvore({
                   variant="neutral"
                   className="px-1.5 py-0 text-2xs font-medium tabular-nums"
                 >
-                  +{unid(a.remessaQtd)}
+                  +{unid(a.remessaQtd)} un.
                 </Badge>
               )}
               {comVenda && a.vendaQtd !== 0 && (
@@ -556,7 +556,7 @@ function LinhaArvore({
                   variant="neutral"
                   className="px-1.5 py-0 text-2xs font-medium tabular-nums"
                 >
-                  −{unid(a.vendaQtd)}
+                  −{unid(a.vendaQtd)} un.
                 </Badge>
               )}
             </div>
