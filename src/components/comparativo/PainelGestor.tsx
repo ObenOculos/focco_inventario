@@ -110,6 +110,9 @@ interface Agregado {
    * R$ 5 mil sobrando o líquido é zero, e ela é justamente a que precisa ser aberta.
    */
   impacto: number;
+  /** A mesma soma em módulo, em unidades — para o Impacto seguir o padrão "un.
+   * em destaque, R$ embaixo" que Falta, Sobra e Contado já usam. */
+  impactoQtd: number;
 }
 
 function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
@@ -138,6 +141,7 @@ function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
         sobraValor: 0,
         sobraItens: 0,
         impacto: 0,
+        impactoQtd: 0,
       };
       mapa.set(categoria, a);
     }
@@ -164,6 +168,7 @@ function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
       a.iguais++;
     }
     a.impacto += Math.abs(valor);
+    a.impactoQtd += Math.abs(l.diferenca);
   }
 
   /**
@@ -175,9 +180,7 @@ function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
    */
   return [...mapa.values()].sort((x, y) => {
     if (y.impacto !== x.impacto) return y.impacto - x.impacto;
-    const qx = Math.abs(x.faltaQtd) + x.sobraQtd;
-    const qy = Math.abs(y.faltaQtd) + y.sobraQtd;
-    if (qy !== qx) return qy - qx;
+    if (y.impactoQtd !== x.impactoQtd) return y.impactoQtd - x.impactoQtd;
     return x.categoria.localeCompare(y.categoria);
   });
 }
@@ -349,9 +352,15 @@ function CardCategoria({
         <p className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           Impacto
         </p>
+        {/* Mesmo padrão de Falta, Sobra e Contado: unidade em destaque, R$ embaixo —
+            "quanto" antes de "quanto vale", e os quatro números da tela lidos da
+            mesma forma. */}
         <p className="text-xl font-bold tabular-nums">
-          {a.impacto === 0 ? '—' : moeda(a.impacto)}
+          {a.impacto === 0 ? '—' : `${unid(a.impactoQtd)} un.`}
         </p>
+        {a.impacto !== 0 && (
+          <p className="text-2xs tabular-nums text-muted-foreground">{moeda(a.impacto)}</p>
+        )}
       </div>
 
       {/* Falta e sobra lado a lado, nunca somadas: são problemas de causas
@@ -549,11 +558,19 @@ function LinhaArvore({
         <div className="text-2xs text-muted-foreground/80">{moeda(a.valor)}</div>
       </TableCell>
 
+      {/* Mesmo padrão da célula de Contado, acima: unidade em destaque, R$ embaixo —
+          "N produtos" no lugar do R$ quando a categoria não tem preço cadastrado, a
+          mesma queda que o cartão do Analítico já faz. */}
       <TableCell className="text-right text-sm font-medium tabular-nums text-warning-strong">
         {a.faltaQtd === 0 ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          `${unid(a.faltaQtd)} un.`
+          <>
+            <div>{unid(a.faltaQtd)} un.</div>
+            <div className="text-2xs font-normal text-muted-foreground">
+              {a.faltaValor === 0 ? `${a.faltaItens} produtos` : moeda(a.faltaValor)}
+            </div>
+          </>
         )}
       </TableCell>
 
@@ -561,17 +578,30 @@ function LinhaArvore({
         {a.sobraQtd === 0 ? (
           <span className="text-muted-foreground">—</span>
         ) : (
-          `+${unid(a.sobraQtd)} un.`
+          <>
+            <div>+{unid(a.sobraQtd)} un.</div>
+            <div className="text-2xs font-normal text-muted-foreground">
+              {a.sobraValor === 0 ? `${a.sobraItens} produtos` : `+${moeda(a.sobraValor)}`}
+            </div>
+          </>
         )}
       </TableCell>
 
       {/* A acuracidade desceu para debaixo do impacto: ela QUALIFICA o impacto (R$ 1.240
           com 92% de acerto é outra conversa que os mesmos R$ 1.240 com 40%), e como
-          coluna própria vivia escondida abaixo de 1024px — justo onde faz falta. */}
+          coluna própria vivia escondida abaixo de 1024px — justo onde faz falta. A
+          unidade entrou em destaque, acima do R$, pelo mesmo motivo de Falta e Sobra. */}
       <TableCell className="text-right tabular-nums">
         <div className="text-sm font-semibold">
-          {a.impacto === 0 ? <span className="text-muted-foreground">—</span> : moeda(a.impacto)}
+          {a.impacto === 0 ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            `${unid(a.impactoQtd)} un.`
+          )}
         </div>
+        {a.impacto !== 0 && (
+          <div className="text-2xs text-muted-foreground">{moeda(a.impacto)}</div>
+        )}
         <div className="whitespace-nowrap text-2xs text-muted-foreground">
           {pct(acuracidade)} acur.
         </div>
