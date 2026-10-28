@@ -96,6 +96,9 @@ interface Agregado {
    */
   anterior: number;
   esperado: number;
+  /** `esperado × valor_unitário` — o mesmo cálculo de `valor` (Contado), só que
+   * sobre o lado teórico da equação em vez do contado. */
+  esperadoValor: number;
   iguais: number;
   faltaQtd: number;
   faltaValor: number;
@@ -133,6 +136,7 @@ function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
         vendaItens: 0,
         anterior: 0,
         esperado: 0,
+        esperadoValor: 0,
         iguais: 0,
         faltaQtd: 0,
         faltaValor: 0,
@@ -155,6 +159,7 @@ function agregar(linhas: LinhaExibida[], nivel: NivelCategoria): Agregado[] {
     if (l.venda !== 0) a.vendaItens++;
     a.anterior += l.quantidade_a;
     a.esperado += l.esperado;
+    a.esperadoValor += l.esperado * l.valor_unitario;
     const valor = l.diferenca * l.valor_unitario;
     if (l.diferenca < 0) {
       a.faltaQtd += l.diferenca;
@@ -429,6 +434,13 @@ function CardProduto({ l, comEsperado }: { l: LinhaExibida; comEsperado: boolean
                 Esperado
               </p>
               <p className="font-medium tabular-nums">{l.esperado}</p>
+              {/* Mesma regra do Contado ao lado: sem preço cadastrado, nada de "R$ 0,00"
+                  fingindo mercadoria sem valor. */}
+              {l.valor_unitario > 0 && (
+                <p className="text-2xs tabular-nums text-muted-foreground">
+                  {moeda(l.esperado * l.valor_unitario)}
+                </p>
+              )}
             </div>
           )}
           <div>
@@ -521,14 +533,34 @@ function LinhaArvore({
       </TableCell>
 
       {/* Movimento antes do Contado, na mesma ordem em que a conta é lida no Modo Tabela
-          (A → remessa → venda → esperado → B). Os dois empilhados numa célula só: são o
-          mesmo assunto, e o sinal já os distingue sem gastar duas colunas. Em cinza de
-          propósito — são contexto, não veredito; o vermelho e o azul ficam para Falta e
-          Sobra. */}
+          (A → remessa → venda → esperado → B). Duas pílulas na MESMA linha — empilhadas
+          em duas, a célula ficava mais alta que as vizinhas e desalinhava a linha
+          inteira. `neutral` de propósito, não `warning`/`info`: são contexto, não
+          veredito; o vermelho e o azul ficam para Falta e Sobra. */}
       {(comRemessa || comVenda) && (
-        <TableCell className="hidden text-right text-sm tabular-nums text-muted-foreground sm:table-cell">
-          {comRemessa && <div>{a.remessaQtd === 0 ? '—' : `+${unid(a.remessaQtd)}`}</div>}
-          {comVenda && <div>{a.vendaQtd === 0 ? '—' : `−${unid(a.vendaQtd)}`}</div>}
+        <TableCell className="hidden text-right text-sm tabular-nums sm:table-cell">
+          {a.remessaQtd === 0 && a.vendaQtd === 0 ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <div className="flex flex-wrap justify-end gap-1">
+              {comRemessa && a.remessaQtd !== 0 && (
+                <Badge
+                  variant="neutral"
+                  className="px-1.5 py-0 text-2xs font-medium tabular-nums"
+                >
+                  +{unid(a.remessaQtd)}
+                </Badge>
+              )}
+              {comVenda && a.vendaQtd !== 0 && (
+                <Badge
+                  variant="neutral"
+                  className="px-1.5 py-0 text-2xs font-medium tabular-nums"
+                >
+                  −{unid(a.vendaQtd)}
+                </Badge>
+              )}
+            </div>
+          )}
         </TableCell>
       )}
 
@@ -539,6 +571,9 @@ function LinhaArvore({
       {comEsperado && (
         <TableCell className="hidden text-right text-sm tabular-nums sm:table-cell">
           <div className="font-medium">= {unid(a.esperado)} un.</div>
+          {/* Mesmo padrão de Contado, Falta e Sobra: a unidade é o resultado da
+              equação, o R$ é quanto isso valeria se o esperado se confirmasse. */}
+          <div className="text-2xs text-muted-foreground">{moeda(a.esperadoValor)}</div>
           {/* De onde a conta partiu. Só quando existe lado A: no modo primeiro
               inventário a Qtd A é zero em tudo, e "de 0" não informa nada — o esperado
               ali é `remessa − venda` e a faixa acima já diz isso. */}
@@ -684,6 +719,7 @@ export function PainelGestor({
           vendaItens: acc.vendaItens + (l.venda !== 0 ? 1 : 0),
           anterior: acc.anterior + l.quantidade_a,
           esperado: acc.esperado + l.esperado,
+          esperadoValor: acc.esperadoValor + l.esperado * l.valor_unitario,
         }),
         {
           unidades: 0,
@@ -694,6 +730,7 @@ export function PainelGestor({
           vendaItens: 0,
           anterior: 0,
           esperado: 0,
+          esperadoValor: 0,
         }
       ),
     [doCaminho]
@@ -892,7 +929,12 @@ export function PainelGestor({
             <CartaoResumo
               rotulo="Esperado"
               valor={`= ${unid(totalDoCaminho.esperado)} un.`}
-              apoio={temContagemA ? 'A + remessa − venda' : 'remessa − venda'}
+              // A fórmula e o R$ na mesma linha: a fórmula diz de onde o número veio,
+              // o R$ o que ele valeria — mesmo par que Falta/Sobra já mostram, só que
+              // o `apoio` deste cartão só tem uma linha.
+              apoio={`${temContagemA ? 'A + remessa − venda' : 'remessa − venda'} · ${moeda(
+                totalDoCaminho.esperadoValor
+              )}`}
               destaque
             />
           )}
