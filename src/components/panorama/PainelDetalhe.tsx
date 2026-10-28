@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CloudOff, Search, X } from 'lucide-react';
 import {
   agrupar,
+  codigo,
   eixoDe,
   rotuloEixo,
   type EixoId,
@@ -58,11 +59,19 @@ function Linha({
   valor,
   apoio,
   participacao,
+  contado,
 }: {
   rotulo: string;
   valor: string;
   apoio: string;
   participacao: number;
+  /**
+   * A contagem do representante, lado a lado com o saldo do ERP — só existe quando a
+   * fonte é "Externo", o eixo é "terceiro" e há inventário aprovado para aquele
+   * código. `undefined` (não `null` com zeros) é o que distingue "esse terceiro não
+   * tem contagem" de "contou zero", que são informações diferentes.
+   */
+  contado?: { valor: string; apoio: string };
 }) {
   return (
     <div className="flex items-center gap-4 px-3.5 py-2.5">
@@ -81,9 +90,20 @@ function Linha({
         </div>
       </div>
       <div className="shrink-0 text-right">
+        {/* O rótulo só aparece quando há "Contado" ao lado — sem comparação, "valor"
+            já se explica pelo cabeçalho da fonte (TITULO_DA_FONTE), e repetir
+            "Sistema (ERP)" em toda saída/entrada seria ruído. */}
+        {contado && <p className="text-2xs text-muted-foreground">Sistema (ERP)</p>}
         <p className="text-sm font-semibold tabular-nums">{valor}</p>
         <p className="text-2xs tabular-nums text-muted-foreground">{apoio}</p>
       </div>
+      {contado && (
+        <div className="shrink-0 border-l border-border/60 pl-3 text-right">
+          <p className="text-2xs text-muted-foreground">Contado</p>
+          <p className="text-sm font-semibold tabular-nums">{contado.valor}</p>
+          <p className="text-2xs tabular-nums text-muted-foreground">{contado.apoio}</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -101,6 +121,18 @@ interface Props {
    * com receita e custo do mesmo movimento.
    */
   mostrarCusto: boolean;
+  /**
+   * A contagem do representante (inventário), já recortada pelo MESMO caminho da
+   * árvore que `linhas` — independente de qual fonte está aberta, porque o gestor
+   * pode clicar em "Externo" sem nunca ter aberto "Contado".
+   *
+   * Só é usada quando `fonte === 'externo'` e o eixo aberto é "terceiro": é o único
+   * par de eixos em que `terceiro_cod` (ERP) e `codigo_vendedor` (Supabase) falam a
+   * mesma língua — ver `codigo()` em `lib/panorama.ts`. Em "UF" não há contrapartida.
+   */
+  inventarioComparativo: readonly LinhaPanorama[];
+  /** Liga/desliga a comparação — mesmo switch que já acrescenta "Contado" na árvore. */
+  mostrarInventario: boolean;
   carregandoProdutos: boolean;
   erroProdutos: string | null;
   onProdutos: () => void;
@@ -114,6 +146,8 @@ export function PainelDetalhe({
   medida,
   produtos,
   mostrarCusto,
+  inventarioComparativo,
+  mostrarInventario,
   carregandoProdutos,
   erroProdutos,
   onProdutos,
@@ -148,6 +182,32 @@ export function PainelDetalhe({
   }
 
   const nos = useMemo(() => agrupar(linhas, eixo, medida), [linhas, eixo, medida]);
+
+  /**
+   * Quanto cada terceiro TEM CONTADO, para pôr ao lado do saldo do ERP.
+   *
+   * ⚠️ A chave não pode ser `codigo_vendedor` crua: ela vem do Supabase como texto
+   * ("16"), enquanto a chave do grupo (`no.chave`) já passou por `codigo()` dentro de
+   * `eixoDe('terceiro')`. Os dois precisam da MESMA normalização, ou "16" e "016"
+   * virariam dois representantes diferentes — por isso ambos os lados usam `codigo()`.
+   *
+   * Nem todo terceiro é um vendedor (há óticas e a matriz na lista — ver o eixo
+   * `terceiro` em `lib/panorama.ts`), e por isso é um `Map`: ausência de chave é
+   * ausência de contagem, nunca zero.
+   */
+  const contadoPorTerceiro = useMemo(() => {
+    if (fonte !== 'externo' || eixo !== 'terceiro' || !mostrarInventario) return null;
+    const mapa = new Map<string, { quantidade: number; valor: number }>();
+    for (const l of inventarioComparativo) {
+      const chave = codigo(l.codigo_vendedor);
+      if (!chave) continue;
+      const atual = mapa.get(chave) ?? { quantidade: 0, valor: 0 };
+      atual.quantidade += Number(l.quantidade) || 0;
+      atual.valor += Number(l.valor) || 0;
+      mapa.set(chave, atual);
+    }
+    return mapa;
+  }, [fonte, eixo, mostrarInventario, inventarioComparativo]);
 
   /**
    * Receita e custo por grupo do eixo aberto — calculado aqui, não em `agrupar`.
@@ -233,8 +293,11 @@ export function PainelDetalhe({
     return visiveis.sort((a, b) => b[medida] - a[medida]);
   }, [produtos, busca, medida]);
 
+  // O sufixo existe porque, sem ele, "987" é ambíguo entre unidade e um valor sem o
+  // "R$" na frente — a mesma pergunta que gerou este ajuste. Em valor não precisa:
+  // "R$" já identifica a grandeza.
   const numero = (t: { quantidade: number; valor: number }) =>
-    medida === 'valor' ? MOEDA.format(t.valor) : INTEIRO.format(t.quantidade);
+    medida === 'valor' ? MOEDA.format(t.valor) : `${INTEIRO.format(t.quantidade)} un.`;
 
   /**
    * O texto de apoio: a OUTRA grandeza, mais a margem quando ela existe.
@@ -279,6 +342,22 @@ export function PainelDetalhe({
     return partes.join(' · ');
   };
 
+  /**
+   * O bloco "Contado" de um grupo de terceiro, ou `undefined` quando não há contagem
+   * para ele — a mesma linguagem da árvore (`ArvoreComparativa.diferenca`), só que por
+   * terceiro em vez de por categoria.
+   */
+  const contadoDoGrupo = (no: NoAgregado): { valor: string; apoio: string } | undefined => {
+    const c = contadoPorTerceiro?.get(no.chave);
+    if (!c) return undefined;
+    const diferenca = c.quantidade - no.quantidade;
+    const sinal = diferenca >= 0 ? '+' : '−';
+    return {
+      valor: numero(c),
+      apoio: `${sinal}${INTEIRO.format(Math.abs(diferenca))} vs sistema`,
+    };
+  };
+
   const totalProdutos = produtosFiltrados.reduce((s, p) => s + p[medida], 0);
 
   return (
@@ -286,7 +365,12 @@ export function PainelDetalhe({
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-3.5 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-semibold">{titulo}</p>
-          <p className="text-2xs text-muted-foreground">{TITULO_DA_FONTE[fonte]}</p>
+          {/* O "% sobre o total deste recorte" existe porque o número sozinho não diz
+              contra o quê — e "este recorte" é o `titulo` logo acima, a trilha
+              completa até o nó clicado, não só o nome dele. */}
+          <p className="truncate text-2xs text-muted-foreground">
+            {TITULO_DA_FONTE[fonte]} · % sobre o total deste recorte
+          </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           {eixos.length > 1 &&
@@ -327,6 +411,7 @@ export function PainelDetalhe({
               valor={numero(no)}
               apoio={apoioDoGrupo(no)}
               participacao={no.participacao}
+              contado={contadoDoGrupo(no)}
             />
           ))
         )}

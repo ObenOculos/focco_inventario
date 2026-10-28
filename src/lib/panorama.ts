@@ -85,7 +85,16 @@ interface Eixo {
   rotuloDe: (l: LinhaPanorama) => string;
 }
 
-const codigo = (v: unknown): string => {
+/**
+ * Normaliza um código de pessoa (terceiro, vendedor, contraparte) para comparar
+ * entre fontes diferentes.
+ *
+ * Exportado porque o painel de detalhe precisa casar `terceiro_cod` (do ERP, estoque
+ * externo) com `codigo_vendedor` (do Supabase, inventário contado) — dois campos de
+ * origens diferentes que só se encontram quando os dois passam pela MESMA normalização
+ * (truncar e virar texto). Sem isso, "16" e "16.0" seriam chaves diferentes.
+ */
+export const codigo = (v: unknown): string => {
   if (v === null || v === undefined || v === '') return '';
   const n = Number(v);
   return Number.isFinite(n) ? String(Math.trunc(n)) : String(v);

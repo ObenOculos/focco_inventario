@@ -494,6 +494,14 @@ export interface NoArvore extends NoComparativo {
   nivel: number;
   /** Chaves da raiz até aqui, inclusive — é o identificador de expansão. */
   caminho: string[];
+  /**
+   * Rótulos da raiz até aqui, inclusive — o `caminho`, mas para humano ler.
+   *
+   * Existe porque o painel de detalhe mostra só `rotulo` (o nó clicado) como título,
+   * e dois níveis de profundidade abaixo disso é ambíguo: "FEMININO" sozinho não diz
+   * que está dentro de CORE EYES. A trilha junta os dois numa string só.
+   */
+  trilha: string[];
   temFilhos: boolean;
 }
 
@@ -520,7 +528,7 @@ export function construirArvore(
 ): NoArvore[] {
   const saida: NoArvore[] = [];
 
-  const descer = (caminho: string[], nivel: number) => {
+  const descer = (caminho: string[], trilha: string[], nivel: number) => {
     const eixo = ordem[nivel];
     if (!eixo) return;
     const nos = ordenarComparativo(
@@ -530,15 +538,16 @@ export function construirArvore(
 
     for (const no of nos) {
       const caminhoDoNo = [...caminho, no.chave];
+      const trilhaDoNo = [...trilha, no.rotulo];
       const temFilhos = nivel + 1 < ordem.length;
-      saida.push({ ...no, nivel, caminho: caminhoDoNo, temFilhos });
+      saida.push({ ...no, nivel, caminho: caminhoDoNo, trilha: trilhaDoNo, temFilhos });
       if (temFilhos && expandidos.has(chaveDoCaminho(caminhoDoNo))) {
-        descer(caminhoDoNo, nivel + 1);
+        descer(caminhoDoNo, trilhaDoNo, nivel + 1);
       }
     }
   };
 
-  descer([], 0);
+  descer([], [], 0);
   return saida;
 }
 

@@ -388,6 +388,19 @@ export default function Panorama() {
     return filtrarPeloCaminho(porFonte[detalhe.fonte], ordem, detalhe.no.caminho);
   }, [detalhe, fontes, ordem]);
 
+  /**
+   * O inventário do MESMO caminho, independente de qual fonte está aberta no painel.
+   *
+   * Existe só para o painel comparar "Externo" com "Contado" por terceiro — o gestor
+   * pode clicar em "Externo" sem nunca ter aberto "Contado", e ainda assim quer ver a
+   * contagem ao lado. Separado de `linhasDoDetalhe` porque aquele segue a fonte
+   * CLICADA; este é sempre inventário, pedido ou não.
+   */
+  const inventarioDoDetalhe: LinhaPanorama[] = useMemo(() => {
+    if (!detalhe) return [];
+    return filtrarPeloCaminho(fontes.inventario, ordem, detalhe.no.caminho);
+  }, [detalhe, fontes.inventario, ordem]);
+
   const recorte = useMemo(
     () => (detalhe ? recorteDoCaminho(linhasDoDetalhe, 'comparativo') : null),
     [detalhe, linhasDoDetalhe]
@@ -844,12 +857,14 @@ export default function Panorama() {
                     detalhe
                       ? () => (
                           <PainelDetalhe
-                            titulo={detalhe.no.rotulo}
+                            titulo={detalhe.no.trilha.join(' › ')}
                             fonte={detalhe.fonte}
                             linhas={linhasDoDetalhe}
                             medida={escopo.medida}
                             produtos={produtos}
                             mostrarCusto={escopo.custo}
+                            inventarioComparativo={inventarioDoDetalhe}
+                            mostrarInventario={escopo.inventario}
                             carregandoProdutos={consultaProdutos?.isLoading ?? false}
                             erroProdutos={consultaProdutos?.error?.message ?? null}
                             onProdutos={() => setPedirProdutos(true)}
