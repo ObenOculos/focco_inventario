@@ -101,6 +101,7 @@ import {
 } from '@/lib/reconciliacao';
 import { useVendedoresSimpleQuery } from '@/hooks/useAnaliseInventarioQuery';
 import { FiltroCategorias } from '@/components/FiltroCategorias';
+import { Segmentado } from '@/components/comparativo/Segmentado';
 import { CabecalhoOrdenavel } from '@/components/CabecalhoOrdenavel';
 import { alternarOrdem, type DirecaoOrdem, type Ordenacao } from '@/lib/ordenacao';
 import {
@@ -171,12 +172,24 @@ type ItemRevisao = {
   grupo: string | null;
   /**
    * Produto que a contagem NÃO tem, mas que a contagem anterior tinha ou que teve
-   * movimento no período. Entra na tabela como linha de leitura, sem campo de
-   * quantidade e sem "usar esperado": esta tela edita e apaga itens, não os cria.
-   * Some da tela se for ignorado — e é justamente a peça que sumiu da mala.
+   * movimento no período. Some da tela se for ignorado — e é justamente a peça que
+   * sumiu da mala.
+   *
+   * Tem campo de quantidade como qualquer linha: o gerente que sabe que a peça está na
+   * mala digita (ou aplica o esperado) e o "Salvar Alterações" INSERE o item. O `id`
+   * aqui não existe em `itens_inventario` — é o que distingue inserir de atualizar.
    */
   nao_contado: boolean;
 };
+
+/**
+ * Recorte por situação contra o Esperado. Só existe com a movimentação em tela.
+ *
+ * Classifica pela quantidade SALVA, nunca pelo rascunho: com o rascunho, aplicar o
+ * esperado numa linha do filtro "Divergentes" a faria sumir no meio da revisão — o
+ * mesmo salto que a ordenação evita pelo mesmo motivo.
+ */
+type SituacaoItem = 'todos' | 'divergentes' | 'nao_contados' | 'conferem';
 
 /** As três colunas de movimentação, quando o gerente mandou buscar no ERP. */
 type Movimentacao = {
@@ -375,6 +388,7 @@ export default function Conferencia() {
   // Revisão dos itens
   const [buscaItem, setBuscaItem] = useState('');
   const [categoriasItem, setCategoriasItem] = useState<SelecaoCategorias>(SELECAO_VAZIA);
+  const [situacaoItem, setSituacaoItem] = useState<SituacaoItem>('todos');
   /** Ordem da tabela de revisão. Abre por código, que era a ordem fixa de antes. */
   const [ordemItens, setOrdemItens] = useState<Ordenacao<CampoOrdemItem>>({
     campo: 'codigo_auxiliar',
@@ -469,6 +483,7 @@ export default function Conferencia() {
       // O inventário seguinte pode não ter nenhum POWER: manter o recorte abriria a
       // revisão numa tabela vazia, com o seletor apontando para uma marca ausente.
       setCategoriasItem(SELECAO_VAZIA);
+      setSituacaoItem('todos');
       setEditedValues({});
       // Trocar de inventário desliga a movimentação: as colunas do inventário
       // anterior ao lado da contagem nova seriam números certos na linha errada. O
@@ -961,12 +976,54 @@ export default function Conferencia() {
    * havia um filtro de tela ligado é exatamente o número que não pode variar conforme a
    * visualização.
    */
-  const itensNoRecorte = useMemo(
+  /** Situação de uma linha pela quantidade SALVA — ver `SituacaoItem`. */
+  const situacaoDe = useCallback(
+    (i: ItemRevisao): Exclude<SituacaoItem, 'todos'> | null => {
+      if (i.nao_contado) return 'nao_contados';
+      const mov = movimentacaoDe(i.codigo_auxiliar);
+      // Acessório (sem movimentação) não diverge nem confere: só aparece em "Todos".
+      if (!mov) return null;
+      return i.quantidade_fisica === mov.esperado ? 'conferem' : 'divergentes';
+    },
+    [movimentacaoDe]
+  );
+
+  /**
+   * A situação só filtra com a movimentação em tela. Sem ela o estado continua guardado
+   * mas não age — senão fechar o painel deixaria a tabela vazia num filtro invisível.
+   */
+  const situacaoAtiva: SituacaoItem = temMovimentacao ? situacaoItem : 'todos';
+
+  /** Linhas no recorte de CATEGORIA — a base das contagens do seletor de situação. */
+  const itensNaCategoria = useMemo(
     () =>
       temSelecao(categoriasItem)
         ? itensDaTabela.filter((i) => casaComSelecao(i, categoriasItem))
         : itensDaTabela,
     [itensDaTabela, categoriasItem]
+  );
+
+  /**
+   * Os números do seletor respeitam o recorte de categoria: quem filtrou OBEN quer saber
+   * quantos divergentes há na OBEN, e um "Divergentes (449)" que abre 12 linhas
+   * pareceria filtro quebrado.
+   */
+  const contagemSituacao = useMemo(() => {
+    const c = { todos: itensNaCategoria.length, divergentes: 0, nao_contados: 0, conferem: 0 };
+    if (!temMovimentacao) return c;
+    for (const i of itensNaCategoria) {
+      const s = situacaoDe(i);
+      if (s) c[s] += 1;
+    }
+    return c;
+  }, [itensNaCategoria, temMovimentacao, situacaoDe]);
+
+  const itensNoRecorte = useMemo(
+    () =>
+      situacaoAtiva === 'todos'
+        ? itensNaCategoria
+        : itensNaCategoria.filter((i) => situacaoDe(i) === situacaoAtiva),
+    [itensNaCategoria, situacaoAtiva, situacaoDe]
   );
 
   /**
@@ -1145,37 +1202,127 @@ export default function Conferencia() {
     setEditedValues((prev) => ({ ...prev, [codigoAuxiliar]: Math.max(0, esperado) }));
   };
 
+  /**
+   * Não contados do recorte VISÍVEL (busca + categoria + situação) que o esperado diz
+   * estarem na mala e que o gerente ainda não tocou.
+   *
+   * Em lote só para os não contados, e não para os divergentes: aqui não há contagem a
+   * preservar — a linha é zero porque ninguém bipou, não porque alguém contou zero. E
+   * fica restrito ao recorte para o gerente poder fazer por marca, conferindo antes.
+   * Esperado ≤ 0 fica de fora: adicionar a peça com zero não muda nada.
+   */
+  const naoContadosParaPreencher = useMemo(
+    () =>
+      paginacaoItens.filteredData
+        .filter((i) => i.nao_contado && editedValues[i.codigo_auxiliar] === undefined)
+        .map((i) => ({ codigo: i.codigo_auxiliar, mov: movimentacaoDe(i.codigo_auxiliar) }))
+        .filter((x): x is { codigo: string; mov: Movimentacao } => !!x.mov && x.mov.esperado > 0),
+    [paginacaoItens.filteredData, editedValues, movimentacaoDe]
+  );
+
+  const preencherNaoContados = () => {
+    setEditedValues((prev) => {
+      const novo = { ...prev };
+      for (const { codigo, mov } of naoContadosParaPreencher) novo[codigo] = mov.esperado;
+      return novo;
+    });
+    toast.info(
+      `${naoContadosParaPreencher.length} produto${naoContadosParaPreencher.length === 1 ? '' : 's'} preenchido${naoContadosParaPreencher.length === 1 ? '' : 's'} pelo esperado.`,
+      { description: 'Revise e clique em "Salvar Alterações" para adicioná-los ao inventário.' }
+    );
+  };
+
+  /** Descarta o rascunho de UMA linha — único jeito de desfazer um não contado preenchido. */
+  const descartarEdicao = (codigoAuxiliar: string) =>
+    setEditedValues((prev) => {
+      const { [codigoAuxiliar]: _descartado, ...resto } = prev;
+      return resto;
+    });
+
   const handleSaveEdits = async () => {
     if (!selectedInventario || !hasEdits) return;
 
+    // Edição de item que já existe vira UPDATE; de não contado vira INSERT. Não contado
+    // deixado em zero é descartado: inserir a linha com zero não acrescenta nada.
+    const existentes = new Map(selectedInventario.itens_inventario.map((i) => [i.codigo_auxiliar, i]));
+    const naoContadosPorCodigo = new Map(naoContados.map((i) => [i.codigo_auxiliar, i]));
+    const edicoes = Object.entries(editedValues);
+    const paraAtualizar = edicoes.filter(([codigo]) => existentes.has(codigo));
+    const paraInserir = edicoes
+      .filter(([codigo, qtd]) => !existentes.has(codigo) && qtd > 0)
+      .map(([codigo, qtd]) => ({ item: naoContadosPorCodigo.get(codigo), qtd }))
+      .filter((x): x is { item: ItemRevisao; qtd: number } => !!x.item);
+
     setSaving(true);
     try {
-      const updates = Object.entries(editedValues).map(([codigo, quantidade]) => {
-        const item = selectedInventario.itens_inventario.find((i) => i.codigo_auxiliar === codigo);
-        return supabase
+      const updates = paraAtualizar.map(([codigo, quantidade]) =>
+        supabase
           .from('itens_inventario')
           .update({ quantidade_fisica: quantidade })
-          .eq('id', item!.id);
-      });
+          .eq('id', existentes.get(codigo)!.id)
+      );
       const results = await Promise.all(updates);
       results.forEach((res) => {
         if (res.error) throw res.error;
       });
 
+      let inseridos: InventarioComItens['itens_inventario'] = [];
+      if (paraInserir.length > 0) {
+        const { data, error } = await supabase
+          .from('itens_inventario')
+          .insert(
+            paraInserir.map(({ item, qtd }) => ({
+              inventario_id: selectedInventario.id,
+              codigo_auxiliar: item.codigo_auxiliar,
+              nome_produto: item.nome_produto,
+              quantidade_fisica: qtd,
+            }))
+          )
+          .select();
+        if (error) throw error;
+        inseridos = data ?? [];
+
+        // A ficha do catálogo já veio na consulta dos não contados; sem copiá-la para
+        // `fichasMap` o item recém-adicionado apareceria valendo R$ 0,00.
+        setFichasMap((prev) => {
+          const novo = { ...prev };
+          for (const { item } of paraInserir) {
+            novo[item.codigo_auxiliar] = {
+              valor: item.valor_unitario,
+              marca: item.marca,
+              tipo: item.tipo,
+              subtipo: item.subtipo,
+              grupo: item.grupo,
+            };
+          }
+          return novo;
+        });
+      }
+
       setSelectedInventario((prev) =>
         prev
           ? {
               ...prev,
-              itens_inventario: prev.itens_inventario.map((i) =>
-                editedValues[i.codigo_auxiliar] !== undefined
-                  ? { ...i, quantidade_fisica: editedValues[i.codigo_auxiliar] }
-                  : i
-              ),
+              itens_inventario: [
+                ...prev.itens_inventario.map((i) =>
+                  editedValues[i.codigo_auxiliar] !== undefined
+                    ? { ...i, quantidade_fisica: editedValues[i.codigo_auxiliar] }
+                    : i
+                ),
+                ...inseridos,
+              ],
             }
           : null
       );
       setEditedValues({});
-      toast.success('Alterações salvas com sucesso!');
+      // O inventário em cache ainda tem a lista antiga: reabrir sem isso esconderia o
+      // que acabou de ser adicionado.
+      if (inseridos.length > 0) queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      toast.success(
+        inseridos.length > 0
+          ? `Alterações salvas — ${inseridos.length} produto${inseridos.length === 1 ? '' : 's'} adicionado${inseridos.length === 1 ? '' : 's'} ao inventário.`
+          : 'Alterações salvas com sucesso!'
+      );
     } catch (error) {
       console.error('Erro ao salvar:', error);
       toast.error('Erro ao salvar alterações.');
@@ -1627,13 +1774,38 @@ export default function Conferencia() {
                     onSelecao={setCategoriasItem}
                   />
 
-                  {(buscaItem !== '' || temSelecao(categoriasItem)) && (
+                  {/* Situação contra o Esperado — só existe com a movimentação em tela.
+                      Os números acompanham o recorte de categoria ao lado. */}
+                  {temMovimentacao && (
+                    <div className="overflow-x-auto">
+                      <Segmentado<SituacaoItem>
+                        nome="Situação do produto"
+                        valor={situacaoItem}
+                        onValor={setSituacaoItem}
+                        opcoes={[
+                          { valor: 'todos', rotulo: `Todos (${contagemSituacao.todos})` },
+                          {
+                            valor: 'divergentes',
+                            rotulo: `Divergentes (${contagemSituacao.divergentes})`,
+                          },
+                          {
+                            valor: 'nao_contados',
+                            rotulo: `Não contados (${contagemSituacao.nao_contados})`,
+                          },
+                          { valor: 'conferem', rotulo: `Conferem (${contagemSituacao.conferem})` },
+                        ]}
+                      />
+                    </div>
+                  )}
+
+                  {(buscaItem !== '' || temSelecao(categoriasItem) || situacaoAtiva !== 'todos') && (
                     <Button
                       variant="ghost"
                       size="sm"
                       onClick={() => {
                         setBuscaItem('');
                         setCategoriasItem(SELECAO_VAZIA);
+                        setSituacaoItem('todos');
                       }}
                       className="lg:ml-auto"
                     >
@@ -1642,6 +1814,27 @@ export default function Conferencia() {
                     </Button>
                   )}
                 </div>
+
+                {/* Adicionar os não contados em lote. Fica fora da barra de recorte porque
+                    é ação, não filtro — e age só sobre o que o recorte está mostrando. */}
+                {isPendingOrRevisao && temMovimentacao && naoContadosParaPreencher.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-info/30 bg-info-subtle px-3 py-2">
+                    <p className="flex-1 text-sm text-info-strong">
+                      <span className="font-semibold tabular-nums">
+                        {naoContadosParaPreencher.length}
+                      </span>{' '}
+                      não contado{naoContadosParaPreencher.length === 1 ? '' : 's'}
+                      {situacaoAtiva !== 'todos' || buscaItem !== '' || temSelecao(categoriasItem)
+                        ? ' neste recorte'
+                        : ''}{' '}
+                      com esperado acima de zero.
+                    </p>
+                    <Button variant="outline" size="sm" onClick={preencherNaoContados}>
+                      <Package className="size-3.5" />
+                      Preencher pelo esperado
+                    </Button>
+                  </div>
+                )}
 
                 {/* Diagnóstico da movimentação — um bloco só, abaixo do recorte.
                     Empilhados aqui, os avisos não empurram a tabela para fora da tela
@@ -2016,9 +2209,9 @@ export default function Conferencia() {
                                 )}
                               </TableCell>
                               <TableCell className="text-center">
-                                {/* Item não contado não tem campo: esta tela edita e
-                                    apaga itens de `itens_inventario`, não os cria. */}
-                                {isPendingOrRevisao && !item.nao_contado ? (
+                                {/* Não contado também tem campo: preenchido e salvo, vira
+                                    item novo do inventário (ver `handleSaveEdits`). */}
+                                {isPendingOrRevisao ? (
                                   <Input
                                     type="text"
                                     value={qtd}
@@ -2047,6 +2240,11 @@ export default function Conferencia() {
                                       recontado · antes {item.quantidade_anterior}
                                     </span>
                                   )}
+                                {item.nao_contado && qtd > 0 && (
+                                  <span className="mt-1 block text-2xs font-medium text-info-strong">
+                                    será adicionado ao salvar
+                                  </span>
+                                )}
                               </TableCell>
                               {temMovimentacao && (
                                 <>
@@ -2076,11 +2274,7 @@ export default function Conferencia() {
                                         esperado={mov.esperado}
                                         ancora={mov.ancora}
                                         divergencia={divergencia}
-                                        podeAplicar={
-                                          !!isPendingOrRevisao &&
-                                          !item.nao_contado &&
-                                          divergencia !== 0
-                                        }
+                                        podeAplicar={!!isPendingOrRevisao && divergencia !== 0}
                                         onAplicar={() =>
                                           aplicarEsperado(item.codigo_auxiliar, mov.esperado)
                                         }
@@ -2103,7 +2297,18 @@ export default function Conferencia() {
                               </TableCell>
                               {isPendingOrRevisao && (
                                 <TableCell className="text-center">
-                                  {item.nao_contado ? null : (
+                                  {item.nao_contado ? (
+                                    editedValues[item.codigo_auxiliar] !== undefined && (
+                                      <Button
+                                        variant="ghost"
+                                        size="iconSm"
+                                        aria-label={`Desfazer o preenchimento de ${item.codigo_auxiliar}`}
+                                        onClick={() => descartarEdicao(item.codigo_auxiliar)}
+                                      >
+                                        <RotateCcw size={16} />
+                                      </Button>
+                                    )
+                                  ) : (
                                     <Button
                                       variant="ghost"
                                       size="icon"
