@@ -1,5 +1,6 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { Archive, CircleCheck, CircleX, Clock, type LucideIcon } from 'lucide-react';
 import type { InventoryStatus } from '@/types/app';
 
 /**
@@ -22,7 +23,10 @@ import type { InventoryStatus } from '@/types/app';
  * Rótulo adotado: o de `Historico`, que é a tela do vendedor — "Não aprovado" descreve o
  * que aconteceu com a contagem dele; "Revisão" descreve a fila do gerente.
  */
-const CONFIG: Record<InventoryStatus, { label: string; variant: 'success' | 'warning' | 'destructive' | 'info' }> = {
+const CONFIG: Record<
+  InventoryStatus,
+  { label: string; variant: 'success' | 'warning' | 'destructive' | 'info' }
+> = {
   aprovado: { label: 'Aprovado', variant: 'success' },
   pendente: { label: 'Pendente', variant: 'warning' },
   revisao: { label: 'Não aprovado', variant: 'destructive' },
@@ -77,5 +81,51 @@ export function StatusInventarioBadge({
     <Badge variant={config.variant} className={cn(dimensoes, className)}>
       {config.label}
     </Badge>
+  );
+}
+
+/**
+ * Status em cartão compacto, onde um badge por linha vira ruído: a BORDA carrega a cor
+ * e um ícone pequeno carrega o significado. Mora aqui, e não na tela, para a cor de
+ * cada status continuar vindo da mesma tabela do badge.
+ *
+ * O ícone não é enfeite: cor sozinha não chega a quem não distingue verde de âmbar, e
+ * o rótulo vai junto como texto acessível e dica ao passar o mouse.
+ */
+const BORDA: Record<(typeof CONFIG)[InventoryStatus]['variant'], string> = {
+  success: 'border-success/70',
+  warning: 'border-warning/70',
+  destructive: 'border-destructive/70',
+  info: 'border-info/70',
+};
+
+const ICONE: Record<InventoryStatus, { Icone: LucideIcon; cor: string }> = {
+  aprovado: { Icone: CircleCheck, cor: 'text-success-strong' },
+  pendente: { Icone: Clock, cor: 'text-warning-strong' },
+  revisao: { Icone: CircleX, cor: 'text-destructive-strong' },
+  baixado: { Icone: Archive, cor: 'text-info-strong' },
+};
+
+/** Classe de borda do status; status desconhecido fica com a borda neutra. */
+export function bordaStatusInventario(status: string | null | undefined): string {
+  const config = status ? CONFIG[status as InventoryStatus] : undefined;
+  return config ? BORDA[config.variant] : 'border-border/80';
+}
+
+export function IconeStatusInventario({
+  status,
+  className,
+}: {
+  status: InventoryStatus | string | null | undefined;
+  className?: string;
+}) {
+  const icone = status ? ICONE[status as InventoryStatus] : undefined;
+  if (!icone) return null;
+  const rotulo = rotuloStatusInventario(status as string);
+  return (
+    <span title={rotulo} className={cn('inline-flex', icone.cor, className)}>
+      <icone.Icone className="size-4" aria-hidden="true" />
+      <span className="sr-only">{rotulo}</span>
+    </span>
   );
 }

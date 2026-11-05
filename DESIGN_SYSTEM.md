@@ -239,6 +239,12 @@ Sempre por **variante**, nunca por `className` de cor:
 etiqueta, não protagonista — nas versões maiores (`text-xs px-3 py-1`) ele roubava peso do dado
 ao lado.
 
+**Cartão compacto em lista selecionável** (ex.: "Escolher contagens" da Conferência): badge
+por cartão compete com o dado principal. Nesse caso o status vai na **borda**
+(`bordaStatusInventario(status)`) com `<IconeStatusInventario />` — o ícone leva o rótulo como
+texto acessível, porque cor sozinha não basta. A seleção usa **fundo** (`bg-primary/10`) e
+`aria-pressed`, nunca a borda, que já é do status. Ambos moram em `StatusInventarioBadge.tsx`.
+
 Status de inventário **sempre** via `<StatusInventarioBadge status={…} />`, e o rótulo em texto
 corrido via `rotuloStatusInventario(status)`. É a fonte única de cor e de nome — existiam
 **quatro** implementações independentes (`Historico`, `Vendedores`, `XmlPorInventarioTab`,

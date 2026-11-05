@@ -7,8 +7,12 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { StatusInventarioBadge } from '@/components/StatusInventarioBadge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import {
+  bordaStatusInventario,
+  IconeStatusInventario,
+  StatusInventarioBadge,
+} from '@/components/StatusInventarioBadge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { toast } from 'sonner';
 import { format, formatDistanceToNow } from 'date-fns';
@@ -17,12 +21,15 @@ import {
   ArrowLeft,
   Calendar,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   ClipboardList,
   CloudOff,
   Download,
   GitCompare,
   Loader2,
   Merge,
+  MessageSquareText,
   Minus,
   Package,
   RotateCcw,
@@ -53,6 +60,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import * as XLSX from 'xlsx';
 import { ConferenciaSkeleton } from '@/components/skeletons/PageSkeleton';
+import { TableSkeleton } from '@/components/skeletons/TableSkeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
 import { SearchFilter } from '@/components/SearchFilter';
@@ -190,6 +199,9 @@ type ItemRevisao = {
  * mesmo salto que a ordenação evita pelo mesmo motivo.
  */
 type SituacaoItem = 'todos' | 'divergentes' | 'nao_contados' | 'conferem';
+
+/** Uma linha que a correção em massa levaria ao esperado. */
+type CorrecaoEmMassa = { codigo: string; de: number; para: number; valor: number };
 
 /** As três colunas de movimentação, quando o gerente mandou buscar no ERP. */
 type Movimentacao = {
@@ -563,6 +575,18 @@ export default function Conferencia() {
     movimentacaoPedida
   );
   const anteriores = consultaAnteriores.data ?? SEM_ANTERIORES;
+
+  /**
+   * A lista de contagens anteriores é PAGINADA, 4 por vez em duas colunas.
+   *
+   * Representante antigo tem dezenas de contagens, e a lista aberta inteira esticava o
+   * painel "Base do esperado" — e com ele o "Período dos movimentos" ao lado, que tem a
+   * mesma altura — até empurrar a tabela para fora da tela.
+   */
+  const { paginatedData: anterioresPaginados, ...paginacaoAnteriores } = usePagination({
+    data: anteriores,
+    itemsPerPage: 4,
+  });
 
   /**
    * Quais contagens anteriores compõem a âncora.
@@ -1081,7 +1105,8 @@ export default function Conferencia() {
     return { produtos: itensRevisao.length, unidades, valor };
   }, [itensRevisao, editedValues]);
 
-  const hasEdits = Object.keys(editedValues).length > 0;
+  const totalEdicoes = Object.keys(editedValues).length;
+  const hasEdits = totalEdicoes > 0;
   const isPendingOrRevisao =
     selectedInventario && ['pendente', 'revisao'].includes(selectedInventario.status);
 
@@ -1191,9 +1216,9 @@ export default function Conferencia() {
    * Joga o Esperado no campo de quantidade — sem gravar.
    *
    * Vira edição pendente como qualquer digitação: continua passando pelo "Salvar
-   * Alterações", e some se o gerente trocar de inventário. É de propósito que a
-   * correção seja explícita e uma a uma: aplicar em massa apagaria, junto com o
-   * descompasso de nota, as contagens que divergem por perda real.
+   * Alterações", e some se o gerente trocar de inventário. A versão em massa existe
+   * (`correcoesEmMassa`), mas passa por confirmação com o impacto à vista: ajustar tudo
+   * apaga, junto com o descompasso de nota, as contagens que divergem por perda real.
    */
   const aplicarEsperado = (codigoAuxiliar: string, esperado: number) => {
     // Esperado negativo é sinal de janela ou regra errada, não de estoque negativo:
@@ -1203,36 +1228,76 @@ export default function Conferencia() {
   };
 
   /**
-   * Não contados do recorte VISÍVEL (busca + categoria + situação) que o esperado diz
-   * estarem na mala e que o gerente ainda não tocou.
+   * O que as duas correções em massa fariam no recorte VISÍVEL (busca + categoria +
+   * situação), deixando de fora o que o gerente já editou à mão.
    *
-   * Em lote só para os não contados, e não para os divergentes: aqui não há contagem a
-   * preservar — a linha é zero porque ninguém bipou, não porque alguém contou zero. E
-   * fica restrito ao recorte para o gerente poder fazer por marca, conferindo antes.
-   * Esperado ≤ 0 fica de fora: adicionar a peça com zero não muda nada.
+   * Restrito ao recorte para dar para corrigir por marca, conferindo antes. O alvo é o
+   * esperado com piso em zero, pelo mesmo motivo de `aplicarEsperado`. Não contado com
+   * alvo zero fica de fora: adicionar a peça com zero não muda nada.
    */
-  const naoContadosParaPreencher = useMemo(
-    () =>
-      paginacaoItens.filteredData
-        .filter((i) => i.nao_contado && editedValues[i.codigo_auxiliar] === undefined)
-        .map((i) => ({ codigo: i.codigo_auxiliar, mov: movimentacaoDe(i.codigo_auxiliar) }))
-        .filter((x): x is { codigo: string; mov: Movimentacao } => !!x.mov && x.mov.esperado > 0),
-    [paginacaoItens.filteredData, editedValues, movimentacaoDe]
+  const correcoesEmMassa = useMemo(() => {
+    const naoContados: CorrecaoEmMassa[] = [];
+    const divergentes: CorrecaoEmMassa[] = [];
+    if (!temMovimentacao) return { nao_contados: naoContados, divergentes };
+    for (const i of paginacaoItens.filteredData) {
+      if (editedValues[i.codigo_auxiliar] !== undefined) continue;
+      const mov = movimentacaoDe(i.codigo_auxiliar);
+      if (!mov) continue;
+      const para = Math.max(0, mov.esperado);
+      const c = {
+        codigo: i.codigo_auxiliar,
+        de: i.quantidade_fisica,
+        para,
+        valor: i.valor_unitario,
+      };
+      if (i.nao_contado) {
+        if (para > 0) naoContados.push(c);
+      } else if (i.quantidade_fisica !== para) {
+        divergentes.push(c);
+      }
+    }
+    return { nao_contados: naoContados, divergentes };
+  }, [temMovimentacao, paginacaoItens.filteredData, editedValues, movimentacaoDe]);
+
+  /** Qual correção em massa está aguardando confirmação. */
+  const [correcaoPendente, setCorrecaoPendente] = useState<keyof typeof correcoesEmMassa | null>(
+    null
   );
 
-  const preencherNaoContados = () => {
+  /** Impacto da correção pendente — é o que o diálogo mostra antes de aplicar. */
+  const impactoCorrecao = useMemo(() => {
+    if (!correcaoPendente) return null;
+    const lista = correcoesEmMassa[correcaoPendente];
+    let entram = 0;
+    let saem = 0;
+    let valor = 0;
+    for (const c of lista) {
+      const d = c.para - c.de;
+      if (d > 0) entram += d;
+      else saem -= d;
+      valor += d * c.valor;
+    }
+    return { produtos: lista.length, entram, saem, valor };
+  }, [correcaoPendente, correcoesEmMassa]);
+
+  const aplicarCorrecaoEmMassa = () => {
+    if (!correcaoPendente) return;
+    const lista = correcoesEmMassa[correcaoPendente];
     setEditedValues((prev) => {
       const novo = { ...prev };
-      for (const { codigo, mov } of naoContadosParaPreencher) novo[codigo] = mov.esperado;
+      for (const c of lista) novo[c.codigo] = c.para;
       return novo;
     });
     toast.info(
-      `${naoContadosParaPreencher.length} produto${naoContadosParaPreencher.length === 1 ? '' : 's'} preenchido${naoContadosParaPreencher.length === 1 ? '' : 's'} pelo esperado.`,
-      { description: 'Revise e clique em "Salvar Alterações" para adicioná-los ao inventário.' }
+      `${lista.length} produto${lista.length === 1 ? '' : 's'} ${
+        correcaoPendente === 'nao_contados' ? 'preenchido' : 'ajustado'
+      }${lista.length === 1 ? '' : 's'} pelo esperado.`,
+      { description: 'Nada foi gravado ainda — revise e clique em "Salvar Alterações".' }
     );
+    setCorrecaoPendente(null);
   };
 
-  /** Descarta o rascunho de UMA linha — único jeito de desfazer um não contado preenchido. */
+  /** Descarta o rascunho de UMA linha — é como se desfaz um não contado preenchido. */
   const descartarEdicao = (codigoAuxiliar: string) =>
     setEditedValues((prev) => {
       const { [codigoAuxiliar]: _descartado, ...resto } = prev;
@@ -1244,7 +1309,9 @@ export default function Conferencia() {
 
     // Edição de item que já existe vira UPDATE; de não contado vira INSERT. Não contado
     // deixado em zero é descartado: inserir a linha com zero não acrescenta nada.
-    const existentes = new Map(selectedInventario.itens_inventario.map((i) => [i.codigo_auxiliar, i]));
+    const existentes = new Map(
+      selectedInventario.itens_inventario.map((i) => [i.codigo_auxiliar, i])
+    );
     const naoContadosPorCodigo = new Map(naoContados.map((i) => [i.codigo_auxiliar, i]));
     const edicoes = Object.entries(editedValues);
     const paraAtualizar = edicoes.filter(([codigo]) => existentes.has(codigo));
@@ -1317,7 +1384,8 @@ export default function Conferencia() {
       setEditedValues({});
       // O inventário em cache ainda tem a lista antiga: reabrir sem isso esconderia o
       // que acabou de ser adicionado.
-      if (inseridos.length > 0) queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
+      if (inseridos.length > 0)
+        queryClient.invalidateQueries({ queryKey: ['inventariosPendentes'] });
       toast.success(
         inseridos.length > 0
           ? `Alterações salvas — ${inseridos.length} produto${inseridos.length === 1 ? '' : 's'} adicionado${inseridos.length === 1 ? '' : 's'} ao inventário.`
@@ -1632,113 +1700,80 @@ export default function Conferencia() {
             )}
           </div>
         ) : isDetailLoading ? (
-          <div className="flex items-center justify-center py-24 text-muted-foreground">
-            <Loader2 className="mr-2 h-8 w-8 animate-spin text-primary" /> Carregando detalhes...
+          /* A forma da tela já é conhecida — cabeçalho e tabela —, então skeleton. */
+          <div className="space-y-4">
+            <Skeleton className="h-48 w-full rounded-2xl" />
+            <TableSkeleton columns={4} rows={8} />
           </div>
         ) : (
           <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <Button
-                variant="outline"
-                size="sm"
-                className="rounded-xl shadow-2xs"
-                onClick={voltarParaLista}
-              >
-                <ArrowLeft className="mr-2 h-4 w-4" />
-                Voltar para lista
-              </Button>
-              <div className="flex items-center gap-3 text-sm text-muted-foreground">
-                <span className="flex items-center gap-1.5 font-medium">
-                  <User size={14} />{' '}
-                  {selectedInventario.profiles?.nome || selectedInventario.codigo_vendedor}
-                </span>
-                <span className="flex items-center gap-1.5 font-medium">
-                  <Calendar size={14} />{' '}
-                  {format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
-                </span>
-                <StatusInventarioBadge status={selectedInventario.status} />
-              </div>
-            </div>
-
-            {selectedInventario.observacoes?.trim() && (
-              <Card className="border border-border/80 border-l-4 border-l-primary rounded-2xl shadow-2xs">
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Observações do Vendedor
-                  </p>
-                  <p className="text-sm whitespace-pre-wrap break-words">
-                    {selectedInventario.observacoes}
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Produtos
-                  </p>
-                  <p className="text-2xl font-bold">{resumo.produtos}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Unidades contadas
-                  </p>
-                  <p className="text-2xl font-bold">{resumo.unidades}</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
-                    Valor total
-                  </p>
-                  <p className="text-2xl font-bold">
-                    {resumo.valor.toLocaleString('pt-BR', {
-                      style: 'currency',
-                      currency: 'BRL',
-                    })}
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
+            {/* CABEÇALHO DO INVENTÁRIO: quem, quando, em que estado, quanto — e as ações
+                que valem para o inventário INTEIRO. Exportar, movimentação e Ações do
+                Gerente moravam no cartão da tabela, ao lado do contador de itens, e
+                pareciam agir sobre o recorte. */}
             <Card>
-              {/* Busca à esquerda, ações à direita. O título "Itens contados" saiu: a tabela
-                  logo abaixo, com colunas Produto/Quantidade/Valor, já diz o que é.
-                  "Ações do Gerente" deixou de ter uma faixa só para si e passou a conviver
-                  com o export — ambas em altura padrão, alinhadas entre si e com a busca. */}
-              <CardHeader className="gap-3 pb-4">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  {/* Quantos itens a tabela está listando. Sem isso, um recorte por
-                      categoria encolheria a tabela sem nenhum número dizendo o quanto —
-                      e a paginação some quando sobra uma página só. */}
-                  <Badge variant="outline" className="w-fit text-xs font-normal tabular-nums">
-                    {paginacaoItens.totalItems < itensDaTabela.length
-                      ? `${paginacaoItens.totalItems} de ${itensDaTabela.length} itens`
-                      : `${itensDaTabela.length} ${itensDaTabela.length === 1 ? 'item' : 'itens'}`}
-                  </Badge>
-                  <div className="flex gap-2 sm:justify-end">
+              <CardContent className="space-y-5 pt-6">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="flex min-w-0 items-start gap-3">
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      onClick={voltarParaLista}
+                      aria-label="Voltar para a lista"
+                      className="shrink-0"
+                    >
+                      <ArrowLeft className="size-4" />
+                    </Button>
+                    <div className="min-w-0 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h2 className="truncate text-lg font-semibold tracking-tight">
+                          {selectedInventario.profiles?.nome || selectedInventario.codigo_vendedor}
+                        </h2>
+                        <StatusInventarioBadge status={selectedInventario.status} />
+                      </div>
+                      <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-muted-foreground">
+                        <span className="font-mono text-xs">
+                          {selectedInventario.codigo_vendedor}
+                        </span>
+                        <span className="flex items-center gap-1.5 tabular-nums">
+                          <Calendar className="size-3.5" />
+                          {format(new Date(selectedInventario.data_inventario), 'dd/MM/yyyy')}
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 lg:shrink-0 lg:justify-end">
                     {/* A movimentação é OPT-IN: cada consulta atravessa VPN até o
                         Ciclone e leva segundos. Sem clicar, a conferência é exatamente
                         a de antes — e não faz chamada nenhuma. */}
                     {isGerente && !movimentacaoPedida && (
-                      <Button variant="outline" onClick={() => setMovimentacaoPedida(true)}>
-                        <GitCompare className="h-4 w-4" />
+                      <Button
+                        variant="outline"
+                        onClick={() => setMovimentacaoPedida(true)}
+                        className="flex-1 sm:flex-none"
+                      >
+                        <GitCompare className="size-4" />
                         Buscar movimentação
                       </Button>
                     )}
                     {isGerente && movimentacaoPedida && (
-                      <Button variant="ghost" onClick={() => setMovimentacaoPedida(false)}>
-                        <X className="h-4 w-4" />
+                      <Button
+                        variant="ghost"
+                        onClick={() => setMovimentacaoPedida(false)}
+                        className="flex-1 sm:flex-none"
+                      >
+                        <X className="size-4" />
                         Ocultar movimentação
                       </Button>
                     )}
                     {isGerente && (
-                      <Button onClick={() => setShowManagerActions(true)} variant="outline">
-                        <Settings className="h-4 w-4" />
+                      <Button
+                        variant="outline"
+                        onClick={() => setShowManagerActions(true)}
+                        className="flex-1 sm:flex-none"
+                      >
+                        <Settings className="size-4" />
                         Ações do Gerente
                       </Button>
                     )}
@@ -1753,94 +1788,62 @@ export default function Conferencia() {
                       aria-label="Exportar para Excel"
                       className="shrink-0"
                     >
-                      <Download className="h-4 w-4" />
+                      <Download className="size-4" />
                     </Button>
                   </div>
                 </div>
 
-                {/* Mesma barra de recorte do Comparativo: busca à esquerda, categorias à
-                    direita da divisória. Inventário de 400 itens não se confere rolando. */}
-                <div className="flex flex-col gap-2 rounded-xl border border-border/80 bg-muted/30 p-2 lg:flex-row lg:flex-wrap lg:items-center">
-                  <SearchFilter
-                    value={buscaItem}
-                    onChange={setBuscaItem}
-                    placeholder="Buscar produto..."
-                    className="max-w-none sm:w-64"
-                  />
-
-                  <FiltroCategorias
-                    linhas={itensDaTabela}
-                    selecao={categoriasItem}
-                    onSelecao={setCategoriasItem}
-                  />
-
-                  {/* Situação contra o Esperado — só existe com a movimentação em tela.
-                      Os números acompanham o recorte de categoria ao lado. */}
-                  {temMovimentacao && (
-                    <div className="overflow-x-auto">
-                      <Segmentado<SituacaoItem>
-                        nome="Situação do produto"
-                        valor={situacaoItem}
-                        onValor={setSituacaoItem}
-                        opcoes={[
-                          { valor: 'todos', rotulo: `Todos (${contagemSituacao.todos})` },
-                          {
-                            valor: 'divergentes',
-                            rotulo: `Divergentes (${contagemSituacao.divergentes})`,
-                          },
-                          {
-                            valor: 'nao_contados',
-                            rotulo: `Não contados (${contagemSituacao.nao_contados})`,
-                          },
-                          { valor: 'conferem', rotulo: `Conferem (${contagemSituacao.conferem})` },
-                        ]}
-                      />
-                    </div>
-                  )}
-
-                  {(buscaItem !== '' || temSelecao(categoriasItem) || situacaoAtiva !== 'todos') && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setBuscaItem('');
-                        setCategoriasItem(SELECAO_VAZIA);
-                        setSituacaoItem('todos');
-                      }}
-                      className="lg:ml-auto"
-                    >
-                      <X className="size-4" />
-                      Limpar filtros
-                    </Button>
-                  )}
-                </div>
-
-                {/* Adicionar os não contados em lote. Fica fora da barra de recorte porque
-                    é ação, não filtro — e age só sobre o que o recorte está mostrando. */}
-                {isPendingOrRevisao && temMovimentacao && naoContadosParaPreencher.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 rounded-xl border border-info/30 bg-info-subtle px-3 py-2">
-                    <p className="flex-1 text-sm text-info-strong">
-                      <span className="font-semibold tabular-nums">
-                        {naoContadosParaPreencher.length}
-                      </span>{' '}
-                      não contado{naoContadosParaPreencher.length === 1 ? '' : 's'}
-                      {situacaoAtiva !== 'todos' || buscaItem !== '' || temSelecao(categoriasItem)
-                        ? ' neste recorte'
-                        : ''}{' '}
-                      com esperado acima de zero.
-                    </p>
-                    <Button variant="outline" size="sm" onClick={preencherNaoContados}>
-                      <Package className="size-3.5" />
-                      Preencher pelo esperado
-                    </Button>
-                  </div>
+                {selectedInventario.observacoes?.trim() && (
+                  <Alert variant="info">
+                    <MessageSquareText className="size-4" />
+                    <AlertTitle>Observações do vendedor</AlertTitle>
+                    <AlertDescription className="whitespace-pre-wrap break-words">
+                      {selectedInventario.observacoes}
+                    </AlertDescription>
+                  </Alert>
                 )}
 
-                {/* Diagnóstico da movimentação — um bloco só, abaixo do recorte.
-                    Empilhados aqui, os avisos não empurram a tabela para fora da tela
-                    a cada condição nova, que é o que acontece com Alert solto. */}
+                {/* Totais do inventário INTEIRO — ver o comentário de `resumo`: não seguem
+                    o recorte da tabela. O valor ocupa a linha toda no celular porque
+                    "R$ 12.345,67" em text-2xl não cabe em meia tela de 360px. */}
+                <dl className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div className="rounded-xl bg-muted/40 p-4">
+                    <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Produtos
+                    </dt>
+                    <dd className="mt-1 text-2xl font-bold tabular-nums">{resumo.produtos}</dd>
+                  </div>
+                  <div className="rounded-xl bg-muted/40 p-4">
+                    <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Unidades contadas
+                    </dt>
+                    <dd className="mt-1 text-2xl font-bold tabular-nums">{resumo.unidades}</dd>
+                  </div>
+                  <div className="col-span-2 rounded-xl bg-muted/40 p-4 sm:col-span-1">
+                    <dt className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Valor total
+                    </dt>
+                    <dd className="mt-1 text-2xl font-bold tabular-nums">
+                      {resumo.valor.toLocaleString('pt-BR', {
+                        style: 'currency',
+                        currency: 'BRL',
+                      })}
+                    </dd>
+                  </div>
+                </dl>
+
+                {/* MOVIMENTAÇÃO mora no cabeçalho do inventário, e não entre o filtro e a
+                    tabela: base e período CONFIGURAM a comparação — são premissa do
+                    Esperado, não recorte da tabela. Intercalados com o filtro, empurravam a
+                    tabela para baixo a cada aviso e misturavam "o que comparar" com "o que
+                    mostrar". Avisos primeiro, os dois painéis lado a lado, o resultado por
+                    último. */}
                 {movimentacaoPedida && (
-                  <div className="space-y-2">
+                  <section className="space-y-3 border-t border-border/80 pt-5">
+                    <h3 className="flex items-center gap-2 text-sm font-semibold">
+                      <GitCompare className="size-4 text-muted-foreground" />
+                      Movimentação no Ciclone
+                    </h3>
                     {/* A mala vazia num representante COM histórico é o uso errado mais
                         provável e o mais caro: tudo que entrou antes da data aparece como
                         sobra, com a mesma cara de uma sobra legítima. */}
@@ -1855,122 +1858,6 @@ export default function Conferencia() {
                           como sobra.
                         </AlertDescription>
                       </Alert>
-                    )}
-
-                    {/* A ÂNCORA É ESCOLHIDA, e pode ser mais de uma contagem.
-                        Fragmentar a contagem é modo de trabalho válido aqui: o vendedor
-                        manda a mala em dois ou três inventários. Com um fragmento só de
-                        âncora, o esperado compara um pedaço da mala com os movimentos do
-                        período inteiro e acusa divergência em tudo que estava no outro. */}
-                    {!consultaAnteriores.isLoading && (
-                      <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Base do esperado
-                          </p>
-                          <div className="flex items-center gap-1">
-                            {idsAncoraEscolhidos !== null && anteriores.length > 0 && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setIdsAncoraEscolhidos(null)}
-                              >
-                                <RotateCcw className="size-3.5" />
-                                Voltar ao padrão
-                              </Button>
-                            )}
-                            {anteriores.length > 0 && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setEscolhendoAncora((v) => !v)}
-                              >
-                                <ClipboardList className="size-3.5" />
-                                {escolhendoAncora ? 'Fechar' : 'Escolher contagens'}
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-
-                        {escolhendoAncora && anteriores.length > 0 ? (
-                          <ul className="space-y-1">
-                            {anteriores.map((a) => (
-                              <li key={a.id}>
-                                <label className="flex cursor-pointer items-center gap-2.5 rounded-lg p-1.5 text-sm hover:bg-muted">
-                                  <Checkbox
-                                    checked={idsAncora.includes(a.id)}
-                                    onCheckedChange={() => alternarAncora(a.id)}
-                                  />
-                                  <span className="font-medium tabular-nums">
-                                    {format(new Date(a.data_inventario), 'dd/MM/yyyy HH:mm')}
-                                  </span>
-                                  <StatusInventarioBadge status={a.status} />
-                                  <span className="text-xs text-muted-foreground tabular-nums">
-                                    {a.itens} {a.itens === 1 ? 'produto' : 'produtos'}
-                                  </span>
-                                </label>
-                              </li>
-                            ))}
-                          </ul>
-                        ) : (
-                          !usandoMalaVazia && (
-                            <p className="text-xs text-muted-foreground tabular-nums">
-                              Contagem de{' '}
-                              {anteriores
-                                .filter((a) => idsAncora.includes(a.id))
-                                .map((a) => format(new Date(a.data_inventario), 'dd/MM/yyyy'))
-                                .join(' + ')}
-                              {idsAncora.length > 1 && ' — somadas'}
-                            </p>
-                          )
-                        )}
-
-                        {/* SEM CONTAGEM ANTERIOR, a base é uma data digitada.
-                            O esperado vira `0 + remessa − venda` — a mesma fórmula com o
-                            primeiro termo zerado, e é assim que a movimentação continua
-                            legível para o representante que ainda não tem histórico. */}
-                        {usandoMalaVazia && (
-                          <div className="space-y-1.5">
-                            <div className="flex flex-wrap items-center gap-2">
-                              <label
-                                htmlFor="conf-mala-vazia"
-                                className="w-20 shrink-0 text-sm font-medium"
-                              >
-                                Mala vazia em
-                              </label>
-                              <Input
-                                id="conf-mala-vazia"
-                                type="date"
-                                value={dataMalaVazia}
-                                max={dataInventario ?? undefined}
-                                onChange={(e) => setDataMalaVazia(e.target.value)}
-                                className="w-auto"
-                              />
-                            </div>
-                            <p className="text-xs text-muted-foreground">
-                              {anteriores.length === 0
-                                ? 'Este vendedor não tem contagem anterior a esta data. Informe o dia em que a mala estava vazia e o esperado vira só remessa − venda.'
-                                : 'Nenhuma contagem marcada — o esperado parte do zero nesta data.'}
-                            </p>
-                          </div>
-                        )}
-
-                        {/* O aviso aponta para o conserto: as irmãs estão na lista logo
-                            acima, esperando serem marcadas. Antes ele só constatava o
-                            problema e deixava o gerente sem o que fazer a respeito. */}
-                        {irmasDeFora.length > 0 && (
-                          <p className="flex items-start gap-1.5 text-xs font-medium text-warning-strong">
-                            <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
-                            <span>
-                              Há {irmasDeFora.length} outra
-                              {irmasDeFora.length === 1 ? '' : 's'} contagem
-                              {irmasDeFora.length === 1 ? '' : 's'} na mesma data e fora da âncora.
-                              Se a contagem foi fragmentada, marque{' '}
-                              {irmasDeFora.length === 1 ? 'a' : 'as'} também.
-                            </span>
-                          </p>
-                        )}
-                      </div>
                     )}
 
                     {!codigoExisteNoErp && (
@@ -1994,84 +1881,284 @@ export default function Conferencia() {
                       </Alert>
                     )}
 
-                    {/* O PERÍODO É EDITÁVEL, e é o que resolve a nota emitida depois
+                    {/* `only-child`: enquanto as contagens anteriores carregam só o Período
+                        aparece, e meia largura vazia ao lado pareceria um painel faltando. */}
+                    {/* Sem `items-start`: o grid estica as células, e os dois painéis lado a
+                        lado ficam sempre da mesma altura, mesmo com a lista de contagens
+                        aberta num e o aviso de datas alteradas no outro. */}
+                    <div className="grid gap-3 xl:grid-cols-2 xl:[&>:only-child]:col-span-2">
+                      {/* A ÂNCORA É ESCOLHIDA, e pode ser mais de uma contagem.
+                        Fragmentar a contagem é modo de trabalho válido aqui: o vendedor
+                        manda a mala em dois ou três inventários. Com um fragmento só de
+                        âncora, o esperado compara um pedaço da mala com os movimentos do
+                        período inteiro e acusa divergência em tudo que estava no outro. */}
+                      {!consultaAnteriores.isLoading && (
+                        <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Base do esperado
+                            </p>
+                            <div className="flex items-center gap-1">
+                              {idsAncoraEscolhidos !== null && anteriores.length > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setIdsAncoraEscolhidos(null)}
+                                >
+                                  <RotateCcw className="size-3.5" />
+                                  Voltar ao padrão
+                                </Button>
+                              )}
+                              {anteriores.length > 0 && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setEscolhendoAncora((v) => !v)}
+                                >
+                                  <ClipboardList className="size-3.5" />
+                                  {escolhendoAncora ? 'Fechar' : 'Escolher contagens'}
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+
+                          {escolhendoAncora && anteriores.length > 0 ? (
+                            <div className="space-y-2">
+                              {/* HIERARQUIA: o dia é o que o gerente procura, então é o único
+                                  dado em destaque. Hora e tamanho são letra miúda de apoio, e
+                                  o status sai do badge para a BORDA + ícone — um badge por
+                                  cartão competia com a data pela atenção. O cartão inteiro é
+                                  o alternador (sem checkbox), e a seleção fica com o FUNDO e
+                                  a cor da data, para não disputar a borda com o status. */}
+                              <ul className="grid gap-1.5 sm:grid-cols-2">
+                                {anterioresPaginados.map((a) => {
+                                  const marcada = idsAncora.includes(a.id);
+                                  const data = new Date(a.data_inventario);
+                                  return (
+                                    <li key={a.id}>
+                                      <button
+                                        type="button"
+                                        aria-pressed={marcada}
+                                        onClick={() => alternarAncora(a.id)}
+                                        className={`flex w-full items-start gap-2.5 rounded-lg border p-2.5 text-left transition-colors ${bordaStatusInventario(
+                                          a.status
+                                        )} ${marcada ? 'bg-primary/10' : 'bg-card hover:bg-muted/40'}`}
+                                      >
+                                        <span className="min-w-0 flex-1">
+                                          <span className="flex items-baseline gap-1.5">
+                                            <span
+                                              className={`text-sm font-semibold tabular-nums ${
+                                                marcada ? 'text-primary' : ''
+                                              }`}
+                                            >
+                                              {format(data, 'dd/MM/yyyy')}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground tabular-nums">
+                                              {format(data, 'HH:mm')}
+                                            </span>
+                                          </span>
+                                          <span className="mt-0.5 flex items-center gap-1 text-xs text-muted-foreground tabular-nums">
+                                            <Package className="size-3 shrink-0" />
+                                            {a.itens} {a.itens === 1 ? 'produto' : 'produtos'}
+                                          </span>
+                                        </span>
+                                        <IconeStatusInventario
+                                          status={a.status}
+                                          className="mt-0.5 shrink-0"
+                                        />
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+
+                              {paginacaoAnteriores.totalPages > 1 && (
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs text-muted-foreground tabular-nums">
+                                    {paginacaoAnteriores.startIndex + 1}–
+                                    {Math.min(
+                                      paginacaoAnteriores.endIndex,
+                                      paginacaoAnteriores.totalItems
+                                    )}{' '}
+                                    de {paginacaoAnteriores.totalItems} contagens
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="iconSm"
+                                      aria-label="Contagens mais recentes"
+                                      disabled={paginacaoAnteriores.currentPage === 1}
+                                      onClick={() =>
+                                        paginacaoAnteriores.onPageChange(
+                                          paginacaoAnteriores.currentPage - 1
+                                        )
+                                      }
+                                    >
+                                      <ChevronLeft className="size-4" />
+                                    </Button>
+                                    <span className="min-w-12 text-center text-xs font-medium tabular-nums">
+                                      {paginacaoAnteriores.currentPage} /{' '}
+                                      {paginacaoAnteriores.totalPages}
+                                    </span>
+                                    <Button
+                                      variant="ghost"
+                                      size="iconSm"
+                                      aria-label="Contagens mais antigas"
+                                      disabled={
+                                        paginacaoAnteriores.currentPage ===
+                                        paginacaoAnteriores.totalPages
+                                      }
+                                      onClick={() =>
+                                        paginacaoAnteriores.onPageChange(
+                                          paginacaoAnteriores.currentPage + 1
+                                        )
+                                      }
+                                    >
+                                      <ChevronRight className="size-4" />
+                                    </Button>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            !usandoMalaVazia && (
+                              <p className="text-xs text-muted-foreground tabular-nums">
+                                Contagem de{' '}
+                                {anteriores
+                                  .filter((a) => idsAncora.includes(a.id))
+                                  .map((a) => format(new Date(a.data_inventario), 'dd/MM/yyyy'))
+                                  .join(' + ')}
+                                {idsAncora.length > 1 && ' — somadas'}
+                              </p>
+                            )
+                          )}
+
+                          {/* SEM CONTAGEM ANTERIOR, a base é uma data digitada.
+                            O esperado vira `0 + remessa − venda` — a mesma fórmula com o
+                            primeiro termo zerado, e é assim que a movimentação continua
+                            legível para o representante que ainda não tem histórico. */}
+                          {usandoMalaVazia && (
+                            <div className="space-y-1.5">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <label
+                                  htmlFor="conf-mala-vazia"
+                                  className="w-20 shrink-0 text-sm font-medium"
+                                >
+                                  Mala vazia em
+                                </label>
+                                <Input
+                                  id="conf-mala-vazia"
+                                  type="date"
+                                  value={dataMalaVazia}
+                                  max={dataInventario ?? undefined}
+                                  onChange={(e) => setDataMalaVazia(e.target.value)}
+                                  className="w-auto"
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground">
+                                {anteriores.length === 0
+                                  ? 'Este vendedor não tem contagem anterior a esta data. Informe o dia em que a mala estava vazia e o esperado vira só remessa − venda.'
+                                  : 'Nenhuma contagem marcada — o esperado parte do zero nesta data.'}
+                              </p>
+                            </div>
+                          )}
+
+                          {/* O aviso aponta para o conserto: as irmãs estão na lista logo
+                            acima, esperando serem marcadas. Antes ele só constatava o
+                            problema e deixava o gerente sem o que fazer a respeito. */}
+                          {irmasDeFora.length > 0 && (
+                            <p className="flex items-start gap-1.5 text-xs font-medium text-warning-strong">
+                              <TriangleAlert className="mt-0.5 size-3.5 shrink-0" />
+                              <span>
+                                Há {irmasDeFora.length} outra
+                                {irmasDeFora.length === 1 ? '' : 's'} contagem
+                                {irmasDeFora.length === 1 ? '' : 's'} na mesma data e fora da
+                                âncora. Se a contagem foi fragmentada, marque{' '}
+                                {irmasDeFora.length === 1 ? 'a' : 'as'} também.
+                              </span>
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* O PERÍODO É EDITÁVEL, e é o que resolve a nota emitida depois
                         do envio físico: alcançá-la exige estender o fim da janela de
                         REMESSA — e só dela, senão as vendas daqueles dias entram junto
                         e o conserto de um lado vira erro do outro. */}
-                    {/* O painel vale para os DOIS modos de base. Ele exigia `ancora`, que
+                      {/* O painel vale para os DOIS modos de base. Ele exigia `ancora`, que
                         é nulo quando a base é uma data de mala vazia — e aí os campos de
                         período simplesmente não existiam, justamente no caso em que o
                         esperado depende só deles. */}
-                    {janelaSugerida && (
-                      <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 p-3">
-                        <div className="flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Período dos movimentos
-                          </p>
-                          {!periodoNoPadrao && (
-                            <Button variant="ghost" size="sm" onClick={voltarAoPadrao}>
-                              <RotateCcw className="size-3.5" />
-                              Voltar ao padrão
-                            </Button>
-                          )}
-                        </div>
+                      {janelaSugerida && (
+                        <div className="space-y-2 rounded-xl border border-border/80 bg-muted/30 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Período dos movimentos
+                            </p>
+                            {!periodoNoPadrao && (
+                              <Button variant="ghost" size="sm" onClick={voltarAoPadrao}>
+                                <RotateCcw className="size-3.5" />
+                                Voltar ao padrão
+                              </Button>
+                            )}
+                          </div>
 
-                        {/* DUAS LINHAS, uma por movimento, sempre visíveis. É o ponto do
+                          {/* DUAS LINHAS, uma por movimento, sempre visíveis. É o ponto do
                             desenho: para alcançar a nota de remessa emitida depois do
                             envio físico é preciso esticar o fim da janela de REMESSA — e
                             só dela, senão as vendas daqueles dias entram junto e o
                             conserto de um lado vira erro do outro, no mesmo número. */}
-                        <div className="space-y-2">
-                          <LinhaPeriodo
-                            id="conf-remessa"
-                            rotulo="Remessa"
-                            de={remessaDe}
-                            ate={remessaAte}
-                            onDe={setRemessaDe}
-                            onAte={setRemessaAte}
-                          />
-                          <LinhaPeriodo
-                            id="conf-venda"
-                            rotulo="Venda"
-                            de={vendaDe}
-                            ate={vendaAte}
-                            onDe={setVendaDe}
-                            onAte={setVendaAte}
-                          />
-                        </div>
-
-                        <p className="text-xs text-muted-foreground tabular-nums">
-                          Padrão: {dataBrIso(janelaSugerida.de)} a {dataBrIso(janelaSugerida.ate)} —
-                          do dia seguinte à base, para a nota daquele dia não contar duas vezes.
-                        </p>
-
-                        {(buscaDesatualizada || !janelasValidas) && (
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            <Button
-                              size="sm"
-                              onClick={buscarMovimentos}
-                              disabled={carregandoMovimentacao || !janelasValidas}
-                            >
-                              <GitCompare className="size-3.5" />
-                              Atualizar
-                            </Button>
-                            {!janelasValidas ? (
-                              <span className="text-xs font-medium text-warning-strong">
-                                A data inicial precisa ser anterior à final.
-                              </span>
-                            ) : (
-                              !carregandoMovimentacao && (
-                                <span className="flex items-center gap-1.5 text-xs font-medium text-warning-strong">
-                                  <TriangleAlert className="size-3.5 shrink-0" />
-                                  Datas alteradas — clique em atualizar para consultar o ERP.
-                                </span>
-                              )
-                            )}
+                          <div className="space-y-2">
+                            <LinhaPeriodo
+                              id="conf-remessa"
+                              rotulo="Remessa"
+                              de={remessaDe}
+                              ate={remessaAte}
+                              onDe={setRemessaDe}
+                              onAte={setRemessaAte}
+                            />
+                            <LinhaPeriodo
+                              id="conf-venda"
+                              rotulo="Venda"
+                              de={vendaDe}
+                              ate={vendaAte}
+                              onDe={setVendaDe}
+                              onAte={setVendaAte}
+                            />
                           </div>
-                        )}
-                      </div>
-                    )}
 
+                          <p className="text-xs text-muted-foreground tabular-nums">
+                            Padrão: {dataBrIso(janelaSugerida.de)} a {dataBrIso(janelaSugerida.ate)}{' '}
+                            — do dia seguinte à base, para a nota daquele dia não contar duas vezes.
+                          </p>
+
+                          {(buscaDesatualizada || !janelasValidas) && (
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <Button
+                                size="sm"
+                                onClick={buscarMovimentos}
+                                disabled={carregandoMovimentacao || !janelasValidas}
+                              >
+                                <GitCompare className="size-3.5" />
+                                Atualizar
+                              </Button>
+                              {!janelasValidas ? (
+                                <span className="text-xs font-medium text-warning-strong">
+                                  A data inicial precisa ser anterior à final.
+                                </span>
+                              ) : (
+                                !carregandoMovimentacao && (
+                                  <span className="flex items-center gap-1.5 text-xs font-medium text-warning-strong">
+                                    <TriangleAlert className="size-3.5 shrink-0" />
+                                    Datas alteradas — clique em atualizar para consultar o ERP.
+                                  </span>
+                                )
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     {carregandoMovimentacao ? (
                       <p className="flex items-center gap-2 text-xs text-muted-foreground">
                         <Loader2 className="size-3.5 animate-spin" />
@@ -2128,8 +2215,119 @@ export default function Conferencia() {
                         </div>
                       )
                     )}
-                  </div>
+                  </section>
                 )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              {/* O cartão da tabela só RECORTA: busca, categorias e situação. Tudo que vale
+                  para o inventário inteiro está no cabeçalho acima. */}
+              <CardHeader className="gap-3 space-y-0 pb-4">
+                {/* Mesma barra de recorte do Comparativo: busca à esquerda, categorias à
+                    direita da divisória. Inventário de 400 itens não se confere rolando. */}
+                <div className="flex flex-col gap-2 rounded-xl border border-border/80 bg-muted/30 p-2 lg:flex-row lg:flex-wrap lg:items-center">
+                  <SearchFilter
+                    value={buscaItem}
+                    onChange={setBuscaItem}
+                    placeholder="Buscar produto..."
+                    className="max-w-none sm:w-64"
+                  />
+
+                  <FiltroCategorias
+                    linhas={itensDaTabela}
+                    selecao={categoriasItem}
+                    onSelecao={setCategoriasItem}
+                  />
+
+                  {/* Situação contra o Esperado — só existe com a movimentação em tela.
+                      Os números acompanham o recorte de categoria ao lado. */}
+                  {temMovimentacao && (
+                    <div className="overflow-x-auto">
+                      <Segmentado<SituacaoItem>
+                        nome="Situação do produto"
+                        valor={situacaoItem}
+                        onValor={setSituacaoItem}
+                        opcoes={[
+                          { valor: 'todos', rotulo: `Todos (${contagemSituacao.todos})` },
+                          {
+                            valor: 'divergentes',
+                            rotulo: `Divergentes (${contagemSituacao.divergentes})`,
+                          },
+                          {
+                            valor: 'nao_contados',
+                            rotulo: `Não contados (${contagemSituacao.nao_contados})`,
+                          },
+                          { valor: 'conferem', rotulo: `Conferem (${contagemSituacao.conferem})` },
+                        ]}
+                      />
+                    </div>
+                  )}
+
+                  {/* Quantos itens a tabela está listando. Sem isso, um recorte por
+                      categoria encolheria a tabela sem nenhum número dizendo o quanto —
+                      e a paginação some quando sobra uma página só. Fica no fim da barra
+                      porque é a RESPOSTA do recorte. */}
+                  <div className="flex items-center justify-between gap-2 px-1 lg:ml-auto">
+                    <span className="text-xs text-muted-foreground tabular-nums">
+                      {paginacaoItens.totalItems < itensDaTabela.length
+                        ? `${paginacaoItens.totalItems} de ${itensDaTabela.length} itens`
+                        : `${itensDaTabela.length} ${itensDaTabela.length === 1 ? 'item' : 'itens'}`}
+                    </span>
+                    {(buscaItem !== '' ||
+                      temSelecao(categoriasItem) ||
+                      situacaoAtiva !== 'todos') && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setBuscaItem('');
+                          setCategoriasItem(SELECAO_VAZIA);
+                          setSituacaoItem('todos');
+                        }}
+                      >
+                        <X className="size-4" />
+                        Limpar filtros
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Correção em massa. Fica fora da barra de recorte porque é ação, não
+                    filtro — e age só sobre o que o recorte está mostrando. */}
+                {isPendingOrRevisao &&
+                  temMovimentacao &&
+                  (correcoesEmMassa.nao_contados.length > 0 ||
+                    correcoesEmMassa.divergentes.length > 0) && (
+                    <div className="flex flex-wrap items-center gap-2 rounded-xl border border-info/30 bg-info-subtle px-3 py-2">
+                      <p className="flex-1 text-sm text-info-strong">
+                        Corrigir pelo esperado
+                        {situacaoAtiva !== 'todos' || buscaItem !== '' || temSelecao(categoriasItem)
+                          ? ' — só o que o filtro está mostrando'
+                          : ''}
+                      </p>
+                      {correcoesEmMassa.nao_contados.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCorrecaoPendente('nao_contados')}
+                        >
+                          <Package className="size-3.5" />
+                          Adicionar não contados ({correcoesEmMassa.nao_contados.length})
+                        </Button>
+                      )}
+                      {correcoesEmMassa.divergentes.length > 0 && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setCorrecaoPendente('divergentes')}
+                        >
+                          <CheckCircle className="size-3.5" />
+                          Ajustar divergentes ({correcoesEmMassa.divergentes.length})
+                        </Button>
+                      )}
+                    </div>
+                  )}
               </CardHeader>
               <CardContent>
                 <div className="border border-border/80 rounded-xl overflow-hidden shadow-2xs">
@@ -2356,7 +2554,16 @@ export default function Conferencia() {
             </Card>
 
             {hasEdits && isPendingOrRevisao && (
-              <div className="flex justify-end">
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {/* Com correção em massa, desfazer linha a linha deixou de ser opção. */}
+                <span className="text-sm text-muted-foreground tabular-nums">
+                  {totalEdicoes}{' '}
+                  {totalEdicoes === 1 ? 'alteração pendente' : 'alterações pendentes'}
+                </span>
+                <Button variant="ghost" onClick={() => setEditedValues({})} disabled={saving}>
+                  <X size={16} className="mr-2" />
+                  Descartar
+                </Button>
                 <Button onClick={handleSaveEdits} disabled={saving}>
                   <Save size={16} className="mr-2" />
                   {saving ? 'Salvando...' : 'Salvar Alterações'}
@@ -2529,6 +2736,56 @@ export default function Conferencia() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog
+        open={correcaoPendente !== null}
+        onOpenChange={(aberto) => !aberto && setCorrecaoPendente(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {correcaoPendente === 'nao_contados'
+                ? 'Adicionar os não contados?'
+                : 'Ajustar os divergentes ao esperado?'}
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                {impactoCorrecao && (
+                  <p className="tabular-nums">
+                    <span className="font-semibold text-foreground">
+                      {impactoCorrecao.produtos} produto{impactoCorrecao.produtos === 1 ? '' : 's'}
+                    </span>
+                    {impactoCorrecao.entram > 0 && <> · +{impactoCorrecao.entram} un.</>}
+                    {impactoCorrecao.saem > 0 && <> · −{impactoCorrecao.saem} un.</>}
+                    {impactoCorrecao.valor !== 0 && (
+                      <>
+                        {' · '}
+                        {impactoCorrecao.valor > 0 ? '+' : '−'}
+                        {Math.abs(impactoCorrecao.valor).toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
+                      </>
+                    )}
+                  </p>
+                )}
+                <p>
+                  {correcaoPendente === 'nao_contados'
+                    ? 'Cada produto entra no inventário com a quantidade esperada.'
+                    : 'A quantidade contada de cada produto é trocada pela esperada. Isso apaga também as faltas e sobras reais — perda, peça trocada, erro de nota.'}{' '}
+                  Nada é gravado até você clicar em "Salvar Alterações", e dá para descartar.
+                </p>
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={aplicarCorrecaoEmMassa}>
+              {correcaoPendente === 'nao_contados' ? 'Adicionar' : 'Ajustar'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={!!deletingItem} onOpenChange={() => setDeletingItem(null)}>
         <AlertDialogContent>
