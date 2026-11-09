@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -45,6 +46,7 @@ import {
   CalendarX,
   FileDown,
   ArrowUpDown,
+  KeyRound,
 } from 'lucide-react';
 import { usePagination } from '@/hooks/usePagination';
 import { Pagination } from '@/components/Pagination';
@@ -82,6 +84,11 @@ export default function Vendedores() {
     codigo_vendedor: '',
     telefone: '',
   });
+
+  const [senhaVendedor, setSenhaVendedor] = useState<Vendedor | null>(null);
+  const [novaSenha, setNovaSenha] = useState('');
+  const [erroSenha, setErroSenha] = useState('');
+  const [definindoSenha, setDefinindoSenha] = useState(false);
 
   const { data: vendedores = [], isLoading, isFetching } = useVendedoresQuery();
   const invalidateVendedores = useInvalidateVendedores();
@@ -263,6 +270,65 @@ export default function Vendedores() {
     }
   };
 
+  const abrirDefinirSenha = (vendedor: Vendedor) => {
+    setSenhaVendedor(vendedor);
+    setNovaSenha('');
+    setErroSenha('');
+  };
+
+  const handleDefinirSenha = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!senhaVendedor) return;
+    // Mesmo mínimo do Supabase Auth: barrar aqui evita a ida ao servidor só para ouvir "não".
+    if (novaSenha.length < 6) {
+      setErroSenha('A senha precisa de pelo menos 6 caracteres.');
+      return;
+    }
+    setDefinindoSenha(true);
+    setErroSenha('');
+
+    try {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) {
+        toast.error('Sessão expirada');
+        return;
+      }
+
+      const response = await fetch(
+        `https://evsneoercdzzwxmhuxid.supabase.co/functions/v1/definir-senha-vendedor`,
+        {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_id: senhaVendedor.id, senha: novaSenha }),
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) {
+        const detalhes = result.details
+          ? Object.values(result.details as Record<string, string[]>)
+              .flat()
+              .join('; ')
+          : '';
+        setErroSenha(detalhes || result.error || 'Erro ao definir senha');
+        return;
+      }
+
+      toast.success(`Senha de ${senhaVendedor.nome} definida.`);
+      setSenhaVendedor(null);
+      setNovaSenha('');
+    } catch (err) {
+      console.error(err);
+      setErroSenha(err instanceof Error ? err.message : 'Erro ao definir senha');
+    } finally {
+      setDefinindoSenha(false);
+    }
+  };
+
   const toggleAtivo = async (vendedor: Vendedor) => {
     const { error } = await supabase
       .from('profiles')
@@ -346,6 +412,16 @@ export default function Vendedores() {
       </Button>
       <Button
         variant="outline"
+        size="iconSm"
+        className="shadow-2xs"
+        onClick={() => abrirDefinirSenha(vendedor)}
+        aria-label={`Definir senha de ${vendedor.nome}`}
+        title="Definir senha"
+      >
+        <KeyRound size={16} />
+      </Button>
+      <Button
+        variant="outline"
         size="icon"
         className={`rounded-xl h-9 w-9 shadow-2xs ${vendedor.ativo ? 'text-destructive hover:bg-destructive/10' : 'text-success-strong hover:bg-success-subtle'}`}
         onClick={() => toggleAtivo(vendedor)}
@@ -424,6 +500,11 @@ export default function Vendedores() {
                 <DialogTitle className="text-xl font-bold tracking-tight">
                   {editingVendedor ? 'Editar Vendedor' : 'Novo Vendedor'}
                 </DialogTitle>
+                <DialogDescription>
+                  {editingVendedor
+                    ? 'Altere os dados do representante.'
+                    : 'O vendedor recebe um email para definir a própria senha.'}
+                </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4 pt-2">
                 <div>
@@ -518,6 +599,65 @@ export default function Vendedores() {
             </Dialog>
           }
         />
+
+        <Dialog
+          open={senhaVendedor !== null}
+          onOpenChange={(open) => {
+            if (!open) setSenhaVendedor(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-xl font-bold tracking-tight">Definir senha</DialogTitle>
+              <DialogDescription>
+                Nova senha de acesso de <strong>{senhaVendedor?.nome}</strong>. A senha atual
+                deixa de valer na hora.
+              </DialogDescription>
+            </DialogHeader>
+            <form onSubmit={handleDefinirSenha} className="space-y-4 pt-2">
+              <div>
+                <Label
+                  htmlFor="vendedor-nova-senha"
+                  className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 block"
+                >
+                  Nova senha
+                </Label>
+                {/* Visível de propósito: o gerente vai repassar a senha ao vendedor, e digitar
+                    às cegas sem campo de confirmação é como se cria senha errada. */}
+                <Input
+                  id="vendedor-nova-senha"
+                  name="nova-senha"
+                  type="text"
+                  value={novaSenha}
+                  onChange={(e) => {
+                    setNovaSenha(e.target.value);
+                    setErroSenha('');
+                  }}
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-invalid={!!erroSenha}
+                  aria-describedby="vendedor-nova-senha-ajuda"
+                  required
+                />
+                {erroSenha ? (
+                  <p
+                    id="vendedor-nova-senha-ajuda"
+                    className="text-xs text-destructive-strong mt-1.5"
+                  >
+                    {erroSenha}
+                  </p>
+                ) : (
+                  <p id="vendedor-nova-senha-ajuda" className="text-xs text-muted-foreground mt-1.5">
+                    Mínimo de 6 caracteres. O vendedor pode trocá-la depois.
+                  </p>
+                )}
+              </div>
+              <Button type="submit" disabled={definindoSenha} className="w-full font-semibold mt-4">
+                {definindoSenha ? 'Salvando...' : 'Definir senha'}
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
 
         {/* Panorama: os três estados de inventário somam o total de ativos */}
         {isLoading ? (
@@ -739,7 +879,8 @@ export default function Vendedores() {
                           <ArrowUpDown size={13} />
                         </span>
                       </TableHead>
-                      <TableHead className="text-right font-semibold w-[7.5rem]">Ações</TableHead>
+                      {/* 3 botões de 36px + 2 vãos de 8px + padding: em 7.5rem o terceiro quebrava linha. */}
+                      <TableHead className="text-right font-semibold w-[10rem]">Ações</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>

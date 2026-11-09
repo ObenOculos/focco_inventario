@@ -59,6 +59,9 @@ verify_jwt = false
 [functions.criar-vendedor]
 verify_jwt = false
 
+[functions.definir-senha-vendedor]
+verify_jwt = false
+
 [functions.reverter-aprovacao-inventario]
 verify_jwt = false
 
