@@ -186,26 +186,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Criar perfil na tabela profiles
-    const { error: insertProfileError } = await supabaseAdmin.from('profiles').insert({
-      id: newUser.user.id,
-      email,
-      nome,
-      codigo_vendedor,
-      telefone,
-      role: 'vendedor',
-      ativo: true,
-    });
+    // Upsert, não insert: o trigger `on_auth_user_created` (handle_new_user) já cria a
+    // linha em profiles no createUser acima, e um insert com o mesmo id batia na chave
+    // primária — todo cadastro caía no rollback com "Erro ao criar perfil".
+    const { error: insertProfileError } = await supabaseAdmin.from('profiles').upsert(
+      {
+        id: newUser.user.id,
+        email,
+        nome,
+        codigo_vendedor: codigo_vendedor ?? null,
+        telefone: telefone ?? null,
+        role: 'vendedor',
+        ativo: true,
+      },
+      { onConflict: 'id' }
+    );
 
     if (insertProfileError) {
       console.error('Erro ao criar perfil:', insertProfileError);
       // Deletar usuário do auth se falhar ao criar perfil
       await supabaseAdmin.auth.admin.deleteUser(newUser.user.id);
 
-      return new Response(JSON.stringify({ error: 'Erro ao criar perfil do vendedor' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      // A causa vai junto: o endpoint é só de gerente, e sem ela o 500 era cego.
+      return new Response(
+        JSON.stringify({ error: `Erro ao criar perfil do vendedor: ${insertProfileError.message}` }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
+      );
     }
 
     // Enviar email de redefinição de senha
