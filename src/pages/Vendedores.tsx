@@ -226,12 +226,29 @@ export default function Vendedores() {
               Authorization: `Bearer ${session.access_token}`,
               'Content-Type': 'application/json',
             },
-            body: JSON.stringify(formData),
+            // Campo opcional em branco vai como `undefined` (omitido do JSON): a função
+            // valida `''` contra o mínimo do campo e recusava todo cadastro sem telefone.
+            body: JSON.stringify({
+              email: formData.email.trim(),
+              nome: formData.nome.trim(),
+              codigo_vendedor: formData.codigo_vendedor.trim() || undefined,
+              telefone: formData.telefone.trim() || undefined,
+            }),
           }
         );
 
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Erro ao criar vendedor');
+        if (!response.ok) {
+          // "Dados inválidos" sozinho não diz o que corrigir; os detalhes vêm por campo.
+          const detalhes = result.details
+            ? Object.values(result.details as Record<string, string[]>)
+                .flat()
+                .join('; ')
+            : '';
+          throw new Error(
+            [result.error || 'Erro ao criar vendedor', detalhes].filter(Boolean).join(': ')
+          );
+        }
         toast.success('Vendedor criado! Um email foi enviado para definir a senha.');
       }
 

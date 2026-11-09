@@ -2,6 +2,11 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.86.0';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { corsHeaders } from '../_shared/cors.ts';
 
+// Formulário manda campo em branco como `''`, e `.optional()` só aceita `undefined`:
+// sem isto, `''` cai no `min()` do campo e o cadastro sem telefone vira 400.
+const opcional = <T extends z.ZodTypeAny>(schema: T) =>
+  z.preprocess((v) => (typeof v === 'string' && v.trim() === '' ? undefined : v), schema.optional());
+
 // Schema rigoroso de validação
 const CriarVendedorSchema = z.object({
   email: z
@@ -13,8 +18,8 @@ const CriarVendedorSchema = z.object({
     .email('Email inválido')
     .regex(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/, 'Formato de email inválido'),
   nome: z.string().trim().min(2).max(150),
-  codigo_vendedor: z.string().trim().min(1).max(50).optional(),
-  telefone: z.string().trim().min(6).max(30).optional(),
+  codigo_vendedor: opcional(z.string().trim().min(1).max(50)),
+  telefone: opcional(z.string().trim().min(6).max(30)),
 });
 
 type CriarVendedorRequest = z.infer<typeof CriarVendedorSchema>;
